@@ -1,0 +1,60 @@
+:root {
+  --bg: #141923;
+  --fg: #f0f3f8;
+  --accent: #9be564;
+  --warn: #ff5a5f;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(circle at 20% 20%, #24314d, var(--bg));
+  color: var(--fg);
+  font-family: "JetBrains Mono", "Fira Code", Menlo, monospace;
+}
+
+#game {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+  padding: 16px;
+  box-sizing: border-box;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+}
+
+#status {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+#help {
+  margin-top: 6px;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.crosshair {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  margin-top: -5px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  pointer-events: none;
+}
