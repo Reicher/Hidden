@@ -926,6 +926,7 @@ function sanitizeSystemTextSegment(raw) {
         x: Number(c.x.toFixed(3)),
         z: Number(c.z.toFixed(3)),
         yaw: Number(c.yaw.toFixed(3)),
+        controllerType: c.controllerType,
         cooldownMsRemaining: Math.max(0, ATTACK_COOLDOWN_MS - (now - c.lastAttackAt)),
         attackFlashMsRemaining: Math.max(0, ATTACK_FLASH_MS - (now - c.lastAttackAt))
       }))
