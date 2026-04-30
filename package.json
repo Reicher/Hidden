@@ -6,12 +6,16 @@
   "scripts": {
     "start": "node server.js",
     "test:smoke": "node tests/smoke.js",
+    "test:browser": "node tests/browser-smoke.js",
     "test:combat": "node tests/combat.unit.js",
     "test:heartbeat": "node tests/heartbeat-timeout.js",
     "test:rate-limit": "node tests/rate-limit.js",
-    "test:all": "npm run test:combat && npm run test:smoke && npm run test:heartbeat && npm run test:rate-limit"
+    "test:all": "npm run test:combat && npm run test:smoke && npm run test:browser && npm run test:heartbeat && npm run test:rate-limit"
   },
   "dependencies": {
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1"
   }
 }

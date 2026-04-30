@@ -373,13 +373,6 @@ function attachSocket(wsUrl, loginName) {
 
       if (msg.type !== "world") return;
 
-      roomSystem.syncFromWorld({
-        roomHalfSize: msg.roomHalfSize,
-        shelves: msg.shelves
-      });
-
-      renderScoreboard(msg.scoreboard || []);
-
       const previousCharacterId = myCharacterId;
       const state = msg.session;
       if (state) {
@@ -392,21 +385,6 @@ function attachSocket(wsUrl, loginName) {
         updateDocumentTitle();
       }
 
-      const controlledYaw = avatarSystem.applyWorldCharacters({
-        characters: msg.characters || [],
-        myCharacterId,
-        nowMs: performance.now()
-      });
-
-      if (controlledYaw != null) {
-        const gainedNewCharacter = myCharacterId != null && myCharacterId !== previousCharacterId;
-        if (gainedNewCharacter) {
-          yaw = controlledYaw;
-          viewYaw = controlledYaw;
-          input.yaw = yaw;
-        }
-      }
-
       if (!authenticated) {
         setAppMode("connect");
       } else if (sessionState === "alive") {
@@ -416,6 +394,32 @@ function attachSocket(wsUrl, loginName) {
         setAppMode("lobby");
       }
       setCountdownTextFromSession(state);
+
+      try {
+        roomSystem.syncFromWorld({
+          roomHalfSize: msg.roomHalfSize,
+          shelves: msg.shelves
+        });
+
+        renderScoreboard(msg.scoreboard || []);
+
+        const controlledYaw = avatarSystem.applyWorldCharacters({
+          characters: msg.characters || [],
+          myCharacterId,
+          nowMs: performance.now()
+        });
+
+        if (controlledYaw != null) {
+          const gainedNewCharacter = myCharacterId != null && myCharacterId !== previousCharacterId;
+          if (gainedNewCharacter) {
+            yaw = controlledYaw;
+            viewYaw = controlledYaw;
+            input.yaw = yaw;
+          }
+        }
+      } catch (err) {
+        console.error("[client:world-render]", err);
+      }
     },
     onClose: () => {
       if (generation !== socketGeneration) return;
@@ -553,7 +557,7 @@ window.addEventListener("resize", () => {
 
 window.addEventListener("keydown", (event) => {
   if (appMode !== "playing") return;
-  if (event.code === "KeyC" && sessionState === "alive") {
+  if (event.code === "KeyC" && sessionState === "alive" && !gameChatOpen && !isGameChatFocused()) {
     event.preventDefault();
     setGameChatOpen(true);
     return;

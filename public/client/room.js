@@ -1,8 +1,8 @@
 import * as THREE from "https://unpkg.com/three@0.164.1/build/three.module.js";
 import { seededRandom } from "./utils.js";
 
-const DEFAULT_ROOM_HALF = 12;
-const WALL_HEIGHT = 3.2;
+const DEFAULT_ROOM_HALF = 24;
+const WALL_HEIGHT = 5.2;
 const DEFAULT_SHELVES = Object.freeze([
   Object.freeze({ x: -2.8, z: 0, width: 0.8, depth: 5.2, height: 1.78 }),
   Object.freeze({ x: 2.8, z: 0, width: 0.8, depth: 5.2, height: 1.78 })
@@ -35,6 +35,14 @@ export function createRoomSystem({ scene, renderer }) {
   const wallMaterials = [];
   const shelfSideMaterials = [];
 
+  function hasImageData(texture) {
+    const image = texture?.image;
+    if (!image) return false;
+    if (typeof image.videoWidth === "number") return image.videoWidth > 0 && image.videoHeight > 0;
+    if (typeof image.width === "number") return image.width > 0 && image.height > 0;
+    return true;
+  }
+
   const floorTexture = textureLoader.load(
     "/assets/floor_tile.png",
     () => {
@@ -43,6 +51,7 @@ export function createRoomSystem({ scene, renderer }) {
       floorTexture.repeat.set(7, 7);
       floorTexture.colorSpace = THREE.SRGBColorSpace;
       floorTexture.anisotropy = textureAnisotropy;
+      floorMaterial.map = floorTexture;
       floorMaterial.needsUpdate = true;
     },
     undefined,
@@ -52,11 +61,6 @@ export function createRoomSystem({ scene, renderer }) {
       floorMaterial.needsUpdate = true;
     }
   );
-  floorTexture.wrapS = THREE.RepeatWrapping;
-  floorTexture.wrapT = THREE.RepeatWrapping;
-  floorTexture.repeat.set(7, 7);
-  floorTexture.colorSpace = THREE.SRGBColorSpace;
-  floorMaterial.map = floorTexture;
 
   const ceilingTexture = textureLoader.load(
     "/assets/ceiling_tile.png",
@@ -66,6 +70,7 @@ export function createRoomSystem({ scene, renderer }) {
       ceilingTexture.repeat.set(7, 7);
       ceilingTexture.colorSpace = THREE.SRGBColorSpace;
       ceilingTexture.anisotropy = textureAnisotropy;
+      ceilingMaterial.map = ceilingTexture;
       ceilingMaterial.needsUpdate = true;
     },
     undefined,
@@ -75,11 +80,6 @@ export function createRoomSystem({ scene, renderer }) {
       ceilingMaterial.needsUpdate = true;
     }
   );
-  ceilingTexture.wrapS = THREE.RepeatWrapping;
-  ceilingTexture.wrapT = THREE.RepeatWrapping;
-  ceilingTexture.repeat.set(7, 7);
-  ceilingTexture.colorSpace = THREE.SRGBColorSpace;
-  ceilingMaterial.map = ceilingTexture;
 
   const wallTexture = textureLoader.load(
     "/assets/wall_sheet.png",
@@ -88,7 +88,12 @@ export function createRoomSystem({ scene, renderer }) {
       wallTexture.wrapT = THREE.ClampToEdgeWrapping;
       wallTexture.colorSpace = THREE.SRGBColorSpace;
       wallTexture.anisotropy = textureAnisotropy;
-      for (const material of wallMaterials) material.needsUpdate = true;
+      for (const material of wallMaterials) {
+        const tileIndex = Number(material.userData?.tileIndex ?? 0);
+        if (!material.map) material.map = createAtlasMap(wallTexture, tileIndex);
+        if (material.map) material.map.needsUpdate = true;
+        material.needsUpdate = true;
+      }
     },
     undefined,
     () => {
@@ -107,7 +112,12 @@ export function createRoomSystem({ scene, renderer }) {
       shelfTexture.wrapT = THREE.ClampToEdgeWrapping;
       shelfTexture.colorSpace = THREE.SRGBColorSpace;
       shelfTexture.anisotropy = textureAnisotropy;
-      for (const material of shelfSideMaterials) material.needsUpdate = true;
+      for (const material of shelfSideMaterials) {
+        const tileIndex = Number(material.userData?.tileIndex ?? 0);
+        if (!material.map) material.map = createAtlasMap(shelfTexture, tileIndex);
+        if (material.map) material.map.needsUpdate = true;
+        material.needsUpdate = true;
+      }
     },
     undefined,
     () => {
@@ -127,7 +137,8 @@ export function createRoomSystem({ scene, renderer }) {
 
   function createAtlasMap(texture, tileIndex) {
     const map = texture.clone();
-    map.needsUpdate = true;
+    map.source = texture.source;
+    map.image = texture.image;
     map.wrapS = THREE.ClampToEdgeWrapping;
     map.wrapT = THREE.ClampToEdgeWrapping;
     map.colorSpace = THREE.SRGBColorSpace;
@@ -138,6 +149,7 @@ export function createRoomSystem({ scene, renderer }) {
     const rowFromTop = Math.floor(tileIndex / atlasSize);
     map.repeat.set(1 / atlasSize, 1 / atlasSize);
     map.offset.set(col / atlasSize, 1 - (rowFromTop + 1) / atlasSize);
+    if (hasImageData(map)) map.needsUpdate = true;
     return map;
   }
 
@@ -151,20 +163,27 @@ export function createRoomSystem({ scene, renderer }) {
 
   function createWallMaterial(tileIndex) {
     const material = wallBaseMaterial.clone();
-    material.color.setHex(0xffffff);
-    material.map = createAtlasMap(wallTexture, tileIndex);
+    material.userData.tileIndex = tileIndex;
+    if (hasImageData(wallTexture)) {
+      material.color.setHex(0xffffff);
+      material.map = createAtlasMap(wallTexture, tileIndex);
+    } else {
+      material.color.setHex(0x4e5868);
+      material.map = null;
+    }
     wallMaterials.push(material);
     return material;
   }
 
   function createShelfSideMaterial(tileIndex) {
     const material = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
+      color: hasImageData(shelfTexture) ? 0xffffff : 0x5a4a3a,
       roughness: 0.88,
       metalness: 0.02,
       side: THREE.DoubleSide
     });
-    material.map = createAtlasMap(shelfTexture, tileIndex);
+    material.userData.tileIndex = tileIndex;
+    material.map = hasImageData(shelfTexture) ? createAtlasMap(shelfTexture, tileIndex) : null;
     shelfSideMaterials.push(material);
     return material;
   }

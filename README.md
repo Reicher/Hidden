@@ -11,6 +11,12 @@ npm start
 
 Öppna: `http://127.0.0.1:3000`
 
+## Tester
+
+- Kör alla tester: `npm run test:all`
+- Browser-smoke (fångar klientfel i console): `npm run test:browser`
+- Om browser-test saknar Chromium lokalt: `npx playwright install chromium`
+
 ## Spelregler
 
 - Max **10 aktiva spelare** samtidigt.

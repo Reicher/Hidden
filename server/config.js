@@ -32,7 +32,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
   `https://localhost:${DEFAULT_PORT}`
 ];
 
-export const ROOM_HALF_SIZE = 12;
+export const ROOM_HALF_SIZE = 24;
 export const MAX_PLAYERS = 10;
 export const TOTAL_CHARACTERS = 20;
 export const TICK_RATE = 20;

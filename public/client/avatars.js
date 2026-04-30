@@ -5,7 +5,6 @@ const ATTACK_ANIM_MS = 140;
 const RESPAWN_HIDE_MS = 110;
 const RESPAWN_JUMP_DISTANCE = 4.2;
 const MOVE_SPEED_REFERENCE = 3.5;
-const CAMERA_HEIGHT = 1.92;
 const POSITION_SMOOTH_RATE = 15;
 const ROTATION_SMOOTH_RATE = 11;
 const MAX_ROTATION_SPEED = 10;
@@ -18,6 +17,9 @@ const EYE_RADIUS_Y_PX = 15;
 const PUPIL_RADIUS_PX = 5.2;
 const PUPIL_RANGE_X_PX = 5.8;
 const PUPIL_RANGE_Y_PX = 4.6;
+const SKIN_TONE_HEX = [
+  0xfad7c4, 0xf1c7a5, 0xe6b88a, 0xd8a676, 0xbf8a5d, 0xa9744d, 0x8c603f, 0x714c34, 0x573a2a, 0x3f2b1f
+];
 
 export function createAvatarSystem({ scene, camera }) {
   const avatars = new Map();
@@ -42,13 +44,39 @@ export function createAvatarSystem({ scene, camera }) {
   camera.add(firstPersonArmPivot);
   let firstPersonAttackMs = 0;
 
-  function buildCharacterColors(id) {
+  function buildCharacterProfile(id) {
     const rng = seededRandom(id * 4093 + 17);
+
+    const heightScale = 0.82 + rng() * 0.34;
+    const legScale = 0.8 + rng() * 0.34;
+    const torsoScale = 0.82 + rng() * 0.3;
+    const armScale = 0.8 + rng() * 0.34;
+    const headScale = 0.84 + rng() * 0.28;
+    const fatness = rng();
+
+    const skin = new THREE.Color(SKIN_TONE_HEX[Math.floor(rng() * SKIN_TONE_HEX.length)]);
     const shirt = new THREE.Color();
-    shirt.setHSL(rng(), 0.45 + rng() * 0.35, 0.38 + rng() * 0.22);
+    shirt.setHSL(rng(), 0.4 + rng() * 0.3, 0.36 + rng() * 0.24);
     const pants = new THREE.Color();
-    pants.setHSL(rng(), 0.3 + rng() * 0.25, 0.2 + rng() * 0.18);
-    return { shirt, pants };
+    pants.setHSL(rng(), 0.18 + rng() * 0.24, 0.25 + rng() * 0.22);
+    const shoe = new THREE.Color();
+    shoe.setHSL(rng(), 0.08 + rng() * 0.12, 0.08 + rng() * 0.18);
+
+    return {
+      rng,
+      heightScale,
+      legScale,
+      torsoScale,
+      armScale,
+      headScale,
+      fatness,
+      torsoWidthScale: 0.88 + fatness * 0.62,
+      torsoDepthScale: 0.84 + fatness * 0.5,
+      skin,
+      shirt,
+      pants,
+      shoe
+    };
   }
 
   function createHeadFaceTexture(skinColor) {
@@ -56,9 +84,11 @@ export function createAvatarSystem({ scene, camera }) {
     canvas.width = HEAD_TEX_SIZE;
     canvas.height = HEAD_TEX_SIZE;
     const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
     const texture = new THREE.CanvasTexture(canvas);
+    texture.image = canvas;
     texture.colorSpace = THREE.SRGBColorSpace;
-    texture.needsUpdate = true;
+    if (texture.image) texture.needsUpdate = true;
 
     const skinStyle = skinColor.getStyle(THREE.SRGBColorSpace);
     const faceCx = FACE_U * HEAD_TEX_SIZE;
@@ -86,7 +116,7 @@ export function createAvatarSystem({ scene, camera }) {
       ctx.arc(rightEyeCx + ox, faceCy + oy, PUPIL_RADIUS_PX, 0, Math.PI * 2);
       ctx.fill();
 
-      texture.needsUpdate = true;
+      if (texture.image) texture.needsUpdate = true;
     }
 
     drawEyes(0, 0);
@@ -94,49 +124,91 @@ export function createAvatarSystem({ scene, camera }) {
   }
 
   function createAvatar(id) {
-    const colors = buildCharacterColors(id);
-    const skin = new THREE.Color(0xe9c8a3);
+    const profile = buildCharacterProfile(id);
     const group = new THREE.Group();
 
-    const torsoMaterial = new THREE.MeshStandardMaterial({ color: colors.shirt, roughness: 0.85 });
-    const pantsMaterial = new THREE.MeshStandardMaterial({ color: colors.pants, roughness: 0.9 });
-    const headFace = createHeadFaceTexture(skin);
-    const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, map: headFace.texture, roughness: 0.8 });
+    const torsoMaterial = new THREE.MeshStandardMaterial({ color: profile.shirt, roughness: 0.85 });
+    const pantsMaterial = new THREE.MeshStandardMaterial({ color: profile.pants, roughness: 0.9 });
+    const skinMaterialPlain = new THREE.MeshStandardMaterial({ color: profile.skin, roughness: 0.8 });
+    const shoeMaterial = new THREE.MeshStandardMaterial({ color: profile.shoe, roughness: 0.92 });
+    const headFace = createHeadFaceTexture(profile.skin);
+    const skinMaterial = headFace
+      ? new THREE.MeshStandardMaterial({ color: 0xffffff, map: headFace.texture, roughness: 0.8 })
+      : new THREE.MeshStandardMaterial({ color: profile.skin, roughness: 0.8 });
 
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.9, 0.36), torsoMaterial);
-    torso.position.set(0, 1.35, 0);
+    const shoeHeight = 0.11 * profile.heightScale;
+    const shoeWidth = 0.2 * profile.heightScale * (0.92 + profile.fatness * 0.2);
+    const shoeLength = 0.34 * profile.heightScale;
+
+    const legRadius = 0.078 * profile.heightScale * profile.legScale;
+    const legTotal = 0.84 * profile.heightScale * profile.legScale;
+    const legCore = Math.max(0.05, legTotal - legRadius * 2);
+    const hipY = shoeHeight + legTotal + 0.03 * profile.heightScale;
+    const legGap = 0.17 * profile.heightScale * (0.95 + profile.fatness * 0.1);
+
+    const torsoRadius = 0.14 * profile.heightScale * profile.torsoScale;
+    const torsoTotal = 0.9 * profile.heightScale * profile.torsoScale;
+    const torsoCore = Math.max(0.06, torsoTotal - torsoRadius * 2);
+    const shoulderY = hipY + torsoTotal * 0.8;
+
+    const armRadius = 0.066 * profile.heightScale * profile.armScale;
+    const armTotal = 0.72 * profile.heightScale * profile.armScale;
+    const armCore = Math.max(0.05, armTotal - armRadius * 2);
+    const shoulderX = torsoRadius * profile.torsoWidthScale + armRadius * 0.58;
+    const handRadius = armRadius * 0.74;
+
+    const headRadius = 0.24 * profile.heightScale * profile.headScale;
+    const headY = hipY + torsoTotal + headRadius * 0.84;
+    const eyeHeight = headY + headRadius * 0.24;
+
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(torsoRadius, torsoCore, 6, 14), torsoMaterial);
+    torso.scale.set(profile.torsoWidthScale, 1, profile.torsoDepthScale);
+    torso.position.set(0, hipY + torsoTotal * 0.5, 0);
     group.add(torso);
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 20, 16), skinMaterial);
-    head.position.set(0, 2.03, 0);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(headRadius, 24, 18), skinMaterial);
+    head.scale.set(0.92, 1.06, 0.95);
+    head.position.set(0, headY, 0);
     group.add(head);
 
     const leftArmPivot = new THREE.Group();
-    leftArmPivot.position.set(-0.4, 1.72, 0);
-    const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.76, 0.2), torsoMaterial);
-    leftArm.position.set(0, -0.38, 0);
+    leftArmPivot.position.set(-shoulderX, shoulderY, 0);
+    const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(armRadius, armCore, 5, 12), torsoMaterial);
+    leftArm.position.set(0, -armTotal * 0.5, 0);
     leftArmPivot.add(leftArm);
+    const leftHand = new THREE.Mesh(new THREE.SphereGeometry(handRadius, 12, 10), skinMaterialPlain);
+    leftHand.position.set(0, -armTotal + handRadius * 0.55, 0);
+    leftArmPivot.add(leftHand);
     group.add(leftArmPivot);
 
     const rightArmPivot = new THREE.Group();
-    rightArmPivot.position.set(0.4, 1.72, 0);
-    const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.76, 0.2), torsoMaterial);
-    rightArm.position.set(0, -0.38, 0);
+    rightArmPivot.position.set(shoulderX, shoulderY, 0);
+    const rightArm = new THREE.Mesh(new THREE.CapsuleGeometry(armRadius, armCore, 5, 12), torsoMaterial);
+    rightArm.position.set(0, -armTotal * 0.5, 0);
     rightArmPivot.add(rightArm);
+    const rightHand = new THREE.Mesh(new THREE.SphereGeometry(handRadius, 12, 10), skinMaterialPlain);
+    rightHand.position.set(0, -armTotal + handRadius * 0.55, 0);
+    rightArmPivot.add(rightHand);
     group.add(rightArmPivot);
 
     const leftLegPivot = new THREE.Group();
-    leftLegPivot.position.set(-0.2, 0.92, 0);
-    const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.84, 0.24), pantsMaterial);
-    leftLeg.position.set(0, -0.42, 0);
+    leftLegPivot.position.set(-legGap, hipY, 0);
+    const leftLeg = new THREE.Mesh(new THREE.CapsuleGeometry(legRadius, legCore, 5, 12), pantsMaterial);
+    leftLeg.position.set(0, -legTotal * 0.5, 0);
     leftLegPivot.add(leftLeg);
+    const leftShoe = new THREE.Mesh(new THREE.BoxGeometry(shoeWidth, shoeHeight, shoeLength), shoeMaterial);
+    leftShoe.position.set(0, -legTotal - shoeHeight * 0.35, shoeLength * 0.08);
+    leftLegPivot.add(leftShoe);
     group.add(leftLegPivot);
 
     const rightLegPivot = new THREE.Group();
-    rightLegPivot.position.set(0.2, 0.92, 0);
-    const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.84, 0.24), pantsMaterial);
-    rightLeg.position.set(0, -0.42, 0);
+    rightLegPivot.position.set(legGap, hipY, 0);
+    const rightLeg = new THREE.Mesh(new THREE.CapsuleGeometry(legRadius, legCore, 5, 12), pantsMaterial);
+    rightLeg.position.set(0, -legTotal * 0.5, 0);
     rightLegPivot.add(rightLeg);
+    const rightShoe = new THREE.Mesh(new THREE.BoxGeometry(shoeWidth, shoeHeight, shoeLength), shoeMaterial);
+    rightShoe.position.set(0, -legTotal - shoeHeight * 0.35, shoeLength * 0.08);
+    rightLegPivot.add(rightShoe);
     group.add(rightLegPivot);
 
     return {
@@ -147,7 +219,7 @@ export function createAvatarSystem({ scene, camera }) {
       leftLegPivot,
       rightLegPivot,
       moveAmount: 0,
-      walkPhase: Math.random() * Math.PI * 2,
+      walkPhase: profile.rng() * Math.PI * 2,
       targetX: 0,
       targetZ: 0,
       targetYaw: 0,
@@ -168,7 +240,9 @@ export function createAvatarSystem({ scene, camera }) {
       eyeTargetY: 0,
       lastDrawnEyeX: 999,
       lastDrawnEyeY: 999,
-      headFace
+      headFace,
+      eyeHeight,
+      skinColor: profile.skin
     };
   }
 
@@ -319,7 +393,7 @@ export function createAvatarSystem({ scene, camera }) {
       Math.abs(avatar.eyeX - avatar.lastDrawnEyeX) > 0.01 ||
       Math.abs(avatar.eyeY - avatar.lastDrawnEyeY) > 0.01
     ) {
-      avatar.headFace.drawEyes(avatar.eyeX, avatar.eyeY);
+      avatar.headFace?.drawEyes?.(avatar.eyeX, avatar.eyeY);
       avatar.lastDrawnEyeX = avatar.eyeX;
       avatar.lastDrawnEyeY = avatar.eyeY;
     }
@@ -391,7 +465,11 @@ export function createAvatarSystem({ scene, camera }) {
       if (id === myCharacterId) {
         hasControl = true;
         firstPersonAttackMs = Math.max(firstPersonAttackMs, avatar.attackFlashMsRemaining);
-        camera.position.set(avatar.group.position.x, CAMERA_HEIGHT, avatar.group.position.z);
+        const fpMat = firstPersonArm.material;
+        if (fpMat && !Array.isArray(fpMat) && fpMat.color && avatar.skinColor) {
+          fpMat.color.copy(avatar.skinColor);
+        }
+        camera.position.set(avatar.group.position.x, avatar.eyeHeight, avatar.group.position.z);
       }
     }
     animateFirstPersonArm(deltaSec, hasControl);
