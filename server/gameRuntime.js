@@ -6,6 +6,7 @@ import {
   TOTAL_CHARACTERS,
   TICK_MS,
   MOVE_SPEED,
+  PLAYER_SPRINT_MULTIPLIER,
   TURN_SPEED,
   AI_DECISION_MS_MIN,
   AI_DECISION_MS_MAX,
@@ -121,41 +122,53 @@ export function attachGameRuntime({ server }) {
   }
 
   function stateSummary() {
-    return `connected=${sockets.size} loggedIn=${authenticatedCount()} alive=${activePlayerCount()} countdown=${countdownPlayerCount()}`;
+    return `anslutna=${sockets.size} inloggade=${authenticatedCount()} spelar=${activePlayerCount()} nedrakning=${countdownPlayerCount()}`;
+  }
+
+  function nowTime() {
+    return new Date().toISOString().slice(11, 19);
+  }
+
+  function logInfo(topic, message) {
+    console.log(`[${nowTime()}] [${topic}] ${message}`);
+  }
+
+  function logWarn(topic, message) {
+    console.warn(`[${nowTime()}] [${topic}] ${message}`);
   }
 
   function logEvent(event, details = {}) {
     const sid = details.sessionId || "-";
     if (event === "runtime_started") {
-      console.log(
-        `[game] runtime started roomHalf=${details.roomHalfSize} maxPlayers=${details.maxPlayers} chars=${details.totalCharacters}`
-      );
+      logInfo("runtime", `start roomHalf=${details.roomHalfSize} maxPlayers=${details.maxPlayers} chars=${details.totalCharacters}`);
       return;
     }
     if (event === "session_connected") {
-      console.log(
-        `[game] connect sid=${sid} ip=${details.ip || "-"} origin=${details.origin || "-"} ${stateSummary()}`
-      );
+      const ua = details.userAgent ? String(details.userAgent).slice(0, 68) : "-";
+      logInfo("anslutning", `ny session sid=${sid} ip=${details.ip || "-"} origin=${details.origin || "-"} ua="${ua}" ${stateSummary()}`);
       return;
     }
     if (event === "session_disconnected") {
       const code = details.code == null ? "-" : String(details.code);
-      console.log(
-        `[game] disconnect sid=${sid} reason=${details.reason || "-"} code=${code} ${stateSummary()}`
+      const name = details.name || "-";
+      logInfo(
+        "anslutning",
+        `frankoppling sid=${sid} namn=${name} reason=${details.reason || "-"} code=${code} ${stateSummary()}`
       );
       return;
     }
     if (event === "session_login") {
-      console.log(`[game] login sid=${sid} name=${details.name} ${stateSummary()}`);
+      logInfo("spelare", `${details.name} loggade in sid=${sid} ${stateSummary()}`);
       return;
     }
     if (event === "countdown_start") {
-      console.log(`[game] countdown sid=${sid} seconds=${details.seconds ?? "-"}`);
+      logInfo("spel", `nedrakning start sid=${sid} sek=${details.seconds ?? "-"}`);
       return;
     }
     if (event === "session_possess") {
-      console.log(
-        `[game] possess sid=${sid} name=${details.name || "-"} char=${details.characterId} at=(${details.x},${details.z}) yaw=${details.yaw}`
+      logInfo(
+        "spel",
+        `${details.name || "-"} tog karaktar ${details.characterId} sid=${sid} pos=(${details.x},${details.z}) yaw=${details.yaw}`
       );
       return;
     }
@@ -164,43 +177,43 @@ export function attachGameRuntime({ server }) {
         Array.isArray(details.victimCharacterIds) && details.victimCharacterIds.length > 0
           ? details.victimCharacterIds.join(",")
           : "-";
-      console.log(
-        `[game] attack sid=${sid} char=${details.attackerCharacterId} victims=${details.victims ?? 0} ids=${victimList}`
+      logInfo(
+        "strid",
+        `attack sid=${sid} char=${details.attackerCharacterId} traffar=${details.victims ?? 0} victimIds=${victimList}`
       );
       return;
     }
     if (event === "player_eliminated") {
-      console.log(`[game] eliminated sid=${sid} name=${details.name || "-"} char=${details.characterId}`);
+      logInfo("strid", `${details.name || "-"} dog (char=${details.characterId}, sid=${sid})`);
       return;
     }
     if (event === "character_respawn") {
-      console.log(
-        `[game] respawn char=${details.characterId} at=(${details.x},${details.z}) yaw=${details.yaw}`
-      );
+      logInfo("world", `respawn char=${details.characterId} pos=(${details.x},${details.z}) yaw=${details.yaw}`);
       return;
     }
     if (event === "chat") {
-      console.log(`[game] chat sid=${sid} name=${details.name || "-"} msg=${details.text || ""}`);
+      logInfo("chat", `${details.name || "-"}: ${details.text || ""}`);
       return;
     }
     if (event === "heartbeat_timeout") {
-      console.log(`[game] heartbeat-timeout sid=${sid}`);
+      logWarn("anslutning", `heartbeat timeout sid=${sid}`);
       return;
     }
     if (event === "message_drop") {
-      console.log(
-        `[game] drop sid=${sid} reason=${details.reason || "-"} total=${details.droppedTotal ?? 0} window=${details.droppedInWindow ?? 0}`
+      logWarn(
+        "ratelimit",
+        `drop sid=${sid} reason=${details.reason || "-"} total=${details.droppedTotal ?? 0} window=${details.droppedInWindow ?? 0}`
       );
       return;
     }
-    console.log(`[game] ${event} ${stateSummary()}`);
+    logInfo("game", `${event} ${stateSummary()}`);
   }
 
   function warnInvariant(key, now, details) {
     const last = invariantLastLogAt.get(key) ?? 0;
     if (now - last < INVARIANT_LOG_COOLDOWN_MS) return;
     invariantLastLogAt.set(key, now);
-    console.warn(`[invariant:${key}] ${details}`);
+    logWarn(`invariant:${key}`, details);
   }
 
   function checkInvariants(now) {
@@ -304,7 +317,11 @@ function sanitizeSystemTextSegment(raw) {
         innocents: s.stats.innocents,
         status: statusLabel(s)
       }))
-      .sort((a, b) => a.name.localeCompare(b.name, "sv"));
+      .sort((a, b) => {
+        if (b.kills !== a.kills) return b.kills - a.kills;
+        if (a.deaths !== b.deaths) return a.deaths - b.deaths;
+        return a.name.localeCompare(b.name, "sv");
+      });
   }
 
   function send(ws, type, payload = {}) {
@@ -700,8 +717,10 @@ function sanitizeSystemTextSegment(raw) {
       const worldX = localX * Math.cos(c.yaw) - localZ * Math.sin(c.yaw);
       const worldZ = -localX * Math.sin(c.yaw) - localZ * Math.cos(c.yaw);
 
-      c.x += worldX * MOVE_SPEED * dt;
-      c.z += worldZ * MOVE_SPEED * dt;
+      const sprintScale = input.sprint ? PLAYER_SPRINT_MULTIPLIER : 1;
+      const playerSpeed = MOVE_SPEED * sprintScale;
+      c.x += worldX * playerSpeed * dt;
+      c.z += worldZ * playerSpeed * dt;
     }
 
     clampInsideRoom(c);
@@ -843,6 +862,7 @@ function sanitizeSystemTextSegment(raw) {
       session.input.backward = Boolean(input.backward);
       session.input.left = Boolean(input.left);
       session.input.right = Boolean(input.right);
+      session.input.sprint = Boolean(input.sprint);
       if (typeof input.yaw === "number" && Number.isFinite(input.yaw)) {
         session.input.yaw = normalizeAngle(input.yaw);
       }
@@ -970,7 +990,7 @@ function sanitizeSystemTextSegment(raw) {
     if (!isOriginAllowed(origin)) {
       socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
       socket.destroy();
-      console.warn(`[ws-origin-block] Rejected origin: ${origin || "<missing>"}`);
+      logWarn("ws-origin", `blocked origin=${origin || "<missing>"}`);
       return;
     }
 
@@ -1009,6 +1029,7 @@ function sanitizeSystemTextSegment(raw) {
       sockets.delete(sessionId);
       logEvent("session_disconnected", {
         sessionId: shortSessionId(sessionId),
+        name: closingSession?.name || null,
         reason,
         ...details
       });
@@ -1031,6 +1052,7 @@ function sanitizeSystemTextSegment(raw) {
         backward: false,
         left: false,
         right: false,
+        sprint: false,
         yaw: 0,
         attackRequested: false
       },
@@ -1066,8 +1088,9 @@ function sanitizeSystemTextSegment(raw) {
         const activeSession = sessions.get(sessionId);
         const reason = activeSession?.net.lastDropReason || "unknown";
         const dropped = activeSession?.net.droppedMessages ?? 0;
-        console.warn(
-          `[game] abuse-kick sid=${shortSessionId(sessionId)} origin=${req?.headers?.origin || "-"} reason=${reason} dropped=${dropped}`
+        logWarn(
+          "ratelimit",
+          `abuse-kick sid=${shortSessionId(sessionId)} origin=${req?.headers?.origin || "-"} reason=${reason} dropped=${dropped}`
         );
         cleanupSession("abuse_kick", { dropReason: reason, droppedMessages: dropped });
         try {

@@ -52,6 +52,7 @@ const input = {
   backward: false,
   left: false,
   right: false,
+  sprint: false,
   yaw: 0
 };
 
@@ -115,6 +116,15 @@ function updateConnectButton() {
   if (!connectBtnEl) return;
   connectBtnEl.disabled = connecting;
   connectBtnEl.textContent = connecting ? "Ansluter..." : "Anslut";
+}
+
+function updateDocumentTitle() {
+  const othersPlaying = Math.max(0, activePlayersInGame - (sessionState === "alive" ? 1 : 0));
+  if (othersPlaying <= 0) {
+    document.title = "Hidden";
+    return;
+  }
+  document.title = `Hidden - ${othersPlaying} spelare`;
 }
 
 function openLobbyDialog(title, text) {
@@ -185,6 +195,7 @@ function setAppMode(mode) {
 
   if (mode !== "playing") setGameChatOpen(false);
   updateInGameHud();
+  updateDocumentTitle();
 }
 
 function setCountdownTextFromSession(state) {
@@ -293,6 +304,7 @@ function resetInputState() {
   input.backward = false;
   input.left = false;
   input.right = false;
+  input.sprint = false;
   input.yaw = yaw;
   inputDirty = true;
 }
@@ -377,6 +389,7 @@ function attachSocket(wsUrl, loginName) {
         myCharacterId = state.characterId ?? null;
         activePlayersInGame = Number(state.activePlayers || 0);
         updateInGameHud();
+        updateDocumentTitle();
       }
 
       const controlledYaw = avatarSystem.applyWorldCharacters({
@@ -410,9 +423,11 @@ function attachSocket(wsUrl, loginName) {
       authenticated = false;
       sessionState = "auth";
       myCharacterId = null;
+      activePlayersInGame = 0;
       updateConnectButton();
       setAppMode("disconnected");
       setConnectError("Anslutningen bröts.");
+      updateDocumentTitle();
     },
     onError: () => {
       if (generation !== socketGeneration) return;
@@ -420,6 +435,7 @@ function attachSocket(wsUrl, loginName) {
       updateConnectButton();
       setConnectError("Kunde inte ansluta till servern.");
       setAppMode("connect");
+      updateDocumentTitle();
     }
   });
 }
@@ -443,6 +459,7 @@ function connectAndLogin() {
   sessionState = "auth";
   myCharacterId = null;
   myName = "";
+  activePlayersInGame = 0;
   updateConnectButton();
   setConnectError("");
   resetInputState();
@@ -494,7 +511,7 @@ playBtnEl?.addEventListener("click", () => {
 controlsBtnEl?.addEventListener("click", () => {
   openLobbyDialog(
     "Kontroller",
-    "WASD: rörelse\nMus: titta runt\nVänsterklick: attack\nC: öppna chat i spelet"
+    "WASD: rörelse\nShift: springa (dum ide)\nMus: titta runt\nVänsterklick: attack\nC: öppna chat i spelet"
   );
 });
 settingsBtnEl?.addEventListener("click", () => {
@@ -559,6 +576,10 @@ window.addEventListener("keydown", (event) => {
     input.right = true;
     changed = true;
   }
+  if ((event.code === "ShiftLeft" || event.code === "ShiftRight") && !input.sprint) {
+    input.sprint = true;
+    changed = true;
+  }
   if (changed) inputDirty = true;
 });
 
@@ -580,6 +601,10 @@ window.addEventListener("keyup", (event) => {
   }
   if (event.code === "KeyD" && input.right) {
     input.right = false;
+    changed = true;
+  }
+  if ((event.code === "ShiftLeft" || event.code === "ShiftRight") && input.sprint) {
+    input.sprint = false;
     changed = true;
   }
   if (changed) inputDirty = true;
@@ -635,3 +660,4 @@ function animate() {
 animate();
 updateConnectButton();
 setAppMode("connect");
+updateDocumentTitle();
