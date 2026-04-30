@@ -50,18 +50,55 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   const roomTag = isPrivate ? `privat:${roomCode}` : "publik";
   let closed = false;
 
-  for (let i = 0; i < TOTAL_CHARACTERS; i += 1) characters.push(createCharacter(i));
-
   function rand(min, max) {
     return min + Math.random() * (max - min);
   }
 
-  function randomSpawn() {
+  const SPAWN_OBSTACLES = [...SHELVES, ...COOLERS, ...FREEZERS];
+
+  function spawnObstacleHalfExtents(obstacle) {
+    const width = typeof obstacle.width === "number" ? obstacle.width : 1;
+    const depth = typeof obstacle.depth === "number" ? obstacle.depth : 1;
+    const yaw = typeof obstacle.yaw === "number" ? obstacle.yaw : 0;
+    const quarterTurns = Math.round(yaw / (Math.PI / 2));
+    const isSwapped = Math.abs(quarterTurns) % 2 === 1;
     return {
-      x: rand(-ROOM_HALF_SIZE + 1, ROOM_HALF_SIZE - 1),
-      z: rand(-ROOM_HALF_SIZE + 1, ROOM_HALF_SIZE - 1),
-      yaw: rand(-Math.PI, Math.PI)
+      halfW: (isSwapped ? depth : width) * 0.5,
+      halfD: (isSwapped ? width : depth) * 0.5
     };
+  }
+
+  function isSpawnBlocked(x, z, margin = CHARACTER_RADIUS + 0.14) {
+    for (const obstacle of SPAWN_OBSTACLES) {
+      const { halfW, halfD } = spawnObstacleHalfExtents(obstacle);
+      const minX = obstacle.x - halfW - margin;
+      const maxX = obstacle.x + halfW + margin;
+      const minZ = obstacle.z - halfD - margin;
+      const maxZ = obstacle.z + halfD + margin;
+      if (x >= minX && x <= maxX && z >= minZ && z <= maxZ) return true;
+    }
+    return false;
+  }
+
+  function randomSpawn() {
+    const min = -ROOM_HALF_SIZE + 1;
+    const max = ROOM_HALF_SIZE - 1;
+    for (let i = 0; i < 180; i += 1) {
+      const x = rand(min, max);
+      const z = rand(min, max);
+      if (isSpawnBlocked(x, z)) continue;
+      return { x, z, yaw: rand(-Math.PI, Math.PI) };
+    }
+
+    const step = Math.max(0.6, CHARACTER_RADIUS * 2.4);
+    for (let x = min; x <= max; x += step) {
+      for (let z = min; z <= max; z += step) {
+        if (isSpawnBlocked(x, z)) continue;
+        return { x, z, yaw: rand(-Math.PI, Math.PI) };
+      }
+    }
+
+    return { x: 0, z: 0, yaw: rand(-Math.PI, Math.PI) };
   }
 
   function createCharacter(id) {
@@ -81,6 +118,8 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
       }
     };
   }
+
+  for (let i = 0; i < TOTAL_CHARACTERS; i += 1) characters.push(createCharacter(i));
 
   function respawnAsAI(charId) {
     const c = characters[charId];
@@ -559,7 +598,7 @@ function sanitizeSystemTextSegment(raw) {
   const ROOM_BOUNDARY_MIN = -ROOM_HALF_SIZE + 0.5;
   const ROOM_BOUNDARY_MAX = ROOM_HALF_SIZE - 0.5;
   const WALL_AVOIDANCE_MARGIN = 1.5;
-  const SHELF_AVOIDANCE_MARGIN = 0.8;
+  const SHELF_AVOIDANCE_MARGIN = 1.1;
   const STATIC_OBSTACLES = [...SHELVES, ...COOLERS, ...FREEZERS];
 
   function obstacleHalfExtents(obstacle) {
@@ -670,40 +709,47 @@ function sanitizeSystemTextSegment(raw) {
     };
   }
 
-  function resolveShelfCollisions(character) {
+  function resolveShelfCollisions(character, maxIterations = 3) {
     let hit = false;
     let pushX = 0;
     let pushZ = 0;
 
-    for (const obstacle of STATIC_OBSTACLES) {
-      const { halfW, halfD } = obstacleHalfExtents(obstacle);
-      const minX = obstacle.x - halfW - CHARACTER_RADIUS;
-      const maxX = obstacle.x + halfW + CHARACTER_RADIUS;
-      const minZ = obstacle.z - halfD - CHARACTER_RADIUS;
-      const maxZ = obstacle.z + halfD + CHARACTER_RADIUS;
+    for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+      let hitThisIteration = false;
 
-      if (character.x < minX || character.x > maxX || character.z < minZ || character.z > maxZ) continue;
+      for (const obstacle of STATIC_OBSTACLES) {
+        const { halfW, halfD } = obstacleHalfExtents(obstacle);
+        const minX = obstacle.x - halfW - CHARACTER_RADIUS;
+        const maxX = obstacle.x + halfW + CHARACTER_RADIUS;
+        const minZ = obstacle.z - halfD - CHARACTER_RADIUS;
+        const maxZ = obstacle.z + halfD + CHARACTER_RADIUS;
 
-      hit = true;
-      const toMinX = Math.abs(character.x - minX);
-      const toMaxX = Math.abs(maxX - character.x);
-      const toMinZ = Math.abs(character.z - minZ);
-      const toMaxZ = Math.abs(maxZ - character.z);
-      const smallest = Math.min(toMinX, toMaxX, toMinZ, toMaxZ);
+        if (character.x < minX || character.x > maxX || character.z < minZ || character.z > maxZ) continue;
 
-      if (smallest === toMinX) {
-        character.x = minX;
-        pushX -= 1;
-      } else if (smallest === toMaxX) {
-        character.x = maxX;
-        pushX += 1;
-      } else if (smallest === toMinZ) {
-        character.z = minZ;
-        pushZ -= 1;
-      } else {
-        character.z = maxZ;
-        pushZ += 1;
+        hit = true;
+        hitThisIteration = true;
+        const toMinX = Math.abs(character.x - minX);
+        const toMaxX = Math.abs(maxX - character.x);
+        const toMinZ = Math.abs(character.z - minZ);
+        const toMaxZ = Math.abs(maxZ - character.z);
+        const smallest = Math.min(toMinX, toMaxX, toMinZ, toMaxZ);
+
+        if (smallest === toMinX) {
+          character.x = minX;
+          pushX -= 1;
+        } else if (smallest === toMaxX) {
+          character.x = maxX;
+          pushX += 1;
+        } else if (smallest === toMinZ) {
+          character.z = minZ;
+          pushZ -= 1;
+        } else {
+          character.z = maxZ;
+          pushZ += 1;
+        }
       }
+
+      if (!hitThisIteration) break;
     }
 
     if (!hit) return null;

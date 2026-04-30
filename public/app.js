@@ -85,8 +85,15 @@ const INPUT_SEND_INTERVAL_MS = 33;
 const INPUT_HEARTBEAT_MS = 120;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
-const IS_TOUCH_DEVICE =
-  (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) || (navigator.maxTouchPoints || 0) > 0;
+const FORCE_MOBILE_UI = new URLSearchParams(location.search).get("mobileUi") === "1";
+const IS_TOUCH_DEVICE = (() => {
+  const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  const hoverNone = window.matchMedia && window.matchMedia("(hover: none)").matches;
+  const touchApi = "ontouchstart" in window;
+  const touchPoints = (navigator.maxTouchPoints || 0) > 0;
+  const mobileUa = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+  return coarsePointer || hoverNone || touchApi || touchPoints || mobileUa || FORCE_MOBILE_UI;
+})();
 
 let pitch = 0;
 let yaw = 0;
@@ -310,6 +317,7 @@ function setAppMode(mode) {
   }
 
   if (mode !== "playing") setGameChatOpen(false);
+  if (mode === "connect" || mode === "disconnected") setCountdownTextFromSession({ state: "lobby" });
   updateMobileControlsVisibility();
   updateInGameHud();
   updateDocumentTitle();
@@ -386,18 +394,18 @@ function closeDebugView() {
 }
 
 function setCountdownTextFromSession(state) {
-  if (!countdownTextEl || !playBtnEl || !countdownOverlayEl) return;
+  if (!countdownTextEl || !countdownOverlayEl) return;
   if (state?.state === "countdown") {
     const ms = state.countdownMsRemaining ?? 3000;
     const sec = Math.max(1, Math.ceil(ms / 1000));
     countdownTextEl.textContent = String(sec);
     countdownOverlayEl.classList.remove("hidden");
-    playBtnEl.disabled = true;
+    if (playBtnEl) playBtnEl.disabled = true;
     return;
   }
   countdownTextEl.textContent = "";
   countdownOverlayEl.classList.add("hidden");
-  playBtnEl.disabled = false;
+  if (playBtnEl) playBtnEl.disabled = false;
 }
 
 function renderScoreboard(players) {
@@ -1164,6 +1172,7 @@ function animate() {
 
   camera.rotation.y = viewYaw;
   camera.rotation.x = viewPitch;
+  roomSystem.update?.(deltaSec);
   avatarSystem.animate(deltaSec, myCharacterId);
   renderer.render(scene, camera);
 }

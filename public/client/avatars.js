@@ -8,6 +8,7 @@ const MOVE_SPEED_REFERENCE = 3.5;
 const POSITION_SMOOTH_RATE = 15;
 const ROTATION_SMOOTH_RATE = 11;
 const MAX_ROTATION_SPEED = 10;
+const AVATAR_VISUAL_SCALE = 1.2;
 const HEAD_TEX_SIZE = 256;
 const FACE_U = 0.25;
 const FACE_V = 0.5;
@@ -288,6 +289,7 @@ export function createAvatarSystem({ scene, camera }) {
     rightShoe.position.set(0, -legTotal - shoeHeight * 0.35, shoeLength * 0.08);
     rightLegPivot.add(rightShoe);
     group.add(rightLegPivot);
+    group.scale.setScalar(AVATAR_VISUAL_SCALE);
 
     return {
       id,
@@ -319,7 +321,7 @@ export function createAvatarSystem({ scene, camera }) {
       lastDrawnEyeX: 999,
       lastDrawnEyeY: 999,
       headFace,
-      eyeHeight,
+      eyeHeight: eyeHeight * AVATAR_VISUAL_SCALE,
       skinColor: profile.skin
     };
   }

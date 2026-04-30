@@ -1,44 +1,30 @@
 import * as THREE from "https://unpkg.com/three@0.164.1/build/three.module.js";
 import { seededRandom } from "./utils.js";
 
-const DEFAULT_ROOM_HALF = 24;
 const WALL_HEIGHT = 5.2;
+const DEFAULT_ROOM_HALF = 24;
+const SHELF_WIDTH = 1.1;
+const SHELF_DEPTH = 6.0;
+const SHELF_HEIGHT = 2.9;
+
+const COOLER_WIDTH = 1.2;
+const COOLER_DEPTH = 0.91;
+const COOLER_HEIGHT = 3.0;
+
+const FREEZER_WIDTH = 1.2;
+const FREEZER_DEPTH = 0.91;
+const FREEZER_HEIGHT = 1.02;
 const DEFAULT_SHELVES = Object.freeze([
-  Object.freeze({ x: -4.2, z: -8, width: 0.8, depth: 5.2, height: 2.9 }),
-  Object.freeze({ x: 4.2, z: -8, width: 0.8, depth: 5.2, height: 2.9 }),
-  Object.freeze({ x: -4.2, z: 0, width: 0.8, depth: 5.2, height: 2.9 }),
-  Object.freeze({ x: 4.2, z: 0, width: 0.8, depth: 5.2, height: 2.9 }),
-  Object.freeze({ x: -4.2, z: 8, width: 0.8, depth: 5.2, height: 2.9 }),
-  Object.freeze({ x: 4.2, z: 8, width: 0.8, depth: 5.2, height: 2.9 })
+  Object.freeze({ x: -8, z: -7, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
+  Object.freeze({ x: 8, z: -7, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
+  Object.freeze({ x: -8, z: 7, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
+  Object.freeze({ x: 8, z: 7, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT })
 ]);
-const DEFAULT_COOLERS = Object.freeze([
-  Object.freeze({ x: -13.8, z: -22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: 0 }),
-  Object.freeze({ x: -12.52, z: -22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: 0 }),
-  Object.freeze({ x: -11.24, z: -22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: 0 }),
-  Object.freeze({ x: 11.24, z: -22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: 0 }),
-  Object.freeze({ x: 12.52, z: -22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: 0 }),
-  Object.freeze({ x: 13.8, z: -22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: 0 }),
-  Object.freeze({ x: -13.8, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI }),
-  Object.freeze({ x: -12.52, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI }),
-  Object.freeze({ x: -11.24, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI }),
-  Object.freeze({ x: 11.24, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI }),
-  Object.freeze({ x: 12.52, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI }),
-  Object.freeze({ x: 13.8, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI })
-]);
-const DEFAULT_FREEZERS = Object.freeze([
-  Object.freeze({ x: -22.85, z: -14.15, width: 1.9, depth: 1.2, height: 1.02, yaw: Math.PI / 2 }),
-  Object.freeze({ x: -22.85, z: -12.25, width: 1.9, depth: 1.2, height: 1.02, yaw: Math.PI / 2 }),
-  Object.freeze({ x: -22.85, z: 12.25, width: 1.9, depth: 1.2, height: 1.02, yaw: Math.PI / 2 }),
-  Object.freeze({ x: -22.85, z: 14.15, width: 1.9, depth: 1.2, height: 1.02, yaw: Math.PI / 2 }),
-  Object.freeze({ x: 22.85, z: -14.15, width: 1.9, depth: 1.2, height: 1.02, yaw: -Math.PI / 2 }),
-  Object.freeze({ x: 22.85, z: -12.25, width: 1.9, depth: 1.2, height: 1.02, yaw: -Math.PI / 2 }),
-  Object.freeze({ x: 22.85, z: 12.25, width: 1.9, depth: 1.2, height: 1.02, yaw: -Math.PI / 2 }),
-  Object.freeze({ x: 22.85, z: 14.15, width: 1.9, depth: 1.2, height: 1.02, yaw: -Math.PI / 2 }),
-  Object.freeze({ x: -4.2, z: -11.35, width: 1.9, depth: 1.2, height: 1.02, yaw: 0 }),
-  Object.freeze({ x: -4.2, z: -4.65, width: 1.9, depth: 1.2, height: 1.02, yaw: Math.PI }),
-  Object.freeze({ x: 4.2, z: 4.65, width: 1.9, depth: 1.2, height: 1.02, yaw: 0 }),
-  Object.freeze({ x: 4.2, z: 11.35, width: 1.9, depth: 1.2, height: 1.02, yaw: Math.PI })
-]);
+const DEFAULT_COOLERS = Object.freeze([]);
+const DEFAULT_FREEZERS = Object.freeze([]);
+const FLUORESCENT_ROWS = 4;
+const FLUORESCENT_COLS = 4;
+const FLUORESCENT_BLINK_INDEX = 5;
 
 export function createRoomSystem({ scene, renderer }) {
   const textureLoader = new THREE.TextureLoader();
@@ -63,9 +49,10 @@ export function createRoomSystem({ scene, renderer }) {
   const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), ceilingMaterial);
   ceiling.rotation.x = Math.PI / 2;
 
-  const wallBaseMaterial = new THREE.MeshStandardMaterial({ color: 0x6f7b8f, roughness: 0.95 });
+  const wallBaseMaterial = new THREE.MeshBasicMaterial({ color: 0x6f7b8f });
   const wallMaterials = [];
   const shelfSideMaterials = [];
+  const fluorescentUnits = [];
 
   function hasImageData(texture) {
     const image = texture?.image;
@@ -163,6 +150,7 @@ export function createRoomSystem({ scene, renderer }) {
 
   const wallRng = seededRandom(20260429);
   const shelfRng = seededRandom(20260430);
+  const blinkRng = seededRandom(20260501);
 
   let builtRoomHalf = null;
   let builtFixturesSignature = "";
@@ -208,10 +196,8 @@ export function createRoomSystem({ scene, renderer }) {
   }
 
   function createShelfSideMaterial(tileIndex) {
-    const material = new THREE.MeshStandardMaterial({
-      color: hasImageData(shelfTexture) ? 0xffffff : 0x7a6753,
-      roughness: 0.88,
-      metalness: 0.02,
+    const material = new THREE.MeshBasicMaterial({
+      color: hasImageData(shelfTexture) ? 0xffffff : 0x9a856b,
       side: THREE.DoubleSide
     });
     material.userData.tileIndex = tileIndex;
@@ -286,7 +272,7 @@ export function createRoomSystem({ scene, renderer }) {
   function createCooler(cooler) {
     const width = typeof cooler.width === "number" ? cooler.width : 1.28;
     const depth = typeof cooler.depth === "number" ? cooler.depth : 0.9;
-    const height = typeof cooler.height === "number" ? cooler.height : 3.52;
+    const height = typeof cooler.height === "number" ? cooler.height : 3.0;
     const yaw = typeof cooler.yaw === "number" ? cooler.yaw : 0;
 
     const group = new THREE.Group();
@@ -359,6 +345,91 @@ export function createRoomSystem({ scene, renderer }) {
     roomRoot.add(group);
   }
 
+  function createFluorescentGrid(roomHalf) {
+    fluorescentUnits.length = 0;
+    const ceilingY = WALL_HEIGHT - 0.2;
+    const edgeMargin = Math.max(2.8, roomHalf * 0.15);
+    const minCoord = -roomHalf + edgeMargin;
+    const maxCoord = roomHalf - edgeMargin;
+    const xStep = FLUORESCENT_COLS > 1 ? (maxCoord - minCoord) / (FLUORESCENT_COLS - 1) : 0;
+    const zStep = FLUORESCENT_ROWS > 1 ? (maxCoord - minCoord) / (FLUORESCENT_ROWS - 1) : 0;
+    const tubeLength = Math.max(3.6, Math.min(5.4, roomHalf * 0.24));
+
+    for (let row = 0; row < FLUORESCENT_ROWS; row += 1) {
+      for (let col = 0; col < FLUORESCENT_COLS; col += 1) {
+        const index = row * FLUORESCENT_COLS + col;
+        const x = minCoord + col * xStep;
+        const z = minCoord + row * zStep;
+        const isBlinker = index === FLUORESCENT_BLINK_INDEX;
+
+        const fixture = new THREE.Group();
+        fixture.position.set(x, ceilingY, z);
+        fixture.userData.type = "fluorescent";
+
+        const housing = new THREE.Mesh(
+          new THREE.BoxGeometry(tubeLength, 0.14, 0.34),
+          new THREE.MeshStandardMaterial({ color: 0x9ca7b6, roughness: 0.4, metalness: 0.24 })
+        );
+        fixture.add(housing);
+
+        const diffuserMaterial = new THREE.MeshStandardMaterial({
+          color: 0xf2f8ff,
+          roughness: 0.2,
+          metalness: 0.02,
+          emissive: 0xdbeeff,
+          emissiveIntensity: 1.35
+        });
+        const diffuser = new THREE.Mesh(new THREE.BoxGeometry(tubeLength * 0.9, 0.06, 0.2), diffuserMaterial);
+        diffuser.position.y = -0.06;
+        fixture.add(diffuser);
+
+        const glow = new THREE.PointLight(0xeef7ff, 1.4, roomHalf * 1.06, 2);
+        glow.position.y = -0.24;
+        fixture.add(glow);
+
+        roomRoot.add(fixture);
+        fluorescentUnits.push({
+          isBlinker,
+          light: glow,
+          diffuserMaterial,
+          baseIntensity: 1.4,
+          baseEmissiveIntensity: 1.35,
+          blinkCooldownSec: 0.9 + blinkRng() * 1.8,
+          blinkRemainingSec: 0
+        });
+      }
+    }
+  }
+
+  function updateFluorescents(deltaSec) {
+    if (!fluorescentUnits.length) return;
+    for (const unit of fluorescentUnits) {
+      if (!unit.isBlinker) continue;
+      if (unit.blinkRemainingSec > 0) {
+        unit.blinkRemainingSec = Math.max(0, unit.blinkRemainingSec - deltaSec);
+      } else {
+        unit.blinkCooldownSec -= deltaSec;
+      }
+
+      const shouldBlinkNow =
+        unit.blinkRemainingSec > 0 ||
+        (unit.blinkCooldownSec <= 0 && (() => {
+          unit.blinkRemainingSec = 0.05 + blinkRng() * 0.07;
+          unit.blinkCooldownSec = 0.8 + blinkRng() * 1.9;
+          return true;
+        })());
+
+      if (shouldBlinkNow) {
+        const pulse = 0.22 + blinkRng() * 0.18;
+        unit.light.intensity = unit.baseIntensity * pulse;
+        unit.diffuserMaterial.emissiveIntensity = unit.baseEmissiveIntensity * pulse;
+      } else {
+        unit.light.intensity = unit.baseIntensity;
+        unit.diffuserMaterial.emissiveIntensity = unit.baseEmissiveIntensity;
+      }
+    }
+  }
+
   function buildRoomGeometry(roomHalf, shelves, coolers, freezers) {
     const wallThickness = 1;
     const wallSegmentsPerSide = 4;
@@ -388,6 +459,7 @@ export function createRoomSystem({ scene, renderer }) {
     for (const shelf of shelves) createShelf(shelf);
     for (const cooler of coolers) createCooler(cooler);
     for (const freezer of freezers) createFreezer(freezer);
+    createFluorescentGrid(roomHalf);
   }
 
   function normalizeFixtures(fixtures, fallback) {
@@ -435,5 +507,5 @@ export function createRoomSystem({ scene, renderer }) {
     freezers: DEFAULT_FREEZERS
   });
 
-  return { syncFromWorld };
+  return { syncFromWorld, update: updateFluorescents };
 }
