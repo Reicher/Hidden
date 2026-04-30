@@ -8,7 +8,6 @@ const screenRootEl = document.getElementById("screenRoot");
 const connectViewEl = document.getElementById("connectView");
 const lobbyViewEl = document.getElementById("lobbyView");
 const connectErrorEl = document.getElementById("connectError");
-const serverInputEl = document.getElementById("serverInput");
 const nameInputEl = document.getElementById("nameInput");
 const connectBtnEl = document.getElementById("connectBtn");
 const scoreBodyEl = document.getElementById("scoreBody");
@@ -18,7 +17,6 @@ const chatSendBtnEl = document.getElementById("chatSendBtn");
 const playBtnEl = document.getElementById("playBtn");
 const countdownTextEl = document.getElementById("countdownText");
 
-const SERVER_TARGET_KEY = "hidden_server_target";
 const PLAYER_NAME_KEY = "hidden_player_name";
 
 const sceneSystem = createSceneSystem(canvas);
@@ -81,18 +79,6 @@ function normalizeAngle(angle) {
 
 function wsScheme() {
   return location.protocol === "https:" ? "wss" : "ws";
-}
-
-function normalizeServerTarget(raw) {
-  const value = String(raw || "").trim();
-  if (value === "") return `${wsScheme()}://${location.host}`;
-  if (/^wss?:\/\//i.test(value)) return value;
-  if (/^https?:\/\//i.test(value)) {
-    const parsed = new URL(value);
-    parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
-    return parsed.toString();
-  }
-  return `${wsScheme()}://${value}`;
 }
 
 function setConnectError(text) {
@@ -366,8 +352,6 @@ function attachSocket(wsUrl, loginName) {
 
 function connectAndLogin() {
   if (connecting) return;
-
-  const rawTarget = serverInputEl.value.trim();
   const rawName = nameInputEl.value.trim();
 
   if (rawName.length < 2) {
@@ -375,16 +359,8 @@ function connectAndLogin() {
     return;
   }
 
-  let wsUrl;
-  try {
-    wsUrl = normalizeServerTarget(rawTarget);
-    new URL(wsUrl);
-  } catch {
-    setConnectError("Ogiltig serveradress.");
-    return;
-  }
+  const wsUrl = `${wsScheme()}://${location.host}`;
 
-  localStorage.setItem(SERVER_TARGET_KEY, rawTarget);
   localStorage.setItem(PLAYER_NAME_KEY, rawName);
 
   connecting = true;
@@ -419,24 +395,13 @@ function sendInput() {
   lastSentSnapshot = snapshot;
 }
 
-const serverFromUrl = (() => {
-  const value = new URLSearchParams(location.search).get("server");
-  return value && value.trim() ? value.trim() : null;
-})();
-if (serverFromUrl) localStorage.setItem(SERVER_TARGET_KEY, serverFromUrl);
-const savedServerTarget = localStorage.getItem(SERVER_TARGET_KEY);
 const savedName = localStorage.getItem(PLAYER_NAME_KEY);
-serverInputEl.value = savedServerTarget != null ? savedServerTarget : location.host;
 nameInputEl.value = savedName != null ? savedName : "";
 
 connectBtnEl.addEventListener("click", connectAndLogin);
 nameInputEl.addEventListener("keydown", (event) => {
   if (event.key === "Enter") connectAndLogin();
 });
-serverInputEl.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") connectAndLogin();
-});
-
 playBtnEl.addEventListener("click", () => {
   if (!socket || !authenticated) return;
   socket.sendJson({ type: "play" });
