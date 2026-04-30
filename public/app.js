@@ -44,6 +44,11 @@ const aliveOthersTextEl = document.getElementById("aliveOthersText");
 const gameChatMessagesEl = document.getElementById("gameChatMessages");
 const gameChatInputRowEl = document.getElementById("gameChatInputRow");
 const gameChatInputEl = document.getElementById("gameChatInput");
+const mobileControlsEl = document.getElementById("mobileControls");
+const mobileLookPadEl = document.getElementById("mobileLookPad");
+const mobileSprintBtnEl = document.getElementById("mobileSprintBtn");
+const mobileAttackBtnEl = document.getElementById("mobileAttackBtn");
+const mobileChatBtnEl = document.getElementById("mobileChatBtn");
 
 const PLAYER_NAME_KEY = "hidden_player_name";
 const DEBUG_TOKEN_KEY = "hidden_debug_token";
@@ -78,6 +83,10 @@ const input = {
 
 const INPUT_SEND_INTERVAL_MS = 33;
 const INPUT_HEARTBEAT_MS = 120;
+const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
+const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
+const IS_TOUCH_DEVICE =
+  (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) || (navigator.maxTouchPoints || 0) > 0;
 
 let pitch = 0;
 let yaw = 0;
@@ -87,6 +96,9 @@ let inputDirty = true;
 let lastInputSentAt = 0;
 let lastSentSnapshot = "";
 let lastFrameAt = performance.now();
+let mobileLookPointerId = null;
+let mobileLookLastX = 0;
+let mobileLookLastY = 0;
 
 function hashString(str) {
   let h = 2166136261;
@@ -110,6 +122,10 @@ function normalizeAngle(angle) {
   while (out > Math.PI) out -= Math.PI * 2;
   while (out < -Math.PI) out += Math.PI * 2;
   return out;
+}
+
+function clampPitch(value) {
+  return Math.max(-1.2, Math.min(1.2, value));
 }
 
 function wsScheme() {
@@ -230,6 +246,13 @@ function isGameChatFocused() {
   return document.activeElement === gameChatInputEl;
 }
 
+function updateMobileControlsVisibility() {
+  if (!mobileControlsEl) return;
+  const show = IS_TOUCH_DEVICE && appMode === "playing" && sessionState === "alive" && !gameChatOpen;
+  mobileControlsEl.classList.toggle("hidden", !show);
+  document.body.classList.toggle("mobile-controls-enabled", show);
+}
+
 function setGameChatOpen(open, { restorePointerLock = false } = {}) {
   if (!gameChatInputRowEl || !gameChatInputEl) return;
   gameChatOpen = Boolean(open);
@@ -240,6 +263,7 @@ function setGameChatOpen(open, { restorePointerLock = false } = {}) {
     sendInput();
     if (document.pointerLockElement) document.exitPointerLock?.();
     gameChatInputEl.focus();
+    updateMobileControlsVisibility();
     return;
   }
 
@@ -247,6 +271,7 @@ function setGameChatOpen(open, { restorePointerLock = false } = {}) {
   if (restorePointerLock && appMode === "playing" && sessionState === "alive") {
     requestPointerLockSafe(canvas);
   }
+  updateMobileControlsVisibility();
 }
 
 function updateInGameHud() {
@@ -277,6 +302,7 @@ function setAppMode(mode) {
 
   if (previous === "playing" && mode !== "playing") {
     myCharacterId = null;
+    resetInputState();
   }
 
   if (mode !== "lobby" && debugOpen) {
@@ -284,6 +310,7 @@ function setAppMode(mode) {
   }
 
   if (mode !== "playing") setGameChatOpen(false);
+  updateMobileControlsVisibility();
   updateInGameHud();
   updateDocumentTitle();
 }
@@ -843,9 +870,117 @@ function sendInput() {
   lastSentSnapshot = snapshot;
 }
 
+function setMoveInputState(field, active) {
+  if (!(field in input)) return;
+  if (input[field] === active) return;
+  input[field] = active;
+  inputDirty = true;
+}
+
+function bindHoldButton(el, onStart, onStop) {
+  if (!el) return;
+
+  const stop = (event) => {
+    if (event && event.pointerId != null && el.hasPointerCapture?.(event.pointerId)) {
+      el.releasePointerCapture(event.pointerId);
+    }
+    onStop();
+  };
+
+  el.addEventListener("pointerdown", (event) => {
+    if (!IS_TOUCH_DEVICE) return;
+    event.preventDefault();
+    el.setPointerCapture?.(event.pointerId);
+    onStart();
+  });
+  el.addEventListener("pointerup", stop);
+  el.addEventListener("pointercancel", stop);
+  el.addEventListener("lostpointercapture", onStop);
+}
+
+function bindMobileControls() {
+  if (!IS_TOUCH_DEVICE) return;
+
+  for (const btn of document.querySelectorAll(".mobileDirBtn")) {
+    const moveField = btn.dataset.move;
+    if (!moveField || !(moveField in input)) continue;
+    bindHoldButton(
+      btn,
+      () => setMoveInputState(moveField, true),
+      () => setMoveInputState(moveField, false)
+    );
+  }
+
+  bindHoldButton(
+    mobileSprintBtnEl,
+    () => setMoveInputState("sprint", true),
+    () => setMoveInputState("sprint", false)
+  );
+
+  if (mobileAttackBtnEl) {
+    mobileAttackBtnEl.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      if (appMode !== "playing" || sessionState !== "alive") return;
+      if (gameChatOpen || isGameChatFocused()) return;
+      socket?.sendJson({ type: "attack" });
+    });
+  }
+
+  if (mobileChatBtnEl) {
+    mobileChatBtnEl.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (appMode !== "playing" || sessionState !== "alive") return;
+      setGameChatOpen(!gameChatOpen, { restorePointerLock: false });
+    });
+  }
+
+  if (!mobileLookPadEl) return;
+  mobileLookPadEl.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    if (mobileLookPointerId != null) return;
+    mobileLookPointerId = event.pointerId;
+    mobileLookLastX = event.clientX;
+    mobileLookLastY = event.clientY;
+    mobileLookPadEl.setPointerCapture?.(event.pointerId);
+  });
+
+  mobileLookPadEl.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== mobileLookPointerId) return;
+    if (appMode !== "playing" || sessionState !== "alive" || gameChatOpen || isGameChatFocused()) return;
+
+    event.preventDefault();
+    const dx = event.clientX - mobileLookLastX;
+    const dy = event.clientY - mobileLookLastY;
+    mobileLookLastX = event.clientX;
+    mobileLookLastY = event.clientY;
+
+    yaw -= dx * LOOK_TOUCH_SENSITIVITY_X;
+    pitch = clampPitch(pitch - dy * LOOK_TOUCH_SENSITIVITY_Y);
+    input.yaw = yaw;
+    inputDirty = true;
+    const now = performance.now();
+    if (now - lastInputSentAt >= INPUT_SEND_INTERVAL_MS) sendInput();
+  });
+
+  const clearLookPointer = (event) => {
+    if (event.pointerId !== mobileLookPointerId) return;
+    if (mobileLookPadEl.hasPointerCapture?.(event.pointerId)) {
+      mobileLookPadEl.releasePointerCapture(event.pointerId);
+    }
+    mobileLookPointerId = null;
+  };
+
+  mobileLookPadEl.addEventListener("pointerup", clearLookPointer);
+  mobileLookPadEl.addEventListener("pointercancel", clearLookPointer);
+  mobileLookPadEl.addEventListener("lostpointercapture", () => {
+    mobileLookPointerId = null;
+  });
+}
+
 const savedName = localStorage.getItem(PLAYER_NAME_KEY);
 if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
 if (debugTokenInputEl) debugTokenInputEl.value = getDebugToken();
+bindMobileControls();
 
 connectBtnEl?.addEventListener("click", connectAndLogin);
 createPrivateRoomBtnEl?.addEventListener("click", () => {
@@ -863,7 +998,7 @@ playBtnEl?.addEventListener("click", () => {
 controlsBtnEl?.addEventListener("click", () => {
   openLobbyDialog(
     "Kontroller",
-    "WASD: rörelse\nShift: springa (dum ide)\nMus: titta runt\nVänsterklick: attack\nC: öppna chat i spelet"
+    "PC: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack, C öppnar chat.\nMobil: knappar nere till vänster för rörelse, dra i höger ruta för att titta, Attack/Spring/Chat till höger."
   );
 });
 settingsBtnEl?.addEventListener("click", () => {
@@ -999,8 +1134,7 @@ document.addEventListener("mousemove", (event) => {
   if (appMode !== "playing") return;
   if (!document.pointerLockElement) return;
   yaw -= event.movementX * 0.0022;
-  pitch -= event.movementY * 0.002;
-  pitch = Math.max(-1.2, Math.min(1.2, pitch));
+  pitch = clampPitch(pitch - event.movementY * 0.002);
 
   input.yaw = yaw;
   inputDirty = true;

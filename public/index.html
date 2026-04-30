@@ -79,6 +79,22 @@
           <input id="gameChatInput" type="text" placeholder="Skriv meddelande..." maxlength="220" autocomplete="off" />
         </div>
       </div>
+      <div id="mobileControls" class="hidden" aria-hidden="true">
+        <div id="mobileMovePad">
+          <button type="button" class="mobileDirBtn" data-move="forward">W</button>
+          <button type="button" class="mobileDirBtn" data-move="left">A</button>
+          <button type="button" class="mobileDirBtn" data-move="backward">S</button>
+          <button type="button" class="mobileDirBtn" data-move="right">D</button>
+        </div>
+        <div id="mobileActionPad">
+          <div id="mobileLookPad">Dra här för att titta</div>
+          <div id="mobileActionRow">
+            <button id="mobileSprintBtn" type="button">Spring</button>
+            <button id="mobileAttackBtn" type="button">Attack</button>
+            <button id="mobileChatBtn" type="button">Chat</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="/app.js"></script>
