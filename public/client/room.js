@@ -26,18 +26,18 @@ const DEFAULT_COOLERS = Object.freeze([
   Object.freeze({ x: 13.8, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI })
 ]);
 const DEFAULT_FREEZERS = Object.freeze([
-  Object.freeze({ x: -22.85, z: -14.15, width: 1.9, depth: 1.2, height: 2.15, yaw: Math.PI / 2 }),
-  Object.freeze({ x: -22.85, z: -12.25, width: 1.9, depth: 1.2, height: 2.15, yaw: Math.PI / 2 }),
-  Object.freeze({ x: -22.85, z: 12.25, width: 1.9, depth: 1.2, height: 2.15, yaw: Math.PI / 2 }),
-  Object.freeze({ x: -22.85, z: 14.15, width: 1.9, depth: 1.2, height: 2.15, yaw: Math.PI / 2 }),
-  Object.freeze({ x: 22.85, z: -14.15, width: 1.9, depth: 1.2, height: 2.15, yaw: -Math.PI / 2 }),
-  Object.freeze({ x: 22.85, z: -12.25, width: 1.9, depth: 1.2, height: 2.15, yaw: -Math.PI / 2 }),
-  Object.freeze({ x: 22.85, z: 12.25, width: 1.9, depth: 1.2, height: 2.15, yaw: -Math.PI / 2 }),
-  Object.freeze({ x: 22.85, z: 14.15, width: 1.9, depth: 1.2, height: 2.15, yaw: -Math.PI / 2 }),
-  Object.freeze({ x: -5.2, z: -9.75, width: 1.9, depth: 1.2, height: 2.15, yaw: Math.PI / 2 }),
-  Object.freeze({ x: -5.2, z: -7.85, width: 1.9, depth: 1.2, height: 2.15, yaw: Math.PI / 2 }),
-  Object.freeze({ x: 5.2, z: 7.85, width: 1.9, depth: 1.2, height: 2.15, yaw: -Math.PI / 2 }),
-  Object.freeze({ x: 5.2, z: 9.75, width: 1.9, depth: 1.2, height: 2.15, yaw: -Math.PI / 2 })
+  Object.freeze({ x: -22.85, z: -14.15, width: 1.9, depth: 1.2, height: 1.02, yaw: Math.PI / 2 }),
+  Object.freeze({ x: -22.85, z: -12.25, width: 1.9, depth: 1.2, height: 1.02, yaw: Math.PI / 2 }),
+  Object.freeze({ x: -22.85, z: 12.25, width: 1.9, depth: 1.2, height: 1.02, yaw: Math.PI / 2 }),
+  Object.freeze({ x: -22.85, z: 14.15, width: 1.9, depth: 1.2, height: 1.02, yaw: Math.PI / 2 }),
+  Object.freeze({ x: 22.85, z: -14.15, width: 1.9, depth: 1.2, height: 1.02, yaw: -Math.PI / 2 }),
+  Object.freeze({ x: 22.85, z: -12.25, width: 1.9, depth: 1.2, height: 1.02, yaw: -Math.PI / 2 }),
+  Object.freeze({ x: 22.85, z: 12.25, width: 1.9, depth: 1.2, height: 1.02, yaw: -Math.PI / 2 }),
+  Object.freeze({ x: 22.85, z: 14.15, width: 1.9, depth: 1.2, height: 1.02, yaw: -Math.PI / 2 }),
+  Object.freeze({ x: -4.2, z: -11.35, width: 1.9, depth: 1.2, height: 1.02, yaw: 0 }),
+  Object.freeze({ x: -4.2, z: -4.65, width: 1.9, depth: 1.2, height: 1.02, yaw: Math.PI }),
+  Object.freeze({ x: 4.2, z: 4.65, width: 1.9, depth: 1.2, height: 1.02, yaw: 0 }),
+  Object.freeze({ x: 4.2, z: 11.35, width: 1.9, depth: 1.2, height: 1.02, yaw: Math.PI })
 ]);
 
 export function createRoomSystem({ scene, renderer }) {
@@ -63,7 +63,7 @@ export function createRoomSystem({ scene, renderer }) {
   const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), ceilingMaterial);
   ceiling.rotation.x = Math.PI / 2;
 
-  const wallBaseMaterial = new THREE.MeshStandardMaterial({ color: 0x4e5868, roughness: 0.95 });
+  const wallBaseMaterial = new THREE.MeshStandardMaterial({ color: 0x6f7b8f, roughness: 0.95 });
   const wallMaterials = [];
   const shelfSideMaterials = [];
 
@@ -89,7 +89,7 @@ export function createRoomSystem({ scene, renderer }) {
     undefined,
     () => {
       floorMaterial.map = null;
-      floorMaterial.color.setHex(0x30353f);
+      floorMaterial.color.setHex(0x4a505d);
       floorMaterial.needsUpdate = true;
     }
   );
@@ -108,7 +108,7 @@ export function createRoomSystem({ scene, renderer }) {
     undefined,
     () => {
       ceilingMaterial.map = null;
-      ceilingMaterial.color.setHex(0x2e3138);
+      ceilingMaterial.color.setHex(0x515661);
       ceilingMaterial.needsUpdate = true;
     }
   );
@@ -131,7 +131,7 @@ export function createRoomSystem({ scene, renderer }) {
     () => {
       for (const material of wallMaterials) {
         material.map = null;
-        material.color.setHex(0x4e5868);
+        material.color.setHex(0x6f7b8f);
         material.needsUpdate = true;
       }
     }
@@ -155,7 +155,7 @@ export function createRoomSystem({ scene, renderer }) {
     () => {
       for (const material of shelfSideMaterials) {
         material.map = null;
-        material.color.setHex(0x5a4a3a);
+        material.color.setHex(0x7a6753);
         material.needsUpdate = true;
       }
     }
@@ -200,7 +200,7 @@ export function createRoomSystem({ scene, renderer }) {
       material.color.setHex(0xffffff);
       material.map = createAtlasMap(wallTexture, tileIndex);
     } else {
-      material.color.setHex(0x4e5868);
+      material.color.setHex(0x6f7b8f);
       material.map = null;
     }
     wallMaterials.push(material);
@@ -209,7 +209,7 @@ export function createRoomSystem({ scene, renderer }) {
 
   function createShelfSideMaterial(tileIndex) {
     const material = new THREE.MeshStandardMaterial({
-      color: hasImageData(shelfTexture) ? 0xffffff : 0x5a4a3a,
+      color: hasImageData(shelfTexture) ? 0xffffff : 0x7a6753,
       roughness: 0.88,
       metalness: 0.02,
       side: THREE.DoubleSide
@@ -262,7 +262,7 @@ export function createRoomSystem({ scene, renderer }) {
     const width = typeof shelf.width === "number" ? shelf.width : 0.8;
     const depth = typeof shelf.depth === "number" ? shelf.depth : 5.2;
     const height = typeof shelf.height === "number" ? shelf.height : 2.9;
-    const plain = new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.9, metalness: 0.02 });
+    const plain = new THREE.MeshStandardMaterial({ color: 0x8a7660, roughness: 0.9, metalness: 0.02 });
 
     const sideA = createShelfSideMaterial(randomShelfTileIndex());
     const sideB = createShelfSideMaterial(randomShelfTileIndex());
@@ -321,7 +321,7 @@ export function createRoomSystem({ scene, renderer }) {
   function createFreezer(freezer) {
     const width = typeof freezer.width === "number" ? freezer.width : 1.9;
     const depth = typeof freezer.depth === "number" ? freezer.depth : 1.2;
-    const height = typeof freezer.height === "number" ? freezer.height : 2.15;
+    const height = typeof freezer.height === "number" ? freezer.height : 1.02;
     const yaw = typeof freezer.yaw === "number" ? freezer.yaw : 0;
 
     const group = new THREE.Group();
@@ -330,7 +330,7 @@ export function createRoomSystem({ scene, renderer }) {
     group.userData.type = "freezer";
     group.userData.opening = "top";
 
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xbec7d1, roughness: 0.44, metalness: 0.06 });
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xcbd3dd, roughness: 0.42, metalness: 0.06 });
     const lidMaterial = new THREE.MeshStandardMaterial({
       color: 0xe5ebf2,
       roughness: 0.12,

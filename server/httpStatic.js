@@ -35,7 +35,10 @@ export function createStaticHttpServer({ host, port, rootDir, onBeforeStaticRequ
         if (handled) return;
       }
       const pathname = decodeURIComponent(requestUrl.pathname || "/");
-      const primaryPath = pathname === "/" ? "/index.html" : pathname;
+      let primaryPath = pathname === "/" ? "/index.html" : pathname;
+      if (pathname === "/debug" || pathname === "/debug/") {
+        primaryPath = "/debug.html";
+      }
 
       const tryReadPath = async (absolutePath) => {
         const data = await readFile(absolutePath);

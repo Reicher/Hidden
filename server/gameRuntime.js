@@ -1,5 +1,6 @@
 import { createRoomRuntime } from "./roomRuntime.js";
 import { createDebugStatsStore } from "./debugStats.js";
+import { createSystemMetricsCollector } from "./systemMetrics.js";
 import { DEBUG_VIEW_TOKEN } from "./config.js";
 
 const PUBLIC_ROOM_ID = "public";
@@ -29,6 +30,7 @@ function parseRoomFromRequestUrl(rawUrl) {
 export function attachGameRuntime({ server, rootDir }) {
   const rooms = new Map();
   const debugStats = createDebugStatsStore({ rootDir });
+  const systemMetrics = createSystemMetricsCollector();
 
   function writeJson(res, statusCode, payload) {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -61,7 +63,7 @@ export function attachGameRuntime({ server, rootDir }) {
 
   ensureRoom({ roomId: PUBLIC_ROOM_ID, roomCode: null, isPrivate: false });
 
-  function handleHttpRequest({ req, res, requestUrl }) {
+  async function handleHttpRequest({ req, res, requestUrl }) {
     if (requestUrl.pathname !== "/api/debug/stats") return false;
     if (req.method !== "GET") {
       writeJson(res, 405, { error: "method_not_allowed" });
@@ -82,6 +84,7 @@ export function attachGameRuntime({ server, rootDir }) {
     }
 
     const payload = debugStats.getSnapshot();
+    payload.systemMetrics = await systemMetrics.collect();
     payload.liveRooms = [...rooms.values()].map((room) => room.getDebugSnapshot()).sort((a, b) => {
       if (b.current.connected !== a.current.connected) return b.current.connected - a.current.connected;
       return String(a.roomId).localeCompare(String(b.roomId), "sv");

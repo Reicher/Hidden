@@ -90,7 +90,7 @@ export const COOLERS = Object.freeze([
 
 export const FREEZER_WIDTH = 1.9;
 export const FREEZER_DEPTH = 1.2;
-export const FREEZER_HEIGHT = 2.15;
+export const FREEZER_HEIGHT = 1.02;
 export const FREEZERS = Object.freeze([
   freezeFixture({ x: -22.85, z: -14.15, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: Math.PI / 2 }),
   freezeFixture({ x: -22.85, z: -12.25, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: Math.PI / 2 }),
@@ -100,10 +100,10 @@ export const FREEZERS = Object.freeze([
   freezeFixture({ x: 22.85, z: -12.25, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: -Math.PI / 2 }),
   freezeFixture({ x: 22.85, z: 12.25, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: -Math.PI / 2 }),
   freezeFixture({ x: 22.85, z: 14.15, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: -Math.PI / 2 }),
-  freezeFixture({ x: -5.2, z: -9.75, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: Math.PI / 2 }),
-  freezeFixture({ x: -5.2, z: -7.85, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: Math.PI / 2 }),
-  freezeFixture({ x: 5.2, z: 7.85, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: -Math.PI / 2 }),
-  freezeFixture({ x: 5.2, z: 9.75, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: -Math.PI / 2 })
+  freezeFixture({ x: -4.2, z: -11.35, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: 0 }),
+  freezeFixture({ x: -4.2, z: -4.65, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: Math.PI }),
+  freezeFixture({ x: 4.2, z: 4.65, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: 0 }),
+  freezeFixture({ x: 4.2, z: 11.35, width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT, yaw: Math.PI })
 ]);
 
 export const HEARTBEAT_INTERVAL_MS = envInt("HEARTBEAT_INTERVAL_MS", 5000);

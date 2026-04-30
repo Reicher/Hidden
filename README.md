@@ -50,6 +50,7 @@ Privata rum: öppna `http://127.0.0.1:3000/<rumskod>` för ett separat rum som t
   - hur många som är inne nu / spelar nu
   - unika namn och senaste inloggningar
   - per-rum statistik
+  - CPU-last, CPU-temp (när tillgängligt) och RAM (host + Node-process)
   - senaste serverevents
   - graf över aktivitet över tid
 - Servern exponerar datan via `GET /api/debug/stats`.
