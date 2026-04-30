@@ -7,9 +7,9 @@ function character(id, x, z, yaw = 0) {
 
 function testVictimCollection() {
   const attacker = character(0, 0, 0, 0);
-  const inFront = character(1, 0, 2, 0);
+  const inFront = character(1, 0, -2, 0);
   const side = character(2, 2, 0, 0);
-  const behind = character(3, 0, -2, 0);
+  const behind = character(3, 0, 2, 0);
 
   const characters = [attacker, inFront, side, behind];
   const victims = collectVictimIds({

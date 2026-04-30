@@ -2,11 +2,36 @@ import * as THREE from "https://unpkg.com/three@0.164.1/build/three.module.js";
 import { clamp01, normalizeAngle, seededRandom } from "./utils.js";
 
 const ATTACK_ANIM_MS = 140;
+const RESPAWN_HIDE_MS = 110;
+const RESPAWN_JUMP_DISTANCE = 4.2;
 const MOVE_SPEED_REFERENCE = 3.5;
 const CAMERA_HEIGHT = 1.6;
+const POSITION_SMOOTH_RATE = 15;
+const ROTATION_SMOOTH_RATE = 11;
+const MAX_ROTATION_SPEED = 10;
 
 export function createAvatarSystem({ scene, camera }) {
   const avatars = new Map();
+  const firstPersonArmPivot = new THREE.Group();
+  firstPersonArmPivot.position.set(0.22, -0.18, -0.38);
+  firstPersonArmPivot.rotation.set(-0.08, -0.12, -0.12);
+  const firstPersonArm = new THREE.Mesh(
+    new THREE.BoxGeometry(0.16, 0.7, 0.18),
+    new THREE.MeshStandardMaterial({
+      color: 0xb57b5f,
+      roughness: 0.82,
+      metalness: 0.02,
+      depthTest: false,
+      depthWrite: false
+    })
+  );
+  firstPersonArm.position.set(0, -0.35, 0.02);
+  firstPersonArm.renderOrder = 1000;
+  firstPersonArm.frustumCulled = false;
+  firstPersonArmPivot.add(firstPersonArm);
+  firstPersonArmPivot.visible = false;
+  camera.add(firstPersonArmPivot);
+  let firstPersonAttackMs = 0;
 
   function buildCharacterColors(id) {
     const rng = seededRandom(id * 4093 + 17);
@@ -77,6 +102,7 @@ export function createAvatarSystem({ scene, camera }) {
       currentYaw: 0,
       initialized: false,
       attackFlashMsRemaining: 0,
+      respawnHideMsRemaining: 0,
       lastServerX: null,
       lastServerZ: null,
       lastServerAt: 0,
@@ -86,8 +112,6 @@ export function createAvatarSystem({ scene, camera }) {
 
   function updateFromServer(avatar, character, nowMs) {
     avatar.seenAtTick = true;
-    avatar.targetX = character.x;
-    avatar.targetZ = character.z;
     avatar.targetYaw = character.yaw;
     avatar.attackFlashMsRemaining = character.attackFlashMsRemaining || 0;
 
@@ -99,11 +123,26 @@ export function createAvatarSystem({ scene, camera }) {
     }
 
     if (avatar.lastServerAt > 0 && avatar.lastServerX != null && avatar.lastServerZ != null) {
+      const serverJump = Math.hypot(character.x - avatar.lastServerX, character.z - avatar.lastServerZ);
+      if (serverJump >= RESPAWN_JUMP_DISTANCE) {
+        avatar.respawnHideMsRemaining = RESPAWN_HIDE_MS;
+        avatar.group.visible = false;
+        avatar.group.position.set(character.x, 0, character.z);
+        avatar.targetX = character.x;
+        avatar.targetZ = character.z;
+        avatar.moveAmount = 0;
+      } else {
+        avatar.targetX = character.x;
+        avatar.targetZ = character.z;
+      }
+
       const dt = Math.max(0.001, (nowMs - avatar.lastServerAt) / 1000);
       const dist = Math.hypot(character.x - avatar.lastServerX, character.z - avatar.lastServerZ);
       const speedRatio = clamp01((dist / dt) / MOVE_SPEED_REFERENCE);
       avatar.moveAmount = THREE.MathUtils.lerp(avatar.moveAmount, speedRatio, 0.5);
     } else {
+      avatar.targetX = character.x;
+      avatar.targetZ = character.z;
       avatar.moveAmount = THREE.MathUtils.lerp(avatar.moveAmount, 0, 0.3);
     }
 
@@ -114,13 +153,22 @@ export function createAvatarSystem({ scene, camera }) {
 
   function animateAvatar(avatar, deltaSec) {
     if (!avatar.initialized) return;
+    if (avatar.respawnHideMsRemaining > 0) {
+      avatar.respawnHideMsRemaining = Math.max(0, avatar.respawnHideMsRemaining - deltaSec * 1000);
+      if (avatar.respawnHideMsRemaining <= 0) avatar.group.visible = true;
+      return;
+    }
     avatar.attackFlashMsRemaining = Math.max(0, avatar.attackFlashMsRemaining - deltaSec * 1000);
-    const posSmooth = 1 - Math.exp(-deltaSec * 15);
+    const posSmooth = 1 - Math.exp(-deltaSec * POSITION_SMOOTH_RATE);
     avatar.group.position.x = THREE.MathUtils.lerp(avatar.group.position.x, avatar.targetX, posSmooth);
     avatar.group.position.z = THREE.MathUtils.lerp(avatar.group.position.z, avatar.targetZ, posSmooth);
 
     const yawDelta = normalizeAngle(avatar.targetYaw - avatar.currentYaw);
-    avatar.currentYaw = normalizeAngle(avatar.currentYaw + yawDelta * posSmooth);
+    const rotSmooth = 1 - Math.exp(-deltaSec * ROTATION_SMOOTH_RATE);
+    const desiredStep = yawDelta * rotSmooth;
+    const maxStep = MAX_ROTATION_SPEED * deltaSec;
+    const clampedStep = THREE.MathUtils.clamp(desiredStep, -maxStep, maxStep);
+    avatar.currentYaw = normalizeAngle(avatar.currentYaw + clampedStep);
     avatar.group.rotation.y = avatar.currentYaw;
 
     avatar.walkPhase += deltaSec * (2.2 + avatar.moveAmount * 7.2);
@@ -134,11 +182,31 @@ export function createAvatarSystem({ scene, camera }) {
     if (avatar.attackFlashMsRemaining > 0) {
       const progress = 1 - clamp01(avatar.attackFlashMsRemaining / ATTACK_ANIM_MS);
       const extension = progress < 0.38 ? progress / 0.38 : 1 - (progress - 0.38) / 0.62;
-      punch = clamp01(extension) * 1.35;
+      punch = clamp01(extension) * 1.9;
     }
 
     avatar.leftArmPivot.rotation.x = armBase;
-    avatar.rightArmPivot.rotation.x = -armBase - punch;
+    avatar.rightArmPivot.rotation.x = -armBase + punch;
+  }
+
+  function animateFirstPersonArm(deltaSec, hasControl) {
+    if (!hasControl) {
+      firstPersonArmPivot.visible = false;
+      firstPersonAttackMs = 0;
+      return;
+    }
+    firstPersonArmPivot.visible = true;
+    firstPersonAttackMs = Math.max(0, firstPersonAttackMs - deltaSec * 1000);
+    let punch = 0;
+    if (firstPersonAttackMs > 0) {
+      const progress = 1 - clamp01(firstPersonAttackMs / ATTACK_ANIM_MS);
+      const extension = progress < 0.35 ? progress / 0.35 : 1 - (progress - 0.35) / 0.65;
+      punch = clamp01(extension) * 2.2;
+    }
+    firstPersonArmPivot.rotation.x = -0.12 + punch;
+    firstPersonArmPivot.rotation.y = -0.12 + punch * 0.16;
+    firstPersonArmPivot.position.x = 0.22 - punch * 0.06;
+    firstPersonArmPivot.position.z = -0.38 - punch * 0.12;
   }
 
   function applyWorldCharacters({ characters, myCharacterId, nowMs }) {
@@ -157,7 +225,6 @@ export function createAvatarSystem({ scene, camera }) {
       avatar.group.visible = character.id !== myCharacterId;
 
       if (character.id === myCharacterId) {
-        camera.position.set(character.x, CAMERA_HEIGHT, character.z);
         myYaw = character.yaw;
       }
     }
@@ -171,8 +238,17 @@ export function createAvatarSystem({ scene, camera }) {
     return myYaw;
   }
 
-  function animate(deltaSec) {
-    for (const avatar of avatars.values()) animateAvatar(avatar, deltaSec);
+  function animate(deltaSec, myCharacterId) {
+    let hasControl = myCharacterId != null;
+    for (const [id, avatar] of avatars.entries()) {
+      animateAvatar(avatar, deltaSec);
+      if (id === myCharacterId) {
+        hasControl = true;
+        firstPersonAttackMs = Math.max(firstPersonAttackMs, avatar.attackFlashMsRemaining);
+        camera.position.set(avatar.group.position.x, CAMERA_HEIGHT, avatar.group.position.z);
+      }
+    }
+    animateFirstPersonArm(deltaSec, hasControl);
   }
 
   return {

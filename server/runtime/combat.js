@@ -18,6 +18,10 @@ export function collectVictimIds({ characters, attackerId, attackRange, attackHa
   if (!attacker) return [];
 
   const victims = [];
+  const forwardX = -Math.sin(attacker.yaw);
+  const forwardZ = -Math.cos(attacker.yaw);
+  const minDot = Math.cos(attackHalfAngle);
+
   for (const target of characters) {
     if (target.id === attacker.id) continue;
     const dx = target.x - attacker.x;
@@ -25,9 +29,8 @@ export function collectVictimIds({ characters, attackerId, attackRange, attackHa
     const dist = Math.hypot(dx, dz);
     if (dist > attackRange || dist < 0.0001) continue;
 
-    const angleToTarget = Math.atan2(dx, dz);
-    const delta = Math.abs(normalizeAngle(angleToTarget - attacker.yaw));
-    if (delta <= attackHalfAngle) victims.push(target.id);
+    const dot = (dx * forwardX + dz * forwardZ) / dist;
+    if (dot >= minDot) victims.push(target.id);
   }
 
   return victims;

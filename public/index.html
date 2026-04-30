@@ -6,12 +6,52 @@
     <title>Hidden</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body>
+  <body class="overlay-active">
     <canvas id="game"></canvas>
-    <div id="hud">
-      <div id="status">Ansluter...</div>
-      <div id="help">Klicka för musfångst. WASD för rörelse. Vänsterklick för attack.</div>
+
+    <div id="screenRoot">
+      <section id="connectView" class="view">
+        <div class="card">
+          <h1>Hidden</h1>
+          <label for="serverInput">Server</label>
+          <input id="serverInput" type="text" placeholder="192.168.1.50:3000" autocomplete="off" />
+          <label for="nameInput">Namn</label>
+          <input id="nameInput" type="text" placeholder="Ditt namn" maxlength="20" autocomplete="off" />
+          <button id="connectBtn" type="button">Anslut</button>
+          <div id="connectError" class="error" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section id="lobbyView" class="view hidden">
+        <div id="scoreboardBar">
+          <table id="scoreTable">
+            <thead>
+              <tr>
+                <th>Namn</th>
+                <th>Kills</th>
+                <th>Deaths</th>
+                <th>Oskyldiga</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="scoreBody"></tbody>
+          </table>
+        </div>
+
+        <div id="lobbyMain">
+          <div id="countdownText"></div>
+          <div id="chatPanel">
+            <div id="chatMessages"></div>
+            <div id="chatInputRow">
+              <input id="chatInput" type="text" placeholder="Skriv i chatten..." maxlength="220" autocomplete="off" />
+              <button id="chatSendBtn" type="button">Skicka</button>
+            </div>
+          </div>
+          <button id="playBtn" type="button">Spela</button>
+        </div>
+      </section>
     </div>
+
     <script type="module" src="/app.js"></script>
   </body>
 </html>

@@ -4,16 +4,36 @@ import { createAvatarSystem } from "./client/avatars.js";
 import { createGameSocket } from "./client/network.js";
 
 const canvas = document.getElementById("game");
-const statusEl = document.getElementById("status");
-const helpEl = document.getElementById("help");
+const screenRootEl = document.getElementById("screenRoot");
+const connectViewEl = document.getElementById("connectView");
+const lobbyViewEl = document.getElementById("lobbyView");
+const connectErrorEl = document.getElementById("connectError");
+const serverInputEl = document.getElementById("serverInput");
+const nameInputEl = document.getElementById("nameInput");
+const connectBtnEl = document.getElementById("connectBtn");
+const scoreBodyEl = document.getElementById("scoreBody");
+const chatMessagesEl = document.getElementById("chatMessages");
+const chatInputEl = document.getElementById("chatInput");
+const chatSendBtnEl = document.getElementById("chatSendBtn");
+const playBtnEl = document.getElementById("playBtn");
+const countdownTextEl = document.getElementById("countdownText");
+
+const SERVER_TARGET_KEY = "hidden_server_target";
+const PLAYER_NAME_KEY = "hidden_player_name";
 
 const sceneSystem = createSceneSystem(canvas);
 const { renderer, scene, camera, resize } = sceneSystem;
 const roomSystem = createRoomSystem({ scene, renderer });
 const avatarSystem = createAvatarSystem({ scene, camera });
 
+let socket = null;
+let socketGeneration = 0;
+let connecting = false;
+let authenticated = false;
+let appMode = "connect"; // connect | lobby | playing | disconnected
+let sessionState = "auth"; // auth | lobby | countdown | alive
 let myCharacterId = null;
-let sessionState = "connecting";
+let myName = "";
 
 const input = {
   forward: false,
@@ -22,133 +42,420 @@ const input = {
   right: false,
   yaw: 0
 };
-const INPUT_SEND_INTERVAL_MS = 50;
-const INPUT_HEARTBEAT_MS = 200;
+
+const INPUT_SEND_INTERVAL_MS = 33;
+const INPUT_HEARTBEAT_MS = 120;
 
 let pitch = 0;
 let yaw = 0;
+let viewPitch = 0;
+let viewYaw = 0;
 let inputDirty = true;
 let lastInputSentAt = 0;
 let lastSentSnapshot = "";
 let lastFrameAt = performance.now();
 
-const crosshair = document.createElement("div");
-crosshair.className = "crosshair";
-document.body.appendChild(crosshair);
-
-const socket = createGameSocket({
-  onOpen: () => {
-    sessionState = "countdown";
-    inputDirty = true;
-  },
-  onMessage: (msg) => {
-    if (msg.type === "countdown") {
-      sessionState = "countdown";
-      return;
-    }
-
-    if (msg.type === "full") {
-      sessionState = "full";
-      myCharacterId = null;
-      return;
-    }
-
-    if (msg.type === "possess") {
-      sessionState = "alive";
-      myCharacterId = msg.characterId;
-      return;
-    }
-
-    if (msg.type !== "world") return;
-
-    roomSystem.syncFromWorld({
-      roomHalfSize: msg.roomHalfSize,
-      shelves: msg.shelves
-    });
-
-    const state = msg.session;
-    if (state) {
-      sessionState = state.state;
-      myCharacterId = state.characterId ?? null;
-    }
-
-    const controlledYaw = avatarSystem.applyWorldCharacters({
-      characters: msg.characters || [],
-      myCharacterId,
-      nowMs: performance.now()
-    });
-    if (controlledYaw != null) {
-      yaw = controlledYaw;
-      input.yaw = yaw;
-    }
-
-    updateStatus(state);
-  },
-  onClose: () => {
-    sessionState = "disconnected";
-    statusEl.textContent = "Frånkopplad från servern";
-  },
-  onError: () => {
-    sessionState = "disconnected";
-    statusEl.textContent = "Nätverksfel mot servern";
+function hashString(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
   }
-});
+  return h >>> 0;
+}
 
-function updateStatus(state) {
-  if (sessionState === "full") {
-    statusEl.style.color = "#ff5a5f";
-    statusEl.textContent = "Spelet är fullt.";
-    if (state?.queuePosition) {
-      helpEl.textContent = `Köplats: ${state.queuePosition}. Startar automatiskt när en plats frigörs.`;
+function colorForName(name) {
+  const h = hashString(String(name || "").toLowerCase());
+  const hue = h % 360;
+  const sat = 60 + ((h >>> 9) % 20);
+  const light = 62 + ((h >>> 16) % 10);
+  return `hsl(${hue} ${sat}% ${light}%)`;
+}
+
+function normalizeAngle(angle) {
+  let out = angle;
+  while (out > Math.PI) out -= Math.PI * 2;
+  while (out < -Math.PI) out += Math.PI * 2;
+  return out;
+}
+
+function wsScheme() {
+  return location.protocol === "https:" ? "wss" : "ws";
+}
+
+function normalizeServerTarget(raw) {
+  const value = String(raw || "").trim();
+  if (value === "") return `${wsScheme()}://${location.host}`;
+  if (/^wss?:\/\//i.test(value)) return value;
+  if (/^https?:\/\//i.test(value)) {
+    const parsed = new URL(value);
+    parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
+    return parsed.toString();
+  }
+  return `${wsScheme()}://${value}`;
+}
+
+function setConnectError(text) {
+  connectErrorEl.textContent = text || "";
+}
+
+function requestPointerLockSafe(targetEl = canvas) {
+  try {
+    const maybePromise = targetEl?.requestPointerLock?.();
+    if (maybePromise && typeof maybePromise.catch === "function") {
+      maybePromise.catch(() => {});
+    }
+  } catch {
+    // ignore pointer lock errors; gameplay flow must continue
+  }
+}
+
+function updateConnectButton() {
+  connectBtnEl.disabled = connecting;
+  connectBtnEl.textContent = connecting ? "Ansluter..." : "Anslut";
+}
+
+function setAppMode(mode) {
+  const previous = appMode;
+  appMode = mode;
+
+  const showConnect = mode === "connect" || mode === "disconnected";
+  const showLobby = mode === "lobby";
+
+  connectViewEl.classList.toggle("hidden", !showConnect);
+  lobbyViewEl.classList.toggle("hidden", !showLobby);
+
+  const overlayActive = mode !== "playing";
+  document.body.classList.toggle("overlay-active", overlayActive);
+  screenRootEl.style.pointerEvents = overlayActive ? "auto" : "none";
+
+  if (previous === "playing" && mode !== "playing" && document.pointerLockElement) {
+    document.exitPointerLock?.();
+  }
+
+  if (previous === "playing" && mode !== "playing") {
+    myCharacterId = null;
+  }
+}
+
+function setCountdownTextFromSession(state) {
+  if (state?.state === "countdown") {
+    const ms = state.countdownMsRemaining ?? 3000;
+    const sec = Math.max(1, Math.ceil(ms / 1000));
+    countdownTextEl.textContent = `Spel startar om ${sec}`;
+    playBtnEl.disabled = true;
+    return;
+  }
+  countdownTextEl.textContent = "";
+  playBtnEl.disabled = false;
+}
+
+function renderScoreboard(players) {
+  scoreBodyEl.textContent = "";
+  if (!Array.isArray(players)) return;
+  for (const p of players) {
+    const tr = document.createElement("tr");
+
+    const nameCell = document.createElement("td");
+    nameCell.textContent = p.name || "-";
+    nameCell.style.color = colorForName(p.name);
+    tr.appendChild(nameCell);
+
+    const killsCell = document.createElement("td");
+    killsCell.textContent = String(p.kills ?? 0);
+    tr.appendChild(killsCell);
+
+    const deathsCell = document.createElement("td");
+    deathsCell.textContent = String(p.deaths ?? 0);
+    tr.appendChild(deathsCell);
+
+    const innocentsCell = document.createElement("td");
+    innocentsCell.textContent = String(p.innocents ?? 0);
+    tr.appendChild(innocentsCell);
+
+    const statusCell = document.createElement("td");
+    statusCell.textContent = p.status || "-";
+    tr.appendChild(statusCell);
+
+    scoreBodyEl.appendChild(tr);
+  }
+}
+
+function appendChat(entry) {
+  if (!entry || typeof entry.text !== "string") return;
+  const line = document.createElement("p");
+  line.className = "chat-line";
+
+  if (entry.system) {
+    line.classList.add("chat-system");
+    if (Array.isArray(entry.segments) && entry.segments.length > 0) {
+      for (const seg of entry.segments) {
+        if (seg?.type === "player") {
+          const playerSpan = document.createElement("span");
+          playerSpan.className = "chat-name";
+          playerSpan.style.color = colorForName(seg.name);
+          playerSpan.textContent = seg.name || "";
+          line.appendChild(playerSpan);
+          continue;
+        }
+        const textSpan = document.createElement("span");
+        textSpan.textContent = seg?.text || "";
+        line.appendChild(textSpan);
+      }
     } else {
-      helpEl.textContent = "Väntar på ledig plats, startar automatiskt när en plats frigörs.";
+      line.textContent = entry.text;
     }
+    chatMessagesEl.appendChild(line);
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     return;
   }
 
-  statusEl.style.color = "#9be564";
-  if (sessionState === "alive") {
-    const currentPlayers = state ? `${state.activePlayers}/${state.maxPlayers}` : "?";
-    statusEl.textContent = `Spelar nu (${currentPlayers})`;
-    helpEl.textContent = "WASD, mus, vänsterklick";
+  const nameSpan = document.createElement("span");
+  nameSpan.className = "chat-name";
+  nameSpan.textContent = `${entry.name || "okänd"}: `;
+  nameSpan.style.color = colorForName(entry.name);
+
+  const textSpan = document.createElement("span");
+  textSpan.textContent = entry.text;
+
+  line.appendChild(nameSpan);
+  line.appendChild(textSpan);
+  chatMessagesEl.appendChild(line);
+  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+}
+
+function replaceChat(history) {
+  chatMessagesEl.textContent = "";
+  if (!Array.isArray(history)) return;
+  for (const entry of history) appendChat(entry);
+}
+
+function resetInputState() {
+  input.forward = false;
+  input.backward = false;
+  input.left = false;
+  input.right = false;
+  input.yaw = yaw;
+  inputDirty = true;
+}
+
+function attachSocket(wsUrl, loginName) {
+  const generation = ++socketGeneration;
+
+  if (socket) {
+    try {
+      socket.close(1000, "reconnect");
+    } catch {
+      // no-op
+    }
+    socket = null;
+  }
+
+  socket = createGameSocket({
+    url: wsUrl,
+    onOpen: () => {
+      if (generation !== socketGeneration) return;
+      connecting = false;
+      updateConnectButton();
+      socket?.sendJson({ type: "login", name: loginName });
+    },
+    onMessage: (msg) => {
+      if (generation !== socketGeneration) return;
+
+      if (msg.type === "login_ok") {
+        authenticated = true;
+        myName = msg.name || loginName;
+        replaceChat(msg.chatHistory || []);
+        setConnectError("");
+        setAppMode("lobby");
+        return;
+      }
+
+      if (msg.type === "login_error") {
+        authenticated = false;
+        myName = "";
+        setAppMode("connect");
+        setConnectError(msg.message || "Inloggning misslyckades.");
+        return;
+      }
+
+      if (msg.type === "action_error") {
+        setCountdownTextFromSession({ state: "lobby" });
+        setConnectError(msg.message || "Kunde inte utföra åtgärden.");
+        return;
+      }
+
+      if (msg.type === "chat") {
+        appendChat(msg.entry);
+        return;
+      }
+
+      if (msg.type === "countdown") {
+        // world-session hanterar själva visningen; detta är bara om world dröjer.
+        setCountdownTextFromSession({ state: "countdown", countdownMsRemaining: 3000 });
+        return;
+      }
+
+      if (msg.type === "possess") {
+        myCharacterId = msg.characterId ?? null;
+        return;
+      }
+
+      if (msg.type !== "world") return;
+
+      roomSystem.syncFromWorld({
+        roomHalfSize: msg.roomHalfSize,
+        shelves: msg.shelves
+      });
+
+      renderScoreboard(msg.scoreboard || []);
+
+      const previousCharacterId = myCharacterId;
+      const state = msg.session;
+      if (state) {
+        sessionState = state.state;
+        authenticated = Boolean(state.authenticated);
+        myName = state.name || myName;
+        myCharacterId = state.characterId ?? null;
+      }
+
+      const controlledYaw = avatarSystem.applyWorldCharacters({
+        characters: msg.characters || [],
+        myCharacterId,
+        nowMs: performance.now()
+      });
+
+      if (controlledYaw != null) {
+        const gainedNewCharacter = myCharacterId != null && myCharacterId !== previousCharacterId;
+        if (gainedNewCharacter) {
+          yaw = controlledYaw;
+          viewYaw = controlledYaw;
+          input.yaw = yaw;
+        }
+      }
+
+      if (!authenticated) {
+        setAppMode("connect");
+      } else if (sessionState === "alive") {
+        setConnectError("");
+        setAppMode("playing");
+      } else {
+        setAppMode("lobby");
+      }
+      setCountdownTextFromSession(state);
+    },
+    onClose: () => {
+      if (generation !== socketGeneration) return;
+      connecting = false;
+      authenticated = false;
+      sessionState = "auth";
+      myCharacterId = null;
+      updateConnectButton();
+      setAppMode("disconnected");
+      setConnectError("Anslutningen bröts.");
+    },
+    onError: () => {
+      if (generation !== socketGeneration) return;
+      connecting = false;
+      updateConnectButton();
+      setConnectError("Kunde inte ansluta till servern.");
+      setAppMode("connect");
+    }
+  });
+}
+
+function connectAndLogin() {
+  if (connecting) return;
+
+  const rawTarget = serverInputEl.value.trim();
+  const rawName = nameInputEl.value.trim();
+
+  if (rawName.length < 2) {
+    setConnectError("Namn måste vara minst 2 tecken.");
     return;
   }
 
-  if (sessionState === "countdown") {
-    const ms = state?.countdownMsRemaining ?? 3000;
-    const seconds = Math.max(1, Math.ceil(ms / 1000));
-    statusEl.textContent = `Startar spel om ${seconds}...`;
+  let wsUrl;
+  try {
+    wsUrl = normalizeServerTarget(rawTarget);
+    new URL(wsUrl);
+  } catch {
+    setConnectError("Ogiltig serveradress.");
     return;
   }
 
-  if (sessionState === "connecting") {
-    statusEl.textContent = "Ansluter...";
-    return;
-  }
+  localStorage.setItem(SERVER_TARGET_KEY, rawTarget);
+  localStorage.setItem(PLAYER_NAME_KEY, rawName);
 
-  statusEl.textContent = "Väntar...";
+  connecting = true;
+  authenticated = false;
+  sessionState = "auth";
+  myCharacterId = null;
+  myName = "";
+  updateConnectButton();
+  setConnectError("");
+  resetInputState();
+  setAppMode("connect");
+  attachSocket(wsUrl, rawName);
+}
+
+function sendChat() {
+  const text = chatInputEl.value.trim();
+  if (!text || !socket) return;
+  socket.sendJson({ type: "chat", text });
+  chatInputEl.value = "";
 }
 
 function sendInput() {
+  if (appMode !== "playing" || sessionState !== "alive") return;
   const now = performance.now();
-  const payload = {
-    type: "input",
-    input
-  };
+  const payload = { type: "input", input };
   const snapshot = JSON.stringify(payload);
   const heartbeatDue = now - lastInputSentAt >= INPUT_HEARTBEAT_MS;
   if (!inputDirty && !heartbeatDue && snapshot === lastSentSnapshot) return;
-  if (!socket.sendJson(payload)) return;
+  if (!socket || !socket.sendJson(payload)) return;
   inputDirty = false;
   lastInputSentAt = now;
   lastSentSnapshot = snapshot;
 }
+
+const serverFromUrl = (() => {
+  const value = new URLSearchParams(location.search).get("server");
+  return value && value.trim() ? value.trim() : null;
+})();
+if (serverFromUrl) localStorage.setItem(SERVER_TARGET_KEY, serverFromUrl);
+const savedServerTarget = localStorage.getItem(SERVER_TARGET_KEY);
+const savedName = localStorage.getItem(PLAYER_NAME_KEY);
+serverInputEl.value = savedServerTarget != null ? savedServerTarget : location.host;
+nameInputEl.value = savedName != null ? savedName : "";
+
+connectBtnEl.addEventListener("click", connectAndLogin);
+nameInputEl.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") connectAndLogin();
+});
+serverInputEl.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") connectAndLogin();
+});
+
+playBtnEl.addEventListener("click", () => {
+  if (!socket || !authenticated) return;
+  socket.sendJson({ type: "play" });
+  requestPointerLockSafe(canvas);
+});
+
+chatSendBtnEl.addEventListener("click", sendChat);
+chatInputEl.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  sendChat();
+});
 
 window.addEventListener("resize", () => {
   resize();
 });
 
 window.addEventListener("keydown", (event) => {
+  if (appMode !== "playing") return;
   let changed = false;
   if (event.code === "KeyW" && !input.forward) {
     input.forward = true;
@@ -170,6 +477,7 @@ window.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("keyup", (event) => {
+  if (appMode !== "playing") return;
   let changed = false;
   if (event.code === "KeyW" && input.forward) {
     input.forward = false;
@@ -190,25 +498,30 @@ window.addEventListener("keyup", (event) => {
   if (changed) inputDirty = true;
 });
 
-canvas.addEventListener("click", async () => {
-  if (document.pointerLockElement !== canvas) {
-    await canvas.requestPointerLock();
+canvas.addEventListener("click", () => {
+  if (appMode !== "playing") return;
+  if (!document.pointerLockElement) {
+    requestPointerLockSafe(canvas);
   }
 });
 
 document.addEventListener("mousemove", (event) => {
-  if (document.pointerLockElement !== canvas) return;
+  if (appMode !== "playing") return;
+  if (!document.pointerLockElement) return;
   yaw -= event.movementX * 0.0022;
   pitch -= event.movementY * 0.002;
   pitch = Math.max(-1.2, Math.min(1.2, pitch));
 
   input.yaw = yaw;
   inputDirty = true;
+  const now = performance.now();
+  if (now - lastInputSentAt >= INPUT_SEND_INTERVAL_MS) sendInput();
 });
 
 window.addEventListener("mousedown", (event) => {
   if (event.button !== 0) return;
-  socket.sendJson({ type: "attack" });
+  if (appMode !== "playing" || sessionState !== "alive") return;
+  socket?.sendJson({ type: "attack" });
 });
 
 setInterval(sendInput, INPUT_SEND_INTERVAL_MS);
@@ -219,10 +532,17 @@ function animate() {
   const deltaSec = Math.min(0.05, (now - lastFrameAt) / 1000);
   lastFrameAt = now;
 
-  camera.rotation.y = yaw;
-  camera.rotation.x = pitch;
-  avatarSystem.animate(deltaSec);
+  const viewSmooth = 1 - Math.exp(-deltaSec * 30);
+  const yawDelta = normalizeAngle(yaw - viewYaw);
+  viewYaw = normalizeAngle(viewYaw + yawDelta * viewSmooth);
+  viewPitch += (pitch - viewPitch) * viewSmooth;
+
+  camera.rotation.y = viewYaw;
+  camera.rotation.x = viewPitch;
+  avatarSystem.animate(deltaSec, myCharacterId);
   renderer.render(scene, camera);
 }
 
 animate();
+updateConnectButton();
+setAppMode("connect");

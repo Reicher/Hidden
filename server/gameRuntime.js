@@ -27,20 +27,22 @@ import {
   INVARIANT_LOG_COOLDOWN_MS,
   SHELVES
 } from "./config.js";
-import { createQueueController } from "./runtime/queue.js";
 import { normalizeAngle, canAttack, markAttack, collectVictimIds } from "./runtime/combat.js";
 import { rawSizeBytes, rawToText } from "./runtime/net.js";
+
+const NAME_MIN_LEN = 2;
+const NAME_MAX_LEN = 20;
+const CHAT_MAX_LEN = 220;
+const CHAT_HISTORY_LIMIT = 80;
 
 export function attachGameRuntime({ server }) {
   const sessions = new Map();
   const sockets = new Map();
   const characters = [];
-  const waitingQueue = [];
+  const chatHistory = [];
   const invariantLastLogAt = new Map();
 
-  for (let i = 0; i < TOTAL_CHARACTERS; i += 1) {
-    characters.push(createCharacter(i));
-  }
+  for (let i = 0; i < TOTAL_CHARACTERS; i += 1) characters.push(createCharacter(i));
 
   function rand(min, max) {
     return min + Math.random() * (max - min);
@@ -86,9 +88,24 @@ export function attachGameRuntime({ server }) {
     c.ai.nextDecisionAt = Date.now() + rand(AI_DECISION_MS_MIN, AI_DECISION_MS_MAX);
   }
 
+  function shortSessionId(sessionId) {
+    return sessionId ? String(sessionId).slice(0, 8) : "-";
+  }
+
+  function authenticatedSessions() {
+    return [...sessions.values()].filter((s) => s.authenticated);
+  }
+
+  function authenticatedCount() {
+    let count = 0;
+    for (const s of sessions.values()) if (s.authenticated) count += 1;
+    return count;
+  }
+
   function activePlayerCount() {
     let count = 0;
     for (const s of sessions.values()) {
+      if (!s.authenticated) continue;
       if (s.state === "alive" && s.characterId != null) count += 1;
     }
     return count;
@@ -97,26 +114,86 @@ export function attachGameRuntime({ server }) {
   function countdownPlayerCount() {
     let count = 0;
     for (const s of sessions.values()) {
+      if (!s.authenticated) continue;
       if (s.state === "countdown") count += 1;
     }
     return count;
   }
 
-  function shortSessionId(sessionId) {
-    return sessionId ? String(sessionId).slice(0, 8) : null;
+  function stateSummary() {
+    return `connected=${sockets.size} loggedIn=${authenticatedCount()} alive=${activePlayerCount()} countdown=${countdownPlayerCount()}`;
   }
 
   function logEvent(event, details = {}) {
-    const payload = {
-      ts: new Date().toISOString(),
-      event,
-      sessions: sessions.size,
-      alive: activePlayerCount(),
-      countdown: countdownPlayerCount(),
-      queue: waitingQueue.length,
-      ...details
-    };
-    console.log(`[game] ${JSON.stringify(payload)}`);
+    const sid = details.sessionId || "-";
+    if (event === "runtime_started") {
+      console.log(
+        `[game] runtime started roomHalf=${details.roomHalfSize} maxPlayers=${details.maxPlayers} chars=${details.totalCharacters}`
+      );
+      return;
+    }
+    if (event === "session_connected") {
+      console.log(
+        `[game] connect sid=${sid} ip=${details.ip || "-"} origin=${details.origin || "-"} ${stateSummary()}`
+      );
+      return;
+    }
+    if (event === "session_disconnected") {
+      const code = details.code == null ? "-" : String(details.code);
+      console.log(
+        `[game] disconnect sid=${sid} reason=${details.reason || "-"} code=${code} ${stateSummary()}`
+      );
+      return;
+    }
+    if (event === "session_login") {
+      console.log(`[game] login sid=${sid} name=${details.name} ${stateSummary()}`);
+      return;
+    }
+    if (event === "countdown_start") {
+      console.log(`[game] countdown sid=${sid} seconds=${details.seconds ?? "-"}`);
+      return;
+    }
+    if (event === "session_possess") {
+      console.log(
+        `[game] possess sid=${sid} name=${details.name || "-"} char=${details.characterId} at=(${details.x},${details.z}) yaw=${details.yaw}`
+      );
+      return;
+    }
+    if (event === "attack") {
+      const victimList =
+        Array.isArray(details.victimCharacterIds) && details.victimCharacterIds.length > 0
+          ? details.victimCharacterIds.join(",")
+          : "-";
+      console.log(
+        `[game] attack sid=${sid} char=${details.attackerCharacterId} victims=${details.victims ?? 0} ids=${victimList}`
+      );
+      return;
+    }
+    if (event === "player_eliminated") {
+      console.log(`[game] eliminated sid=${sid} name=${details.name || "-"} char=${details.characterId}`);
+      return;
+    }
+    if (event === "character_respawn") {
+      console.log(
+        `[game] respawn char=${details.characterId} at=(${details.x},${details.z}) yaw=${details.yaw}`
+      );
+      return;
+    }
+    if (event === "chat") {
+      console.log(`[game] chat sid=${sid} name=${details.name || "-"} msg=${details.text || ""}`);
+      return;
+    }
+    if (event === "heartbeat_timeout") {
+      console.log(`[game] heartbeat-timeout sid=${sid}`);
+      return;
+    }
+    if (event === "message_drop") {
+      console.log(
+        `[game] drop sid=${sid} reason=${details.reason || "-"} total=${details.droppedTotal ?? 0} window=${details.droppedInWindow ?? 0}`
+      );
+      return;
+    }
+    console.log(`[game] ${event} ${stateSummary()}`);
   }
 
   function warnInvariant(key, now, details) {
@@ -150,7 +227,6 @@ export function attachGameRuntime({ server }) {
       const owned = ownerToChars.get(c.ownerSessionId) || [];
       owned.push(c.id);
       ownerToChars.set(c.ownerSessionId, owned);
-
       if (c.controllerType !== "PLAYER") {
         warnInvariant(
           "owner_controller_mismatch",
@@ -189,6 +265,48 @@ export function attachGameRuntime({ server }) {
     }
   }
 
+  function normalizePlayerName(raw) {
+    const trimmed = String(raw || "").trim().replace(/\s+/g, " ");
+    return trimmed.slice(0, NAME_MAX_LEN);
+  }
+
+function normalizeChatText(raw) {
+  const trimmed = String(raw || "").replace(/[\u0000-\u001f\u007f]/g, "").trim();
+  return trimmed.slice(0, CHAT_MAX_LEN);
+}
+
+function sanitizeSystemTextSegment(raw) {
+  return String(raw || "").replace(/[\u0000-\u001f\u007f]/g, "").slice(0, CHAT_MAX_LEN);
+}
+
+  function findAuthenticatedByName(name) {
+    const key = name.toLowerCase();
+    for (const s of sessions.values()) {
+      if (!s.authenticated || !s.name) continue;
+      if (s.name.toLowerCase() === key) return s;
+    }
+    return null;
+  }
+
+  function statusLabel(session) {
+    if (!session?.authenticated) return "disconnected";
+    if (session.state === "alive" || session.state === "countdown") return "spelar";
+    if (session.state === "lobby") return "lobby";
+    return "disconnected";
+  }
+
+  function scoreboardSnapshot() {
+    return authenticatedSessions()
+      .map((s) => ({
+        name: s.name,
+        kills: s.stats.kills,
+        deaths: s.stats.deaths,
+        innocents: s.stats.innocents,
+        status: statusLabel(s)
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "sv"));
+  }
+
   function send(ws, type, payload = {}) {
     if (ws.readyState !== ws.OPEN) return;
     ws.send(JSON.stringify({ type, ...payload }));
@@ -200,51 +318,56 @@ export function attachGameRuntime({ server }) {
     send(ws, type, payload);
   }
 
-  const queue = createQueueController({ sessions, waitingQueue, sendToSession });
-
-  function removeFromQueueWithLog(sessionId, reason) {
-    const wasQueued = waitingQueue.includes(sessionId);
-    queue.removeFromQueue(sessionId);
-    if (!wasQueued) return;
-    logEvent("queue_remove", {
-      sessionId: shortSessionId(sessionId),
-      reason
-    });
+  function broadcast(type, payload = {}) {
+    for (const ws of sockets.values()) send(ws, type, payload);
   }
 
-  function enqueueSessionWithLog(sessionId, reason) {
-    queue.enqueueSession(sessionId);
-    const session = sessions.get(sessionId);
-    logEvent("queue_enqueue", {
-      sessionId: shortSessionId(sessionId),
-      reason,
-      queuePosition: session?.queuePosition ?? null
-    });
+  function appendChat({ name, text, system = false, segments = null }) {
+    const entry = {
+      id: randomUUID(),
+      at: Date.now(),
+      name,
+      text,
+      system: Boolean(system),
+      segments: Array.isArray(segments) ? segments : null
+    };
+    chatHistory.push(entry);
+    if (chatHistory.length > CHAT_HISTORY_LIMIT) chatHistory.shift();
+    return entry;
   }
 
-  function dequeueNextWithLog(reason) {
-    const sessionId = queue.dequeueNext();
-    if (!sessionId) return null;
-    logEvent("queue_dequeue", {
-      sessionId: shortSessionId(sessionId),
-      reason
-    });
-    return sessionId;
+  function appendSystemChat(segments) {
+    if (!Array.isArray(segments) || segments.length === 0) return null;
+    const normalized = [];
+    let plainText = "";
+    for (const seg of segments) {
+      if (seg?.type === "player") {
+        const playerName = normalizePlayerName(seg.name);
+        if (!playerName) continue;
+        normalized.push({ type: "player", name: playerName });
+        plainText += playerName;
+        continue;
+      }
+      const text = sanitizeSystemTextSegment(seg?.text || "");
+      if (!text) continue;
+      normalized.push({ type: "text", text });
+      plainText += text;
+    }
+    if (normalized.length === 0 || !plainText) return null;
+    const entry = appendChat({ name: "System", text: plainText, system: true, segments: normalized });
+    broadcast("chat", { entry });
+    return entry;
   }
 
   function assignCharacterToSession(sessionId, now) {
     const session = sessions.get(sessionId);
-    if (!session) return;
-    removeFromQueueWithLog(sessionId, "assign_character");
-
-    if (activePlayerCount() >= MAX_PLAYERS) {
-      enqueueSessionWithLog(sessionId, "assign_denied_full");
-      return;
-    }
+    if (!session || !session.authenticated) return;
+    if (session.state === "alive") return;
 
     const available = characters.find((c) => c.controllerType === "AI" && c.ownerSessionId == null);
     if (!available) {
-      enqueueSessionWithLog(sessionId, "assign_denied_no_ai");
+      session.state = "lobby";
+      sendToSession(sessionId, "action_error", { message: "Ingen ledig karaktär just nu." });
       return;
     }
 
@@ -259,6 +382,7 @@ export function attachGameRuntime({ server }) {
 
     logEvent("session_possess", {
       sessionId: shortSessionId(sessionId),
+      name: session.name,
       characterId: available.id,
       x: Number(available.x.toFixed(2)),
       z: Number(available.z.toFixed(2)),
@@ -269,8 +393,8 @@ export function attachGameRuntime({ server }) {
 
   function scheduleCountdown(sessionId, seconds, now) {
     const s = sessions.get(sessionId);
-    if (!s) return;
-    removeFromQueueWithLog(sessionId, "countdown_start");
+    if (!s || !s.authenticated) return;
+    if (s.state !== "lobby") return;
     s.state = "countdown";
     s.readyAt = now + seconds * 1000;
     s.input.attackRequested = false;
@@ -281,6 +405,14 @@ export function attachGameRuntime({ server }) {
     sendToSession(sessionId, "countdown", { seconds });
   }
 
+  function returnToLobby(session) {
+    if (!session) return;
+    session.state = "lobby";
+    session.characterId = null;
+    session.readyAt = 0;
+    session.input.attackRequested = false;
+  }
+
   function handleCharacterEliminated(charId, now) {
     const c = characters[charId];
     const owner = c.ownerSessionId;
@@ -288,12 +420,13 @@ export function attachGameRuntime({ server }) {
     if (owner) {
       const ownerSession = sessions.get(owner);
       if (ownerSession) {
+        ownerSession.stats.deaths += 1;
         logEvent("player_eliminated", {
           sessionId: shortSessionId(owner),
+          name: ownerSession.name,
           characterId: charId
         });
-        ownerSession.characterId = null;
-        scheduleCountdown(owner, 3, now);
+        returnToLobby(ownerSession);
       }
     }
 
@@ -320,22 +453,41 @@ export function attachGameRuntime({ server }) {
       attackHalfAngle: ATTACK_HALF_ANGLE
     });
 
+    const attackerSessionId = attacker.ownerSessionId;
+    const attackerSession = attackerSessionId ? sessions.get(attackerSessionId) : null;
+
+    for (const victimId of victims) {
+      const victimOwner = characters[victimId].ownerSessionId;
+      const victimSession = victimOwner ? sessions.get(victimOwner) : null;
+      if (attackerSession?.authenticated) {
+        if (victimOwner && victimOwner !== attackerSessionId) {
+          attackerSession.stats.kills += 1;
+          if (victimSession?.authenticated && victimSession.name) {
+            appendSystemChat([
+              { type: "player", name: attackerSession.name },
+              { type: "text", text: " dödade " },
+              { type: "player", name: victimSession.name }
+            ]);
+          }
+        } else if (!victimOwner) {
+          attackerSession.stats.innocents += 1;
+        }
+      }
+      handleCharacterEliminated(victimId, now);
+    }
+
     logEvent("attack", {
-      attackerSessionId: shortSessionId(attacker.ownerSessionId),
+      sessionId: shortSessionId(attackerSessionId),
       attackerCharacterId: attackerId,
       victims: victims.length,
       victimCharacterIds: victims
     });
-
-    for (const victimId of victims) {
-      handleCharacterEliminated(victimId, now);
-    }
   }
 
   const ROOM_BOUNDARY_MIN = -ROOM_HALF_SIZE + 0.5;
   const ROOM_BOUNDARY_MAX = ROOM_HALF_SIZE - 0.5;
   const WALL_AVOIDANCE_MARGIN = 1.5;
-  const SHELF_AVOIDANCE_MARGIN = 1.1;
+  const SHELF_AVOIDANCE_MARGIN = 0.8;
 
   function clampInsideRoom(character, { steerOnClamp = false } = {}) {
     let hitMinX = false;
@@ -447,9 +599,7 @@ export function attachGameRuntime({ server }) {
       const minZ = shelf.z - halfD - CHARACTER_RADIUS;
       const maxZ = shelf.z + halfD + CHARACTER_RADIUS;
 
-      if (character.x < minX || character.x > maxX || character.z < minZ || character.z > maxZ) {
-        continue;
-      }
+      if (character.x < minX || character.x > maxX || character.z < minZ || character.z > maxZ) continue;
 
       hit = true;
       const toMinX = Math.abs(character.x - minX);
@@ -547,8 +697,8 @@ export function attachGameRuntime({ server }) {
       localX /= len;
       localZ /= len;
 
-      const worldX = localX * Math.cos(c.yaw) + localZ * Math.sin(c.yaw);
-      const worldZ = -localX * Math.sin(c.yaw) + localZ * Math.cos(c.yaw);
+      const worldX = localX * Math.cos(c.yaw) - localZ * Math.sin(c.yaw);
+      const worldZ = -localX * Math.sin(c.yaw) - localZ * Math.cos(c.yaw);
 
       c.x += worldX * MOVE_SPEED * dt;
       c.z += worldZ * MOVE_SPEED * dt;
@@ -583,6 +733,68 @@ export function attachGameRuntime({ server }) {
     return ALLOWED_ORIGINS.has(String(origin).trim());
   }
 
+  function processLogin(sessionId, name) {
+    const session = sessions.get(sessionId);
+    if (!session) return "ignored";
+    if (session.authenticated) {
+      sendToSession(sessionId, "login_error", { message: "Du är redan inloggad." });
+      return "ok";
+    }
+
+    const normalizedName = normalizePlayerName(name);
+    if (normalizedName.length < NAME_MIN_LEN) {
+      sendToSession(sessionId, "login_error", { message: `Namnet måste vara minst ${NAME_MIN_LEN} tecken.` });
+      return "ok";
+    }
+
+    if (authenticatedCount() >= MAX_PLAYERS) {
+      sendToSession(sessionId, "login_error", { message: "Spelet är fullt." });
+      return "ok";
+    }
+
+    if (findAuthenticatedByName(normalizedName)) {
+      sendToSession(sessionId, "login_error", { message: "Namnet är upptaget." });
+      return "ok";
+    }
+
+    session.authenticated = true;
+    session.name = normalizedName;
+    session.state = "lobby";
+    session.readyAt = 0;
+
+    logEvent("session_login", {
+      sessionId: shortSessionId(sessionId),
+      name: normalizedName
+    });
+
+    sendToSession(sessionId, "login_ok", {
+      name: normalizedName,
+      chatHistory,
+      maxPlayers: MAX_PLAYERS
+    });
+    appendSystemChat([
+      { type: "player", name: normalizedName },
+      { type: "text", text: " joinade spelet" }
+    ]);
+    return "ok";
+  }
+
+  function processChat(sessionId, textRaw) {
+    const session = sessions.get(sessionId);
+    if (!session || !session.authenticated) return "ignored";
+    const text = normalizeChatText(textRaw);
+    if (!text) return "ok";
+
+    const entry = appendChat({ name: session.name, text });
+    logEvent("chat", {
+      sessionId: shortSessionId(sessionId),
+      name: session.name,
+      text
+    });
+    broadcast("chat", { entry });
+    return "ok";
+  }
+
   function processClientMessage(sessionId, raw) {
     const session = sessions.get(sessionId);
     if (!session) return "ignored";
@@ -606,6 +818,18 @@ export function attachGameRuntime({ server }) {
     session.net.windowCount += 1;
     if (session.net.windowCount > MAX_MESSAGES_PER_WINDOW) {
       return dropMessage(session, "rate_window") ? "abuse" : "dropped";
+    }
+
+    if (msg.type === "login") return processLogin(sessionId, msg.name);
+    if (msg.type === "chat") return processChat(sessionId, msg.text);
+
+    if (!session.authenticated) {
+      return dropMessage(session, "unauthenticated") ? "abuse" : "dropped";
+    }
+
+    if (msg.type === "play") {
+      if (session.state === "lobby") scheduleCountdown(sessionId, 3, at);
+      return "ok";
     }
 
     if (msg.type === "input") {
@@ -645,23 +869,8 @@ export function attachGameRuntime({ server }) {
     checkInvariants(now);
 
     for (const [sessionId, session] of sessions.entries()) {
-      if (session.state === "countdown" && now >= session.readyAt) {
-        assignCharacterToSession(sessionId, now);
-      }
-    }
-
-    const alivePlayers = activePlayerCount();
-    const countdownPlayers = countdownPlayerCount();
-    let availablePlayerSlots = Math.max(0, MAX_PLAYERS - (alivePlayers + countdownPlayers));
-
-    while (availablePlayerSlots > 0 && waitingQueue.length > 0) {
-      const queuedSessionId = dequeueNextWithLog("slot_opened");
-      if (!queuedSessionId) continue;
-      const queuedSession = sessions.get(queuedSessionId);
-      if (!queuedSession) continue;
-      if (queuedSession.state !== "full") continue;
-      scheduleCountdown(queuedSessionId, 3, now);
-      availablePlayerSlots -= 1;
+      if (!session.authenticated) continue;
+      if (session.state === "countdown" && now >= session.readyAt) assignCharacterToSession(sessionId, now);
     }
 
     for (const c of characters) {
@@ -685,9 +894,13 @@ export function attachGameRuntime({ server }) {
       }
     }
 
+    const alivePlayers = activePlayerCount();
+    const scoreboard = scoreboardSnapshot();
+
     const worldState = {
       roomHalfSize: ROOM_HALF_SIZE,
       shelves: SHELVES,
+      scoreboard,
       characters: characters.map((c) => ({
         id: c.id,
         x: Number(c.x.toFixed(3)),
@@ -707,12 +920,12 @@ export function attachGameRuntime({ server }) {
         session: session
           ? {
               state: session.state,
+              authenticated: session.authenticated,
+              name: session.name,
               characterId: session.characterId,
-              countdownMsRemaining:
-                session.state === "countdown" ? Math.max(0, session.readyAt - now) : 0,
+              countdownMsRemaining: session.state === "countdown" ? Math.max(0, session.readyAt - now) : 0,
               activePlayers: alivePlayers,
               maxPlayers: MAX_PLAYERS,
-              queuePosition: session.inQueue ? session.queuePosition : null,
               attackCooldownMsRemaining: playerCharacter
                 ? Math.max(0, ATTACK_COOLDOWN_MS - (now - playerCharacter.lastAttackAt))
                 : 0
@@ -777,8 +990,6 @@ export function attachGameRuntime({ server }) {
       cleanedUp = true;
 
       const closingSession = sessions.get(sessionId);
-      removeFromQueueWithLog(sessionId, `cleanup:${reason}`);
-      const releasedCharacterId = closingSession?.characterId ?? null;
       if (closingSession?.characterId != null) {
         const c = characters[closingSession.characterId];
         if (c && c.ownerSessionId === sessionId) {
@@ -787,23 +998,34 @@ export function attachGameRuntime({ server }) {
         }
       }
 
+      if (closingSession?.authenticated && closingSession.name) {
+        appendSystemChat([
+          { type: "player", name: closingSession.name },
+          { type: "text", text: " lämnade spelet" }
+        ]);
+      }
+
       sessions.delete(sessionId);
       sockets.delete(sessionId);
       logEvent("session_disconnected", {
         sessionId: shortSessionId(sessionId),
         reason,
-        releasedCharacterId,
         ...details
       });
     };
 
     const session = {
       id: sessionId,
-      state: "countdown",
-      inQueue: false,
-      queuePosition: null,
-      readyAt: now + 3000,
+      authenticated: false,
+      name: null,
+      state: "auth",
+      readyAt: 0,
       characterId: null,
+      stats: {
+        kills: 0,
+        deaths: 0,
+        innocents: 0
+      },
       input: {
         forward: false,
         backward: false,
@@ -832,12 +1054,7 @@ export function attachGameRuntime({ server }) {
       ip: req.socket?.remoteAddress || null,
       userAgent: req.headers["user-agent"] || null
     });
-    send(ws, "welcome", { sessionId });
-
-    const hasQueue = waitingQueue.length > 0;
-    const slotsTaken = activePlayerCount() + countdownPlayerCount();
-    if (hasQueue || slotsTaken >= MAX_PLAYERS) enqueueSessionWithLog(sessionId, "connect_full_or_queue");
-    else scheduleCountdown(sessionId, 3, now);
+    send(ws, "welcome", { sessionId, maxPlayers: MAX_PLAYERS });
 
     ws.on("pong", () => {
       ws.isAlive = true;
@@ -850,7 +1067,7 @@ export function attachGameRuntime({ server }) {
         const reason = activeSession?.net.lastDropReason || "unknown";
         const dropped = activeSession?.net.droppedMessages ?? 0;
         console.warn(
-          `[ws-abuse-kick:${sessionId}] origin=${req?.headers?.origin || "<missing>"} reason=${reason} dropped=${dropped}`
+          `[game] abuse-kick sid=${shortSessionId(sessionId)} origin=${req?.headers?.origin || "-"} reason=${reason} dropped=${dropped}`
         );
         cleanupSession("abuse_kick", { dropReason: reason, droppedMessages: dropped });
         try {
@@ -872,8 +1089,7 @@ export function attachGameRuntime({ server }) {
     });
 
     ws.on("close", (code, closeReasonBuffer) => {
-      const closeReason =
-        closeReasonBuffer && closeReasonBuffer.length > 0 ? closeReasonBuffer.toString() : "";
+      const closeReason = closeReasonBuffer && closeReasonBuffer.length > 0 ? closeReasonBuffer.toString() : "";
       cleanupSession("socket_close", { code, closeReason });
     });
   });

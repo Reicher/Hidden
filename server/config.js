@@ -49,10 +49,10 @@ export const CHARACTER_RADIUS = 0.34;
 
 export const SHELF_WIDTH = 0.8;
 export const SHELF_DEPTH = 5.2;
-export const SHELF_HEIGHT = 1.52;
+export const SHELF_HEIGHT = 1.78;
 export const SHELVES = Object.freeze([
-  Object.freeze({ x: -1.9, z: 0, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
-  Object.freeze({ x: 1.9, z: 0, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT })
+  Object.freeze({ x: -2.8, z: 0, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
+  Object.freeze({ x: 2.8, z: 0, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT })
 ]);
 
 export const HEARTBEAT_INTERVAL_MS = envInt("HEARTBEAT_INTERVAL_MS", 10000);

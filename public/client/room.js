@@ -2,13 +2,15 @@ import * as THREE from "https://unpkg.com/three@0.164.1/build/three.module.js";
 import { seededRandom } from "./utils.js";
 
 const DEFAULT_ROOM_HALF = 12;
+const WALL_HEIGHT = 3.2;
 const DEFAULT_SHELVES = Object.freeze([
-  Object.freeze({ x: -1.9, z: 0, width: 0.8, depth: 5.2, height: 1.52 }),
-  Object.freeze({ x: 1.9, z: 0, width: 0.8, depth: 5.2, height: 1.52 })
+  Object.freeze({ x: -2.8, z: 0, width: 0.8, depth: 5.2, height: 1.78 }),
+  Object.freeze({ x: 2.8, z: 0, width: 0.8, depth: 5.2, height: 1.78 })
 ]);
 
 export function createRoomSystem({ scene, renderer }) {
   const textureLoader = new THREE.TextureLoader();
+  const textureAnisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
   const roomRoot = new THREE.Group();
   scene.add(roomRoot);
 
@@ -40,7 +42,7 @@ export function createRoomSystem({ scene, renderer }) {
       floorTexture.wrapT = THREE.RepeatWrapping;
       floorTexture.repeat.set(7, 7);
       floorTexture.colorSpace = THREE.SRGBColorSpace;
-      floorTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      floorTexture.anisotropy = textureAnisotropy;
       floorMaterial.needsUpdate = true;
     },
     undefined,
@@ -57,13 +59,13 @@ export function createRoomSystem({ scene, renderer }) {
   floorMaterial.map = floorTexture;
 
   const ceilingTexture = textureLoader.load(
-    "/assets/ciel_tile.png",
+    "/assets/ceiling_tile.png",
     () => {
       ceilingTexture.wrapS = THREE.RepeatWrapping;
       ceilingTexture.wrapT = THREE.RepeatWrapping;
       ceilingTexture.repeat.set(7, 7);
       ceilingTexture.colorSpace = THREE.SRGBColorSpace;
-      ceilingTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      ceilingTexture.anisotropy = textureAnisotropy;
       ceilingMaterial.needsUpdate = true;
     },
     undefined,
@@ -85,7 +87,7 @@ export function createRoomSystem({ scene, renderer }) {
       wallTexture.wrapS = THREE.ClampToEdgeWrapping;
       wallTexture.wrapT = THREE.ClampToEdgeWrapping;
       wallTexture.colorSpace = THREE.SRGBColorSpace;
-      wallTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      wallTexture.anisotropy = textureAnisotropy;
       for (const material of wallMaterials) material.needsUpdate = true;
     },
     undefined,
@@ -104,7 +106,7 @@ export function createRoomSystem({ scene, renderer }) {
       shelfTexture.wrapS = THREE.ClampToEdgeWrapping;
       shelfTexture.wrapT = THREE.ClampToEdgeWrapping;
       shelfTexture.colorSpace = THREE.SRGBColorSpace;
-      shelfTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      shelfTexture.anisotropy = textureAnisotropy;
       for (const material of shelfSideMaterials) material.needsUpdate = true;
     },
     undefined,
@@ -129,7 +131,7 @@ export function createRoomSystem({ scene, renderer }) {
     map.wrapS = THREE.ClampToEdgeWrapping;
     map.wrapT = THREE.ClampToEdgeWrapping;
     map.colorSpace = THREE.SRGBColorSpace;
-    map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    map.anisotropy = textureAnisotropy;
 
     const atlasSize = 3;
     const col = tileIndex % atlasSize;
@@ -159,44 +161,73 @@ export function createRoomSystem({ scene, renderer }) {
     const material = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       roughness: 0.88,
-      metalness: 0.02
+      metalness: 0.02,
+      side: THREE.DoubleSide
     });
     material.map = createAtlasMap(shelfTexture, tileIndex);
     shelfSideMaterials.push(material);
     return material;
   }
 
+  function disposeMaterial(material) {
+    if (!material) return;
+    if (material.map) {
+      material.map.dispose();
+      material.map = null;
+    }
+    material.dispose();
+  }
+
+  function disposeMeshResources(mesh) {
+    if (mesh.geometry) mesh.geometry.dispose();
+    if (!mesh.material) return;
+    if (Array.isArray(mesh.material)) {
+      const unique = new Set(mesh.material);
+      for (const material of unique) disposeMaterial(material);
+      return;
+    }
+    disposeMaterial(mesh.material);
+  }
+
   function clearRoomRootGeometry() {
-    for (const child of [...roomRoot.children]) roomRoot.remove(child);
+    for (const child of [...roomRoot.children]) {
+      roomRoot.remove(child);
+      if (child !== floor && child !== ceiling) disposeMeshResources(child);
+    }
+    wallMaterials.length = 0;
+    shelfSideMaterials.length = 0;
   }
 
   function createWall(x, z, sx, sz, tileIndex) {
     const material = createWallMaterial(tileIndex);
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, 2.5, sz), material);
-    mesh.position.set(x, 1.25, z);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, WALL_HEIGHT, sz), material);
+    mesh.position.set(x, WALL_HEIGHT * 0.5, z);
     roomRoot.add(mesh);
   }
 
   function createShelf(shelf) {
     const width = typeof shelf.width === "number" ? shelf.width : 0.8;
     const depth = typeof shelf.depth === "number" ? shelf.depth : 5.2;
-    const height = typeof shelf.height === "number" ? shelf.height : 1.52;
+    const height = typeof shelf.height === "number" ? shelf.height : 1.78;
     const plain = new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.9, metalness: 0.02 });
 
     const sideA = createShelfSideMaterial(randomShelfTileIndex());
     const sideB = createShelfSideMaterial(randomShelfTileIndex());
-    const materials = [
-      plain,
-      plain,
-      plain,
-      plain,
-      sideA,
-      sideB
-    ];
+    const core = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), plain);
+    core.position.set(shelf.x, height * 0.5, shelf.z);
+    roomRoot.add(core);
 
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), materials);
-    mesh.position.set(shelf.x, height * 0.5, shelf.z);
-    roomRoot.add(mesh);
+    // Put textured panels explicitly on the long sides to avoid BoxGeometry material-index ambiguity.
+    const sideOffsetX = width * 0.5 + 0.004;
+    const longSideA = new THREE.Mesh(new THREE.PlaneGeometry(depth, height), sideA);
+    longSideA.position.set(shelf.x + sideOffsetX, height * 0.5, shelf.z);
+    longSideA.rotation.y = Math.PI / 2;
+    roomRoot.add(longSideA);
+
+    const longSideB = new THREE.Mesh(new THREE.PlaneGeometry(depth, height), sideB);
+    longSideB.position.set(shelf.x - sideOffsetX, height * 0.5, shelf.z);
+    longSideB.rotation.y = -Math.PI / 2;
+    roomRoot.add(longSideB);
   }
 
   function buildRoomGeometry(roomHalf, shelves) {
@@ -212,7 +243,7 @@ export function createRoomSystem({ scene, renderer }) {
 
     floor.geometry = new THREE.PlaneGeometry(planeSize, planeSize);
     ceiling.geometry = new THREE.PlaneGeometry(planeSize, planeSize);
-    ceiling.position.y = 2.5;
+    ceiling.position.y = WALL_HEIGHT;
 
     roomRoot.add(floor);
     roomRoot.add(ceiling);

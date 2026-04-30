@@ -60,40 +60,41 @@ function startServer() {
 }
 
 class Client {
-  constructor(index) {
-    this.index = index;
+  constructor(name) {
+    this.name = name;
     this.ws = new WebSocket(BASE_URL, [], { headers: { Origin: ORIGIN } });
-    this.state = "connecting";
-    this.queuePosition = null;
-    this.activePlayers = 0;
+    this.open = false;
+    this.loggedIn = false;
+    this.fullRejected = false;
+    this.state = "auth";
 
     this.opened = new Promise((resolve, reject) => {
-      this.ws.once("open", resolve);
+      this.ws.once("open", () => {
+        this.open = true;
+        resolve();
+      });
       this.ws.once("error", reject);
     });
 
     this.ws.on("message", (raw) => {
       const msg = JSON.parse(raw.toString());
-
-      if (msg.type === "full") {
-        this.state = "full";
-        if (typeof msg.queuePosition === "number") this.queuePosition = msg.queuePosition;
+      if (msg.type === "login_ok") {
+        this.loggedIn = true;
+        this.fullRejected = false;
+        this.state = "lobby";
       }
-
-      if (msg.type === "countdown") {
-        this.state = "countdown";
+      if (msg.type === "login_error" && String(msg.message || "").includes("full")) {
+        this.fullRejected = true;
       }
-
-      if (msg.type === "possess") {
-        this.state = "alive";
-      }
-
-      if (msg.type === "world" && msg.session) {
-        this.state = msg.session.state;
-        this.queuePosition = msg.session.queuePosition ?? null;
-        this.activePlayers = msg.session.activePlayers ?? this.activePlayers;
-      }
+      if (msg.type === "countdown") this.state = "countdown";
+      if (msg.type === "possess") this.state = "alive";
+      if (msg.type === "world" && msg.session) this.state = msg.session.state;
     });
+  }
+
+  send(payload) {
+    if (this.ws.readyState !== WebSocket.OPEN) return;
+    this.ws.send(JSON.stringify(payload));
   }
 
   close() {
@@ -107,51 +108,25 @@ async function run() {
   const clients = [];
 
   try {
-    for (let i = 0; i < 12; i += 1) {
-      clients.push(new Client(i));
-    }
+    for (let i = 0; i < 11; i += 1) clients.push(new Client(`p${i}`));
     await Promise.all(clients.map((c) => c.opened));
 
-    await waitFor(
-      () => clients.slice(0, 10).every((c) => c.state === "alive"),
-      15000,
-      "first 10 clients alive"
-    );
+    for (const client of clients) client.send({ type: "login", name: client.name });
 
-    await waitFor(
-      () => clients[10].state === "full" && clients[11].state === "full",
-      10000,
-      "clients 11-12 in full/queue"
-    );
+    await waitFor(() => clients.slice(0, 10).every((c) => c.loggedIn), 8000, "first 10 clients logged in");
+    await waitFor(() => clients[10].fullRejected, 5000, "11th client rejected when full");
 
-    await waitFor(
-      () => clients[10].queuePosition === 1 && clients[11].queuePosition === 2,
-      5000,
-      "queue positions 1 and 2"
-    );
+    clients[0].send({ type: "play" });
+    await waitFor(() => clients[0].state === "countdown", 4000, "countdown starts after play click");
+    await waitFor(() => clients[0].state === "alive", 7000, "client becomes alive after countdown");
 
-    // Disconnect client at queue position 1; client 12 should move to queue position 1.
-    clients[10].close();
-    await waitFor(
-      () => clients[11].state === "full" && clients[11].queuePosition === 1,
-      5000,
-      "queue compaction after queued disconnect"
-    );
+    clients[0].close();
+    await sleep(250);
 
-    // Free one active slot; queued client should get countdown then become alive.
-    const aliveToDisconnect = clients.slice(0, 10).find((c) => c.state === "alive");
-    assert.ok(aliveToDisconnect, "expected at least one alive client to disconnect");
-    aliveToDisconnect.close();
+    clients[10].send({ type: "login", name: clients[10].name });
+    await waitFor(() => clients[10].loggedIn, 7000, "login succeeds after slot is freed");
 
-    await waitFor(() => clients[11].state === "countdown", 7000, "queued client enters countdown");
-    await waitFor(() => clients[11].state === "alive", 7000, "queued client becomes alive");
-
-    assert.ok(
-      clients[11].activePlayers <= 10,
-      `activePlayers exceeded max: ${clients[11].activePlayers}`
-    );
-
-    console.log("Smoke test passed: queue FIFO + disconnect behavior is correct.");
+    console.log("Smoke test passed: login/full/lobby->play flow is correct.");
   } finally {
     for (const client of clients) client.close();
     await sleep(100);

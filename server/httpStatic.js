@@ -46,9 +46,16 @@ export function createStaticHttpServer({ host, port, rootDir }) {
 
       res.writeHead(200);
       res.end(data);
-    } catch {
-      res.writeHead(404);
-      res.end("Not found");
+    } catch (error) {
+      const code = error && typeof error === "object" ? error.code : null;
+      if (code === "ENOENT" || code === "ENOTDIR" || code === "EISDIR") {
+        res.writeHead(404);
+        res.end("Not found");
+        return;
+      }
+      console.error(`[http-static] ${error?.message || error}`);
+      res.writeHead(500);
+      res.end("Internal server error");
     }
   });
 }

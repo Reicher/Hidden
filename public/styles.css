@@ -1,18 +1,21 @@
 :root {
-  --bg: #141923;
-  --fg: #f0f3f8;
-  --accent: #9be564;
-  --warn: #ff5a5f;
+  --bg: #16181e;
+  --panel: #20232b;
+  --panel-2: #1a1d24;
+  --line: #3a3f4a;
+  --fg: #f3f5f9;
+  --muted: #a9b2c3;
+  --ok: #8de16f;
+  --warn: #ff6a70;
 }
 
 html,
 body {
   margin: 0;
-  padding: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: radial-gradient(circle at 20% 20%, #24314d, var(--bg));
+  background: var(--bg);
   color: var(--fg);
   font-family: "JetBrains Mono", "Fira Code", Menlo, monospace;
 }
@@ -23,38 +26,180 @@ body {
   display: block;
 }
 
-#hud {
+body.overlay-active #game {
+  visibility: hidden;
+}
+
+#screenRoot {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  pointer-events: none;
-  padding: 16px;
+  inset: 0;
+}
+
+.view {
+  position: absolute;
+  inset: 0;
+}
+
+.view.hidden {
+  display: none !important;
+}
+
+#connectView {
+  display: grid;
+  place-items: center;
+  background: #151820;
+}
+
+.card {
+  width: min(500px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px;
   box-sizing: border-box;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
 }
 
-#status {
+.card h1 {
+  margin: 0 0 6px;
   font-size: 26px;
-  font-weight: 700;
-  color: var(--accent);
 }
 
-#help {
-  margin-top: 6px;
+label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+input,
+button {
+  font: inherit;
+}
+
+input {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #12151b;
+  color: var(--fg);
+  padding: 9px 10px;
+}
+
+button {
+  border: 1px solid #5d8c4d;
+  border-radius: 7px;
+  background: #243226;
+  color: var(--fg);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.error {
+  min-height: 20px;
+  color: var(--warn);
   font-size: 13px;
-  opacity: 0.9;
 }
 
-.crosshair {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  width: 10px;
-  height: 10px;
-  margin-left: -5px;
-  margin-top: -5px;
-  border: 2px solid rgba(255, 255, 255, 0.85);
-  border-radius: 50%;
-  pointer-events: none;
+#lobbyView {
+  background: #13161d;
+  display: flex;
+  flex-direction: column;
+}
+
+#scoreboardBar {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+  overflow-x: auto;
+}
+
+#scoreTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px;
+}
+
+#scoreTable th,
+#scoreTable td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+}
+
+#scoreTable th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#lobbyMain {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 10px;
+}
+
+#countdownText {
+  min-height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--ok);
+}
+
+#chatPanel {
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0f1218;
+  display: flex;
+  flex-direction: column;
+}
+
+#chatMessages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.chat-line {
+  margin: 0 0 4px;
+  word-break: break-word;
+}
+
+.chat-system {
+  color: #ffffff;
+}
+
+.chat-name {
+  color: var(--ok);
+}
+
+#chatInputRow {
+  display: flex;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding: 8px;
+}
+
+#chatInput {
+  flex: 1 1 auto;
+}
+
+#playBtn {
+  align-self: stretch;
+  font-size: 16px;
+  padding: 12px;
 }
