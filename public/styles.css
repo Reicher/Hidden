@@ -490,19 +490,11 @@ button:disabled {
   justify-content: space-between;
   align-items: flex-end;
   padding: 12px;
-  gap: 10px;
+  gap: 12px;
   pointer-events: none;
 }
 
-#mobileMovePad {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  width: min(36vw, 168px);
-}
-
-.mobileDirBtn,
-#mobileActionRow button {
+#mobileCombatPad button {
   pointer-events: auto;
   touch-action: none;
   user-select: none;
@@ -516,12 +508,56 @@ button:disabled {
   font-weight: 600;
 }
 
+#mobileJoystickWrap {
+  width: min(34vw, 178px);
+  display: grid;
+  place-items: center;
+}
+
+#mobileJoystickBase {
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  width: min(34vw, 178px);
+  height: min(34vw, 178px);
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.26);
+  background:
+    radial-gradient(circle at 35% 30%, rgba(140, 165, 192, 0.22), rgba(24, 30, 40, 0.88)),
+    rgba(10, 13, 19, 0.85);
+  position: relative;
+  box-sizing: border-box;
+}
+
+#mobileJoystickKnob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 42%;
+  height: 42%;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(216, 229, 248, 0.2);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.32);
+}
+
+#mobileCombatPad {
+  pointer-events: none;
+  align-self: flex-end;
+  width: min(30vw, 170px);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
 #mobileActionPad {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  width: min(44vw, 220px);
-  gap: 8px;
+  width: min(37vw, 188px);
+  gap: 0;
 }
 
 #mobileLookPad {
@@ -542,14 +578,17 @@ button:disabled {
   box-sizing: border-box;
 }
 
-#mobileActionRow {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+body.mobile-controls-enabled #gameChatBox {
+  display: none;
 }
 
-body.mobile-controls-enabled #gameChatBox {
-  bottom: 128px;
+body.mobile-controls-enabled #gameChatNotice {
+  display: none;
+}
+
+body.touch-device #gameChatBox,
+body.touch-device #gameChatNotice {
+  display: none;
 }
 
 @media (max-width: 900px), (max-height: 740px) {

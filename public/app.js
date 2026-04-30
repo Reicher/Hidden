@@ -48,10 +48,11 @@ const gameChatMessagesEl = document.getElementById("gameChatMessages");
 const gameChatInputRowEl = document.getElementById("gameChatInputRow");
 const gameChatInputEl = document.getElementById("gameChatInput");
 const mobileControlsEl = document.getElementById("mobileControls");
+const mobileJoystickBaseEl = document.getElementById("mobileJoystickBase");
+const mobileJoystickKnobEl = document.getElementById("mobileJoystickKnob");
 const mobileLookPadEl = document.getElementById("mobileLookPad");
 const mobileSprintBtnEl = document.getElementById("mobileSprintBtn");
 const mobileAttackBtnEl = document.getElementById("mobileAttackBtn");
-const mobileChatBtnEl = document.getElementById("mobileChatBtn");
 
 const PLAYER_NAME_KEY = "hidden_player_name";
 const DEBUG_TOKEN_KEY = "hidden_debug_token";
@@ -89,6 +90,7 @@ const INPUT_SEND_INTERVAL_MS = 33;
 const INPUT_HEARTBEAT_MS = 120;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
+const JOYSTICK_DEADZONE = 0.16;
 const FORCE_MOBILE_UI = new URLSearchParams(location.search).get("mobileUi") === "1";
 const MOBILE_CONTROLS_PREFS = Object.freeze(["auto", "on", "off"]);
 const IS_TOUCH_DEVICE = (() => {
@@ -111,6 +113,9 @@ let lastFrameAt = performance.now();
 let mobileLookPointerId = null;
 let mobileLookLastX = 0;
 let mobileLookLastY = 0;
+let mobileMovePointerId = null;
+let joystickCurrentX = 0;
+let joystickCurrentY = 0;
 let mobileControlsPreference = normalizeMobileControlsPreference(localStorage.getItem(MOBILE_CONTROLS_PREF_KEY));
 
 function hashString(str) {
@@ -313,10 +318,16 @@ function updateMobileControlsVisibility() {
   const show = mobileControlsEnabledByPreference() && appMode === "playing" && sessionState === "alive" && !gameChatOpen;
   mobileControlsEl.classList.toggle("hidden", !show);
   document.body.classList.toggle("mobile-controls-enabled", show);
+  if (!show) resetJoystickState();
+}
+
+function isMobileChatDisabledInGame() {
+  return IS_TOUCH_DEVICE;
 }
 
 function setGameChatOpen(open, { restorePointerLock = false } = {}) {
   if (!gameChatInputRowEl || !gameChatInputEl) return;
+  if (open && isMobileChatDisabledInGame()) return;
   gameChatOpen = Boolean(open);
   gameChatInputRowEl.classList.toggle("hidden", !gameChatOpen);
 
@@ -372,6 +383,7 @@ function setAppMode(mode) {
   }
 
   if (mode !== "playing") setGameChatOpen(false);
+  if (mode === "playing" && isMobileChatDisabledInGame() && gameChatOpen) setGameChatOpen(false);
   if (mode === "connect" || mode === "disconnected") setCountdownTextFromSession({ state: "lobby" });
   updateMobileControlsVisibility();
   updateInGameHud();
@@ -735,6 +747,7 @@ function resetInputState() {
   input.sprint = false;
   input.yaw = yaw;
   inputDirty = true;
+  resetJoystickState();
 }
 
 function attachSocket(wsUrl, loginName) {
@@ -940,6 +953,40 @@ function setMoveInputState(field, active) {
   inputDirty = true;
 }
 
+function resetMoveDirectionalInput() {
+  setMoveInputState("forward", false);
+  setMoveInputState("backward", false);
+  setMoveInputState("left", false);
+  setMoveInputState("right", false);
+}
+
+function updateJoystickVisual() {
+  if (!mobileJoystickKnobEl || !mobileJoystickBaseEl) return;
+  const radius = mobileJoystickBaseEl.clientWidth * 0.5;
+  const travel = Math.max(0, radius - mobileJoystickKnobEl.clientWidth * 0.5 - 4);
+  mobileJoystickKnobEl.style.transform = `translate(calc(-50% + ${joystickCurrentX * travel}px), calc(-50% + ${joystickCurrentY * travel}px))`;
+}
+
+function applyMovementFromJoystick(x, y) {
+  const mag = Math.hypot(x, y);
+  if (mag < JOYSTICK_DEADZONE) {
+    resetMoveDirectionalInput();
+    return;
+  }
+
+  setMoveInputState("forward", y < -JOYSTICK_DEADZONE * 0.75);
+  setMoveInputState("backward", y > JOYSTICK_DEADZONE * 0.75);
+  setMoveInputState("left", x < -JOYSTICK_DEADZONE * 0.75);
+  setMoveInputState("right", x > JOYSTICK_DEADZONE * 0.75);
+}
+
+function resetJoystickState() {
+  joystickCurrentX = 0;
+  joystickCurrentY = 0;
+  updateJoystickVisual();
+  resetMoveDirectionalInput();
+}
+
 function bindHoldButton(el, onStart, onStop) {
   if (!el) return;
 
@@ -963,16 +1010,7 @@ function bindHoldButton(el, onStart, onStop) {
 
 function bindMobileControls() {
   if (!IS_TOUCH_DEVICE) return;
-
-  for (const btn of document.querySelectorAll(".mobileDirBtn")) {
-    const moveField = btn.dataset.move;
-    if (!moveField || !(moveField in input)) continue;
-    bindHoldButton(
-      btn,
-      () => setMoveInputState(moveField, true),
-      () => setMoveInputState(moveField, false)
-    );
-  }
+  updateJoystickVisual();
 
   bindHoldButton(
     mobileSprintBtnEl,
@@ -989,11 +1027,53 @@ function bindMobileControls() {
     });
   }
 
-  if (mobileChatBtnEl) {
-    mobileChatBtnEl.addEventListener("click", (event) => {
+  if (mobileJoystickBaseEl) {
+    const updateFromPointer = (event) => {
+      const rect = mobileJoystickBaseEl.getBoundingClientRect();
+      const centerX = rect.left + rect.width * 0.5;
+      const centerY = rect.top + rect.height * 0.5;
+      const maxRadius = Math.max(1, rect.width * 0.5);
+      const dx = (event.clientX - centerX) / maxRadius;
+      const dy = (event.clientY - centerY) / maxRadius;
+      const mag = Math.hypot(dx, dy);
+      const scale = mag > 1 ? 1 / mag : 1;
+      joystickCurrentX = dx * scale;
+      joystickCurrentY = dy * scale;
+      updateJoystickVisual();
+      applyMovementFromJoystick(joystickCurrentX, joystickCurrentY);
+    };
+
+    mobileJoystickBaseEl.addEventListener("pointerdown", (event) => {
       event.preventDefault();
+      if (mobileMovePointerId != null) return;
+      mobileMovePointerId = event.pointerId;
+      mobileJoystickBaseEl.setPointerCapture?.(event.pointerId);
+      updateFromPointer(event);
+    });
+
+    mobileJoystickBaseEl.addEventListener("pointermove", (event) => {
+      if (event.pointerId !== mobileMovePointerId) return;
       if (appMode !== "playing" || sessionState !== "alive") return;
-      setGameChatOpen(!gameChatOpen, { restorePointerLock: false });
+      event.preventDefault();
+      updateFromPointer(event);
+      const now = performance.now();
+      if (now - lastInputSentAt >= INPUT_SEND_INTERVAL_MS) sendInput();
+    });
+
+    const stopMovePointer = (event) => {
+      if (event.pointerId !== mobileMovePointerId) return;
+      if (mobileJoystickBaseEl.hasPointerCapture?.(event.pointerId)) {
+        mobileJoystickBaseEl.releasePointerCapture(event.pointerId);
+      }
+      mobileMovePointerId = null;
+      resetJoystickState();
+    };
+
+    mobileJoystickBaseEl.addEventListener("pointerup", stopMovePointer);
+    mobileJoystickBaseEl.addEventListener("pointercancel", stopMovePointer);
+    mobileJoystickBaseEl.addEventListener("lostpointercapture", () => {
+      mobileMovePointerId = null;
+      resetJoystickState();
     });
   }
 
@@ -1043,6 +1123,7 @@ function bindMobileControls() {
 const savedName = localStorage.getItem(PLAYER_NAME_KEY);
 if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
 if (debugTokenInputEl) debugTokenInputEl.value = getDebugToken();
+if (IS_TOUCH_DEVICE) document.body.classList.add("touch-device");
 refreshMobileControlsSettingsUi();
 bindMobileControls();
 
@@ -1062,7 +1143,7 @@ playBtnEl?.addEventListener("click", () => {
 controlsBtnEl?.addEventListener("click", () => {
   openLobbyDialog(
     "Kontroller",
-    "PC: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack, C öppnar chat.\nMobil: knappar nere till vänster för rörelse, dra i höger ruta för att titta, Attack/Spring/Chat till höger."
+    "PC: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack, C öppnar chat.\nMobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta. Chat i match är avstängd på mobil."
   );
 });
 settingsBtnEl?.addEventListener("click", () => {
@@ -1136,7 +1217,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (appMode !== "playing") return;
-  if (event.code === "KeyC" && sessionState === "alive" && !gameChatOpen && !isGameChatFocused()) {
+  if (event.code === "KeyC" && sessionState === "alive" && !gameChatOpen && !isGameChatFocused() && !isMobileChatDisabledInGame()) {
     event.preventDefault();
     setGameChatOpen(true);
     return;
