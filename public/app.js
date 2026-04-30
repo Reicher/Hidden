@@ -26,6 +26,9 @@ const countdownTextEl = document.getElementById("countdownText");
 const lobbyDialogBackdropEl = document.getElementById("lobbyDialogBackdrop");
 const lobbyDialogTitleEl = document.getElementById("lobbyDialogTitle");
 const lobbyDialogTextEl = document.getElementById("lobbyDialogText");
+const settingsPanelEl = document.getElementById("settingsPanel");
+const mobileControlsModeBtnEl = document.getElementById("mobileControlsModeBtn");
+const mobileControlsModeHelpEl = document.getElementById("mobileControlsModeHelp");
 const lobbyDialogCloseBtnEl = document.getElementById("lobbyDialogCloseBtn");
 const debugBackdropEl = document.getElementById("debugBackdrop");
 const debugCloseBtnEl = document.getElementById("debugCloseBtn");
@@ -52,6 +55,7 @@ const mobileChatBtnEl = document.getElementById("mobileChatBtn");
 
 const PLAYER_NAME_KEY = "hidden_player_name";
 const DEBUG_TOKEN_KEY = "hidden_debug_token";
+const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
 
 const sceneSystem = createSceneSystem(canvas);
 const { renderer, scene, camera, resize } = sceneSystem;
@@ -86,6 +90,7 @@ const INPUT_HEARTBEAT_MS = 120;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
 const FORCE_MOBILE_UI = new URLSearchParams(location.search).get("mobileUi") === "1";
+const MOBILE_CONTROLS_PREFS = Object.freeze(["auto", "on", "off"]);
 const IS_TOUCH_DEVICE = (() => {
   const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
   const hoverNone = window.matchMedia && window.matchMedia("(hover: none)").matches;
@@ -106,6 +111,7 @@ let lastFrameAt = performance.now();
 let mobileLookPointerId = null;
 let mobileLookLastX = 0;
 let mobileLookLastY = 0;
+let mobileControlsPreference = normalizeMobileControlsPreference(localStorage.getItem(MOBILE_CONTROLS_PREF_KEY));
 
 function hashString(str) {
   let h = 2166136261;
@@ -200,6 +206,46 @@ function setDebugError(text) {
   debugAuthErrorEl.textContent = text || "";
 }
 
+function normalizeMobileControlsPreference(value) {
+  if (value === "on" || value === "off" || value === "auto") return value;
+  return "auto";
+}
+
+function persistMobileControlsPreference(value) {
+  const normalized = normalizeMobileControlsPreference(value);
+  mobileControlsPreference = normalized;
+  localStorage.setItem(MOBILE_CONTROLS_PREF_KEY, normalized);
+}
+
+function mobileControlsEnabledByPreference() {
+  if (mobileControlsPreference === "on") return true;
+  if (mobileControlsPreference === "off") return false;
+  return IS_TOUCH_DEVICE;
+}
+
+function mobileControlsLabel(pref) {
+  if (pref === "on") return "På";
+  if (pref === "off") return "Av";
+  return "Auto";
+}
+
+function refreshMobileControlsSettingsUi() {
+  if (mobileControlsModeBtnEl) {
+    mobileControlsModeBtnEl.textContent = mobileControlsLabel(mobileControlsPreference);
+  }
+  if (mobileControlsModeHelpEl) {
+    if (mobileControlsPreference === "on") {
+      mobileControlsModeHelpEl.textContent = "På: mobilkontroller visas alltid under spel.";
+      return;
+    }
+    if (mobileControlsPreference === "off") {
+      mobileControlsModeHelpEl.textContent = "Av: mobilkontroller döljs alltid.";
+      return;
+    }
+    mobileControlsModeHelpEl.textContent = "Auto: visas bara när enheten identifieras som touch.";
+  }
+}
+
 function formatDateTime(at) {
   if (!at || !Number.isFinite(at)) return "-";
   const date = new Date(at);
@@ -236,17 +282,26 @@ function updateDocumentTitle() {
   document.title = `Hidden - ${othersPlaying} spelare`;
 }
 
-function openLobbyDialog(title, text) {
+function openLobbyDialog(title, text, { showSettings = false } = {}) {
   if (!lobbyDialogBackdropEl || !lobbyDialogTitleEl || !lobbyDialogTextEl || !lobbyDialogCloseBtnEl) return;
   lobbyDialogTitleEl.textContent = title;
   lobbyDialogTextEl.textContent = text;
+  lobbyDialogTextEl.classList.toggle("hidden", showSettings);
+  if (settingsPanelEl) settingsPanelEl.classList.toggle("hidden", !showSettings);
+  if (showSettings) refreshMobileControlsSettingsUi();
   lobbyDialogBackdropEl.classList.remove("hidden");
-  lobbyDialogCloseBtnEl.focus();
+  if (showSettings && mobileControlsModeBtnEl) {
+    mobileControlsModeBtnEl.focus();
+  } else {
+    lobbyDialogCloseBtnEl.focus();
+  }
 }
 
 function closeLobbyDialog() {
   if (!lobbyDialogBackdropEl) return;
   lobbyDialogBackdropEl.classList.add("hidden");
+  if (settingsPanelEl) settingsPanelEl.classList.add("hidden");
+  lobbyDialogTextEl?.classList.remove("hidden");
 }
 
 function isGameChatFocused() {
@@ -255,7 +310,7 @@ function isGameChatFocused() {
 
 function updateMobileControlsVisibility() {
   if (!mobileControlsEl) return;
-  const show = IS_TOUCH_DEVICE && appMode === "playing" && sessionState === "alive" && !gameChatOpen;
+  const show = mobileControlsEnabledByPreference() && appMode === "playing" && sessionState === "alive" && !gameChatOpen;
   mobileControlsEl.classList.toggle("hidden", !show);
   document.body.classList.toggle("mobile-controls-enabled", show);
 }
@@ -988,6 +1043,7 @@ function bindMobileControls() {
 const savedName = localStorage.getItem(PLAYER_NAME_KEY);
 if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
 if (debugTokenInputEl) debugTokenInputEl.value = getDebugToken();
+refreshMobileControlsSettingsUi();
 bindMobileControls();
 
 connectBtnEl?.addEventListener("click", connectAndLogin);
@@ -1010,7 +1066,7 @@ controlsBtnEl?.addEventListener("click", () => {
   );
 });
 settingsBtnEl?.addEventListener("click", () => {
-  openLobbyDialog("Inställningar", "Nada just nu.");
+  openLobbyDialog("Inställningar", "", { showSettings: true });
 });
 creditsBtnEl?.addEventListener("click", () => {
   openLobbyDialog(
@@ -1060,6 +1116,13 @@ gameChatInputEl?.addEventListener("keydown", (event) => {
 lobbyDialogCloseBtnEl?.addEventListener("click", closeLobbyDialog);
 lobbyDialogBackdropEl?.addEventListener("click", (event) => {
   if (event.target === lobbyDialogBackdropEl) closeLobbyDialog();
+});
+mobileControlsModeBtnEl?.addEventListener("click", () => {
+  const idx = MOBILE_CONTROLS_PREFS.indexOf(mobileControlsPreference);
+  const next = MOBILE_CONTROLS_PREFS[(idx + 1) % MOBILE_CONTROLS_PREFS.length];
+  persistMobileControlsPreference(next);
+  refreshMobileControlsSettingsUi();
+  updateMobileControlsVisibility();
 });
 
 window.addEventListener("resize", () => {

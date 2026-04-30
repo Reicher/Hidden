@@ -265,6 +265,35 @@ button:disabled {
   white-space: pre-line;
 }
 
+#settingsPanel {
+  margin: 0 0 14px;
+  display: grid;
+  gap: 10px;
+}
+
+#settingsIntro,
+#mobileControlsModeHelp {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+#settingsMobileControlsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#settingsMobileControlsRow span {
+  font-size: 14px;
+}
+
+#mobileControlsModeBtn {
+  min-width: 122px;
+}
+
 #lobbyDialogCloseBtn {
   min-width: 110px;
 }
