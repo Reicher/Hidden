@@ -15,7 +15,19 @@ const chatMessagesEl = document.getElementById("chatMessages");
 const chatInputEl = document.getElementById("chatInput");
 const chatSendBtnEl = document.getElementById("chatSendBtn");
 const playBtnEl = document.getElementById("playBtn");
+const controlsBtnEl = document.getElementById("controlsBtn");
+const settingsBtnEl = document.getElementById("settingsBtn");
+const creditsBtnEl = document.getElementById("creditsBtn");
 const countdownTextEl = document.getElementById("countdownText");
+const lobbyDialogBackdropEl = document.getElementById("lobbyDialogBackdrop");
+const lobbyDialogTitleEl = document.getElementById("lobbyDialogTitle");
+const lobbyDialogTextEl = document.getElementById("lobbyDialogText");
+const lobbyDialogCloseBtnEl = document.getElementById("lobbyDialogCloseBtn");
+const gameHudEl = document.getElementById("gameHud");
+const aliveOthersTextEl = document.getElementById("aliveOthersText");
+const gameChatMessagesEl = document.getElementById("gameChatMessages");
+const gameChatInputRowEl = document.getElementById("gameChatInputRow");
+const gameChatInputEl = document.getElementById("gameChatInput");
 
 const PLAYER_NAME_KEY = "hidden_player_name";
 
@@ -32,6 +44,8 @@ let appMode = "connect"; // connect | lobby | playing | disconnected
 let sessionState = "auth"; // auth | lobby | countdown | alive
 let myCharacterId = null;
 let myName = "";
+let activePlayersInGame = 0;
+let gameChatOpen = false;
 
 const input = {
   forward: false,
@@ -82,6 +96,7 @@ function wsScheme() {
 }
 
 function setConnectError(text) {
+  if (!connectErrorEl) return;
   connectErrorEl.textContent = text || "";
 }
 
@@ -97,8 +112,52 @@ function requestPointerLockSafe(targetEl = canvas) {
 }
 
 function updateConnectButton() {
+  if (!connectBtnEl) return;
   connectBtnEl.disabled = connecting;
   connectBtnEl.textContent = connecting ? "Ansluter..." : "Anslut";
+}
+
+function openLobbyDialog(title, text) {
+  if (!lobbyDialogBackdropEl || !lobbyDialogTitleEl || !lobbyDialogTextEl || !lobbyDialogCloseBtnEl) return;
+  lobbyDialogTitleEl.textContent = title;
+  lobbyDialogTextEl.textContent = text;
+  lobbyDialogBackdropEl.classList.remove("hidden");
+  lobbyDialogCloseBtnEl.focus();
+}
+
+function closeLobbyDialog() {
+  if (!lobbyDialogBackdropEl) return;
+  lobbyDialogBackdropEl.classList.add("hidden");
+}
+
+function isGameChatFocused() {
+  return document.activeElement === gameChatInputEl;
+}
+
+function setGameChatOpen(open, { restorePointerLock = false } = {}) {
+  if (!gameChatInputRowEl || !gameChatInputEl) return;
+  gameChatOpen = Boolean(open);
+  gameChatInputRowEl.classList.toggle("hidden", !gameChatOpen);
+
+  if (gameChatOpen) {
+    resetInputState();
+    sendInput();
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    gameChatInputEl.focus();
+    return;
+  }
+
+  gameChatInputEl.blur();
+  if (restorePointerLock && appMode === "playing" && sessionState === "alive") {
+    requestPointerLockSafe(canvas);
+  }
+}
+
+function updateInGameHud() {
+  if (!aliveOthersTextEl) return;
+  const others = Math.max(0, activePlayersInGame - (sessionState === "alive" ? 1 : 0));
+  const noun = others === 1 ? "annan" : "andra";
+  aliveOthersTextEl.textContent = `${others} ${noun} spelar just nu`;
 }
 
 function setAppMode(mode) {
@@ -108,12 +167,13 @@ function setAppMode(mode) {
   const showConnect = mode === "connect" || mode === "disconnected";
   const showLobby = mode === "lobby";
 
-  connectViewEl.classList.toggle("hidden", !showConnect);
-  lobbyViewEl.classList.toggle("hidden", !showLobby);
+  connectViewEl?.classList.toggle("hidden", !showConnect);
+  lobbyViewEl?.classList.toggle("hidden", !showLobby);
+  gameHudEl?.classList.toggle("hidden", mode !== "playing");
 
   const overlayActive = mode !== "playing";
   document.body.classList.toggle("overlay-active", overlayActive);
-  screenRootEl.style.pointerEvents = overlayActive ? "auto" : "none";
+  if (screenRootEl) screenRootEl.style.pointerEvents = overlayActive ? "auto" : "none";
 
   if (previous === "playing" && mode !== "playing" && document.pointerLockElement) {
     document.exitPointerLock?.();
@@ -122,9 +182,13 @@ function setAppMode(mode) {
   if (previous === "playing" && mode !== "playing") {
     myCharacterId = null;
   }
+
+  if (mode !== "playing") setGameChatOpen(false);
+  updateInGameHud();
 }
 
 function setCountdownTextFromSession(state) {
+  if (!countdownTextEl || !playBtnEl) return;
   if (state?.state === "countdown") {
     const ms = state.countdownMsRemaining ?? 3000;
     const sec = Math.max(1, Math.ceil(ms / 1000));
@@ -137,6 +201,7 @@ function setCountdownTextFromSession(state) {
 }
 
 function renderScoreboard(players) {
+  if (!scoreBodyEl) return;
   scoreBodyEl.textContent = "";
   if (!Array.isArray(players)) return;
   for (const p of players) {
@@ -167,7 +232,8 @@ function renderScoreboard(players) {
   }
 }
 
-function appendChat(entry) {
+function appendChatLine(container, entry) {
+  if (!container) return;
   if (!entry || typeof entry.text !== "string") return;
   const line = document.createElement("p");
   line.className = "chat-line";
@@ -191,8 +257,8 @@ function appendChat(entry) {
     } else {
       line.textContent = entry.text;
     }
-    chatMessagesEl.appendChild(line);
-    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+    container.appendChild(line);
+    container.scrollTop = container.scrollHeight;
     return;
   }
 
@@ -206,12 +272,18 @@ function appendChat(entry) {
 
   line.appendChild(nameSpan);
   line.appendChild(textSpan);
-  chatMessagesEl.appendChild(line);
-  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  container.appendChild(line);
+  container.scrollTop = container.scrollHeight;
+}
+
+function appendChat(entry) {
+  appendChatLine(chatMessagesEl, entry);
+  appendChatLine(gameChatMessagesEl, entry);
 }
 
 function replaceChat(history) {
-  chatMessagesEl.textContent = "";
+  if (chatMessagesEl) chatMessagesEl.textContent = "";
+  if (gameChatMessagesEl) gameChatMessagesEl.textContent = "";
   if (!Array.isArray(history)) return;
   for (const entry of history) appendChat(entry);
 }
@@ -303,6 +375,8 @@ function attachSocket(wsUrl, loginName) {
         authenticated = Boolean(state.authenticated);
         myName = state.name || myName;
         myCharacterId = state.characterId ?? null;
+        activePlayersInGame = Number(state.activePlayers || 0);
+        updateInGameHud();
       }
 
       const controlledYaw = avatarSystem.applyWorldCharacters({
@@ -352,6 +426,7 @@ function attachSocket(wsUrl, loginName) {
 
 function connectAndLogin() {
   if (connecting) return;
+  if (!nameInputEl) return;
   const rawName = nameInputEl.value.trim();
 
   if (rawName.length < 2) {
@@ -376,10 +451,19 @@ function connectAndLogin() {
 }
 
 function sendChat() {
+  if (!chatInputEl) return;
   const text = chatInputEl.value.trim();
   if (!text || !socket) return;
   socket.sendJson({ type: "chat", text });
   chatInputEl.value = "";
+}
+
+function sendGameChat() {
+  if (!gameChatInputEl) return;
+  const text = gameChatInputEl.value.trim();
+  if (!text || !socket) return;
+  socket.sendJson({ type: "chat", text });
+  gameChatInputEl.value = "";
 }
 
 function sendInput() {
@@ -396,23 +480,54 @@ function sendInput() {
 }
 
 const savedName = localStorage.getItem(PLAYER_NAME_KEY);
-nameInputEl.value = savedName != null ? savedName : "";
+if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
 
-connectBtnEl.addEventListener("click", connectAndLogin);
-nameInputEl.addEventListener("keydown", (event) => {
+connectBtnEl?.addEventListener("click", connectAndLogin);
+nameInputEl?.addEventListener("keydown", (event) => {
   if (event.key === "Enter") connectAndLogin();
 });
-playBtnEl.addEventListener("click", () => {
+playBtnEl?.addEventListener("click", () => {
   if (!socket || !authenticated) return;
   socket.sendJson({ type: "play" });
   requestPointerLockSafe(canvas);
 });
+controlsBtnEl?.addEventListener("click", () => {
+  openLobbyDialog(
+    "Kontroller",
+    "WASD: rörelse\nMus: titta runt\nVänsterklick: attack\nC: öppna chat i spelet"
+  );
+});
+settingsBtnEl?.addEventListener("click", () => {
+  openLobbyDialog("Inställningar", "Nada just nu.");
+});
+creditsBtnEl?.addEventListener("click", () => {
+  openLobbyDialog(
+    "Credits",
+    "Skapat av Robin Reicher.\nInspirerat av Adam Spraggs spel \"Hidden in Plain Sight\"."
+  );
+});
 
-chatSendBtnEl.addEventListener("click", sendChat);
-chatInputEl.addEventListener("keydown", (event) => {
+chatSendBtnEl?.addEventListener("click", sendChat);
+chatInputEl?.addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
   event.preventDefault();
   sendChat();
+});
+gameChatInputEl?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    sendGameChat();
+    setGameChatOpen(false, { restorePointerLock: true });
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    setGameChatOpen(false, { restorePointerLock: true });
+  }
+});
+lobbyDialogCloseBtnEl?.addEventListener("click", closeLobbyDialog);
+lobbyDialogBackdropEl?.addEventListener("click", (event) => {
+  if (event.target === lobbyDialogBackdropEl) closeLobbyDialog();
 });
 
 window.addEventListener("resize", () => {
@@ -421,6 +536,12 @@ window.addEventListener("resize", () => {
 
 window.addEventListener("keydown", (event) => {
   if (appMode !== "playing") return;
+  if (event.code === "KeyC" && sessionState === "alive") {
+    event.preventDefault();
+    setGameChatOpen(true);
+    return;
+  }
+  if (gameChatOpen || isGameChatFocused()) return;
   let changed = false;
   if (event.code === "KeyW" && !input.forward) {
     input.forward = true;
@@ -443,6 +564,7 @@ window.addEventListener("keydown", (event) => {
 
 window.addEventListener("keyup", (event) => {
   if (appMode !== "playing") return;
+  if (gameChatOpen || isGameChatFocused()) return;
   let changed = false;
   if (event.code === "KeyW" && input.forward) {
     input.forward = false;
@@ -465,6 +587,7 @@ window.addEventListener("keyup", (event) => {
 
 canvas.addEventListener("click", () => {
   if (appMode !== "playing") return;
+  if (gameChatOpen) return;
   if (!document.pointerLockElement) {
     requestPointerLockSafe(canvas);
   }
@@ -486,6 +609,7 @@ document.addEventListener("mousemove", (event) => {
 window.addEventListener("mousedown", (event) => {
   if (event.button !== 0) return;
   if (appMode !== "playing" || sessionState !== "alive") return;
+  if (gameChatOpen || isGameChatFocused()) return;
   socket?.sendJson({ type: "attack" });
 });
 

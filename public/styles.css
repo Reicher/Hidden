@@ -44,6 +44,10 @@ body.overlay-active #game {
   display: none !important;
 }
 
+.hidden {
+  display: none !important;
+}
+
 #connectView {
   display: grid;
   place-items: center;
@@ -198,8 +202,118 @@ button:disabled {
   flex: 1 1 auto;
 }
 
-#playBtn {
+#lobbyActionRow {
+  display: flex;
+  gap: 10px;
   align-self: stretch;
-  font-size: 16px;
-  padding: 12px;
+}
+
+#lobbyActionRow button {
+  flex: 1 1 0;
+  font-size: 15px;
+  padding: 11px 10px;
+}
+
+#lobbyDialogBackdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+#lobbyDialogCard {
+  width: min(540px, calc(100vw - 44px));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #171b23;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+#lobbyDialogTitle {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+#lobbyDialogText {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+#lobbyDialogCloseBtn {
+  min-width: 110px;
+}
+
+#gameHud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  color: #e7ebf5;
+  z-index: 5;
+}
+
+#aliveOthersText {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  color: rgba(231, 235, 245, 0.86);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+#gameChatNotice {
+  position: absolute;
+  right: 14px;
+  bottom: 128px;
+  font-size: 11px;
+  color: rgba(231, 235, 245, 0.75);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+#gameChatBox {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: min(420px, calc(100vw - 24px));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(9, 11, 16, 0.5);
+  backdrop-filter: blur(2px);
+  pointer-events: auto;
+}
+
+#gameChatMessages {
+  max-height: 116px;
+  overflow: auto;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+#gameChatMessages .chat-line {
+  margin: 0 0 3px;
+  color: rgba(233, 236, 243, 0.86);
+}
+
+#gameChatMessages .chat-system {
+  color: #ffffff;
+}
+
+#gameChatInputRow {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 7px;
+}
+
+#gameChatInput {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(10, 12, 18, 0.88);
+  color: #f3f5f9;
+  padding: 7px 8px;
 }
