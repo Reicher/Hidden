@@ -4,8 +4,40 @@ import { seededRandom } from "./utils.js";
 const DEFAULT_ROOM_HALF = 24;
 const WALL_HEIGHT = 5.2;
 const DEFAULT_SHELVES = Object.freeze([
-  Object.freeze({ x: -2.8, z: 0, width: 0.8, depth: 5.2, height: 1.78 }),
-  Object.freeze({ x: 2.8, z: 0, width: 0.8, depth: 5.2, height: 1.78 })
+  Object.freeze({ x: -4.2, z: -8, width: 0.8, depth: 5.2, height: 2.9 }),
+  Object.freeze({ x: 4.2, z: -8, width: 0.8, depth: 5.2, height: 2.9 }),
+  Object.freeze({ x: -4.2, z: 0, width: 0.8, depth: 5.2, height: 2.9 }),
+  Object.freeze({ x: 4.2, z: 0, width: 0.8, depth: 5.2, height: 2.9 }),
+  Object.freeze({ x: -4.2, z: 8, width: 0.8, depth: 5.2, height: 2.9 }),
+  Object.freeze({ x: 4.2, z: 8, width: 0.8, depth: 5.2, height: 2.9 })
+]);
+const DEFAULT_COOLERS = Object.freeze([
+  Object.freeze({ x: -13.8, z: -22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: 0 }),
+  Object.freeze({ x: -12.52, z: -22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: 0 }),
+  Object.freeze({ x: -11.24, z: -22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: 0 }),
+  Object.freeze({ x: 11.24, z: -22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: 0 }),
+  Object.freeze({ x: 12.52, z: -22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: 0 }),
+  Object.freeze({ x: 13.8, z: -22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: 0 }),
+  Object.freeze({ x: -13.8, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI }),
+  Object.freeze({ x: -12.52, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI }),
+  Object.freeze({ x: -11.24, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI }),
+  Object.freeze({ x: 11.24, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI }),
+  Object.freeze({ x: 12.52, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI }),
+  Object.freeze({ x: 13.8, z: 22.85, width: 1.28, depth: 0.9, height: 3.52, yaw: Math.PI })
+]);
+const DEFAULT_FREEZERS = Object.freeze([
+  Object.freeze({ x: -22.85, z: -14.15, width: 1.9, depth: 1.2, height: 2.15, yaw: Math.PI / 2 }),
+  Object.freeze({ x: -22.85, z: -12.25, width: 1.9, depth: 1.2, height: 2.15, yaw: Math.PI / 2 }),
+  Object.freeze({ x: -22.85, z: 12.25, width: 1.9, depth: 1.2, height: 2.15, yaw: Math.PI / 2 }),
+  Object.freeze({ x: -22.85, z: 14.15, width: 1.9, depth: 1.2, height: 2.15, yaw: Math.PI / 2 }),
+  Object.freeze({ x: 22.85, z: -14.15, width: 1.9, depth: 1.2, height: 2.15, yaw: -Math.PI / 2 }),
+  Object.freeze({ x: 22.85, z: -12.25, width: 1.9, depth: 1.2, height: 2.15, yaw: -Math.PI / 2 }),
+  Object.freeze({ x: 22.85, z: 12.25, width: 1.9, depth: 1.2, height: 2.15, yaw: -Math.PI / 2 }),
+  Object.freeze({ x: 22.85, z: 14.15, width: 1.9, depth: 1.2, height: 2.15, yaw: -Math.PI / 2 }),
+  Object.freeze({ x: -5.2, z: -9.75, width: 1.9, depth: 1.2, height: 2.15, yaw: Math.PI / 2 }),
+  Object.freeze({ x: -5.2, z: -7.85, width: 1.9, depth: 1.2, height: 2.15, yaw: Math.PI / 2 }),
+  Object.freeze({ x: 5.2, z: 7.85, width: 1.9, depth: 1.2, height: 2.15, yaw: -Math.PI / 2 }),
+  Object.freeze({ x: 5.2, z: 9.75, width: 1.9, depth: 1.2, height: 2.15, yaw: -Math.PI / 2 })
 ]);
 
 export function createRoomSystem({ scene, renderer }) {
@@ -133,7 +165,7 @@ export function createRoomSystem({ scene, renderer }) {
   const shelfRng = seededRandom(20260430);
 
   let builtRoomHalf = null;
-  let builtShelvesSignature = "";
+  let builtFixturesSignature = "";
 
   function createAtlasMap(texture, tileIndex) {
     const map = texture.clone();
@@ -197,21 +229,23 @@ export function createRoomSystem({ scene, renderer }) {
     material.dispose();
   }
 
-  function disposeMeshResources(mesh) {
-    if (mesh.geometry) mesh.geometry.dispose();
-    if (!mesh.material) return;
-    if (Array.isArray(mesh.material)) {
-      const unique = new Set(mesh.material);
+  function disposeObjectResources(object3d) {
+    for (const child of object3d.children || []) disposeObjectResources(child);
+    if (!object3d.geometry && !object3d.material) return;
+    if (object3d.geometry) object3d.geometry.dispose();
+    if (!object3d.material) return;
+    if (Array.isArray(object3d.material)) {
+      const unique = new Set(object3d.material);
       for (const material of unique) disposeMaterial(material);
       return;
     }
-    disposeMaterial(mesh.material);
+    disposeMaterial(object3d.material);
   }
 
   function clearRoomRootGeometry() {
     for (const child of [...roomRoot.children]) {
       roomRoot.remove(child);
-      if (child !== floor && child !== ceiling) disposeMeshResources(child);
+      if (child !== floor && child !== ceiling) disposeObjectResources(child);
     }
     wallMaterials.length = 0;
     shelfSideMaterials.length = 0;
@@ -227,7 +261,7 @@ export function createRoomSystem({ scene, renderer }) {
   function createShelf(shelf) {
     const width = typeof shelf.width === "number" ? shelf.width : 0.8;
     const depth = typeof shelf.depth === "number" ? shelf.depth : 5.2;
-    const height = typeof shelf.height === "number" ? shelf.height : 1.78;
+    const height = typeof shelf.height === "number" ? shelf.height : 2.9;
     const plain = new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.9, metalness: 0.02 });
 
     const sideA = createShelfSideMaterial(randomShelfTileIndex());
@@ -249,7 +283,83 @@ export function createRoomSystem({ scene, renderer }) {
     roomRoot.add(longSideB);
   }
 
-  function buildRoomGeometry(roomHalf, shelves) {
+  function createCooler(cooler) {
+    const width = typeof cooler.width === "number" ? cooler.width : 1.28;
+    const depth = typeof cooler.depth === "number" ? cooler.depth : 0.9;
+    const height = typeof cooler.height === "number" ? cooler.height : 3.52;
+    const yaw = typeof cooler.yaw === "number" ? cooler.yaw : 0;
+
+    const group = new THREE.Group();
+    group.position.set(cooler.x, 0, cooler.z);
+    group.rotation.y = yaw;
+    group.userData.type = "cooler";
+    group.userData.frontLocalAxis = "+Z";
+    group.userData.frontFacingYaw = yaw;
+
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xdce1e7, roughness: 0.28, metalness: 0.08 });
+    const frontMaterial = new THREE.MeshStandardMaterial({ color: 0xf6f9ff, roughness: 0.18, metalness: 0.04 });
+    const trimMaterial = new THREE.MeshStandardMaterial({ color: 0x9ea7b4, roughness: 0.34, metalness: 0.22 });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), bodyMaterial);
+    body.position.y = height * 0.5;
+    body.userData.frontLocalAxis = "+Z";
+    group.add(body);
+
+    const frontPanel = new THREE.Mesh(new THREE.PlaneGeometry(width * 0.86, height * 0.92), frontMaterial);
+    frontPanel.position.set(0, height * 0.5, depth * 0.5 + 0.004);
+    frontPanel.userData.frontLocalAxis = "+Z";
+    group.add(frontPanel);
+
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(width * 0.04, height * 0.54, 0.02), trimMaterial);
+    handle.position.set(width * 0.34, height * 0.5, depth * 0.5 + 0.018);
+    handle.userData.frontLocalAxis = "+Z";
+    group.add(handle);
+
+    roomRoot.add(group);
+  }
+
+  function createFreezer(freezer) {
+    const width = typeof freezer.width === "number" ? freezer.width : 1.9;
+    const depth = typeof freezer.depth === "number" ? freezer.depth : 1.2;
+    const height = typeof freezer.height === "number" ? freezer.height : 2.15;
+    const yaw = typeof freezer.yaw === "number" ? freezer.yaw : 0;
+
+    const group = new THREE.Group();
+    group.position.set(freezer.x, 0, freezer.z);
+    group.rotation.y = yaw;
+    group.userData.type = "freezer";
+    group.userData.opening = "top";
+
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xbec7d1, roughness: 0.44, metalness: 0.06 });
+    const lidMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe5ebf2,
+      roughness: 0.12,
+      metalness: 0.02,
+      transparent: true,
+      opacity: 0.82
+    });
+    const railMaterial = new THREE.MeshStandardMaterial({ color: 0x8f99a6, roughness: 0.36, metalness: 0.2 });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), bodyMaterial);
+    body.position.y = height * 0.5;
+    group.add(body);
+
+    const splitGap = 0.05;
+    const lidA = new THREE.Mesh(new THREE.BoxGeometry(width * 0.46, 0.05, depth * 0.94), lidMaterial);
+    lidA.position.set(-width * 0.24 - splitGap, height - 0.026, 0);
+    group.add(lidA);
+    const lidB = new THREE.Mesh(new THREE.BoxGeometry(width * 0.46, 0.05, depth * 0.94), lidMaterial);
+    lidB.position.set(width * 0.24 + splitGap, height - 0.026, 0);
+    group.add(lidB);
+
+    const topRail = new THREE.Mesh(new THREE.BoxGeometry(width * 0.98, 0.04, 0.06), railMaterial);
+    topRail.position.set(0, height - 0.022, 0);
+    group.add(topRail);
+
+    roomRoot.add(group);
+  }
+
+  function buildRoomGeometry(roomHalf, shelves, coolers, freezers) {
     const wallThickness = 1;
     const wallSegmentsPerSide = 4;
     const wallSpan = roomHalf * 2 + wallThickness;
@@ -276,41 +386,54 @@ export function createRoomSystem({ scene, renderer }) {
     }
 
     for (const shelf of shelves) createShelf(shelf);
+    for (const cooler of coolers) createCooler(cooler);
+    for (const freezer of freezers) createFreezer(freezer);
   }
 
-  function normalizeShelves(shelves) {
-    if (!Array.isArray(shelves)) return DEFAULT_SHELVES;
-    const valid = shelves.filter(
-      (s) =>
-        s &&
-        typeof s.x === "number" &&
-        Number.isFinite(s.x) &&
-        typeof s.z === "number" &&
-        Number.isFinite(s.z)
+  function normalizeFixtures(fixtures, fallback) {
+    if (!Array.isArray(fixtures)) return fallback;
+    const valid = fixtures.filter(
+      (fixture) =>
+        fixture &&
+        typeof fixture.x === "number" &&
+        Number.isFinite(fixture.x) &&
+        typeof fixture.z === "number" &&
+        Number.isFinite(fixture.z)
     );
-    return valid.length > 0 ? valid : DEFAULT_SHELVES;
+    return valid.length > 0 ? valid : fallback;
   }
 
-  function shelvesSignature(shelves) {
-    return shelves
-      .map((s) => [s.x, s.z, s.width, s.depth, s.height].join(","))
+  function fixtureSignature(fixtures) {
+    return fixtures
+      .map((fixture) => [fixture.x, fixture.z, fixture.width, fixture.depth, fixture.height, fixture.yaw].join(","))
       .join("|");
   }
 
-  function syncFromWorld({ roomHalfSize, shelves }) {
+  function syncFromWorld({ roomHalfSize, shelves, coolers, freezers }) {
     const roomHalf =
       typeof roomHalfSize === "number" && Number.isFinite(roomHalfSize) ? roomHalfSize : DEFAULT_ROOM_HALF;
-    const normalizedShelves = normalizeShelves(shelves);
-    const nextSignature = shelvesSignature(normalizedShelves);
-    const shouldRebuild = builtRoomHalf !== roomHalf || builtShelvesSignature !== nextSignature;
+    const normalizedShelves = normalizeFixtures(shelves, DEFAULT_SHELVES);
+    const normalizedCoolers = normalizeFixtures(coolers, DEFAULT_COOLERS);
+    const normalizedFreezers = normalizeFixtures(freezers, DEFAULT_FREEZERS);
+    const nextSignature = [
+      fixtureSignature(normalizedShelves),
+      fixtureSignature(normalizedCoolers),
+      fixtureSignature(normalizedFreezers)
+    ].join("||");
+    const shouldRebuild = builtRoomHalf !== roomHalf || builtFixturesSignature !== nextSignature;
     if (!shouldRebuild) return;
 
-    buildRoomGeometry(roomHalf, normalizedShelves);
+    buildRoomGeometry(roomHalf, normalizedShelves, normalizedCoolers, normalizedFreezers);
     builtRoomHalf = roomHalf;
-    builtShelvesSignature = nextSignature;
+    builtFixturesSignature = nextSignature;
   }
 
-  syncFromWorld({ roomHalfSize: DEFAULT_ROOM_HALF, shelves: DEFAULT_SHELVES });
+  syncFromWorld({
+    roomHalfSize: DEFAULT_ROOM_HALF,
+    shelves: DEFAULT_SHELVES,
+    coolers: DEFAULT_COOLERS,
+    freezers: DEFAULT_FREEZERS
+  });
 
   return { syncFromWorld };
 }

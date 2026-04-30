@@ -39,8 +39,11 @@
           </table>
         </div>
 
-        <div id="lobbyMain">
+        <div id="countdownOverlay" class="hidden" aria-live="polite">
           <div id="countdownText"></div>
+        </div>
+
+        <div id="lobbyMain">
           <div id="chatPanel">
             <div id="chatMessages"></div>
             <div id="chatInputRow">
@@ -53,6 +56,7 @@
             <button id="controlsBtn" type="button">Kontroller</button>
             <button id="settingsBtn" type="button">Inställningar</button>
             <button id="creditsBtn" type="button">Credits</button>
+            <button id="debugBtn" type="button">Debug</button>
           </div>
 
           <div id="lobbyDialogBackdrop" class="hidden">
@@ -60,6 +64,39 @@
               <h2 id="lobbyDialogTitle"></h2>
               <p id="lobbyDialogText"></p>
               <button id="lobbyDialogCloseBtn" type="button">Stäng</button>
+            </div>
+          </div>
+
+          <div id="debugBackdrop" class="hidden">
+            <div id="debugCard" role="dialog" aria-modal="true" aria-labelledby="debugTitle">
+              <div id="debugHeader">
+                <h2 id="debugTitle">Debug-vy</h2>
+                <button id="debugCloseBtn" type="button">Stäng</button>
+              </div>
+              <div id="debugAuthRow">
+                <label for="debugTokenInput">Token</label>
+                <input id="debugTokenInput" type="password" placeholder="DEBUG_VIEW_TOKEN" autocomplete="off" />
+                <button id="debugLoginBtn" type="button">Läs data</button>
+                <button id="debugClearTokenBtn" type="button">Glöm token</button>
+              </div>
+              <div id="debugAuthError" class="error" aria-live="polite"></div>
+              <div id="debugSummary"></div>
+              <canvas id="debugChart" width="960" height="240"></canvas>
+              <div id="debugGrid">
+                <div class="debugPane">
+                  <h3>Rum nu</h3>
+                  <pre id="debugRoomsText"></pre>
+                </div>
+                <div class="debugPane">
+                  <h3>Spelare (senast sedda)</h3>
+                  <pre id="debugPlayersText"></pre>
+                </div>
+                <div class="debugPane">
+                  <h3>Senaste events</h3>
+                  <pre id="debugEventsText"></pre>
+                </div>
+              </div>
+              <p id="debugMeta"></p>
             </div>
           </div>
         </div>

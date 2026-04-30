@@ -20,11 +20,25 @@ const playBtnEl = document.getElementById("playBtn");
 const controlsBtnEl = document.getElementById("controlsBtn");
 const settingsBtnEl = document.getElementById("settingsBtn");
 const creditsBtnEl = document.getElementById("creditsBtn");
+const debugBtnEl = document.getElementById("debugBtn");
+const countdownOverlayEl = document.getElementById("countdownOverlay");
 const countdownTextEl = document.getElementById("countdownText");
 const lobbyDialogBackdropEl = document.getElementById("lobbyDialogBackdrop");
 const lobbyDialogTitleEl = document.getElementById("lobbyDialogTitle");
 const lobbyDialogTextEl = document.getElementById("lobbyDialogText");
 const lobbyDialogCloseBtnEl = document.getElementById("lobbyDialogCloseBtn");
+const debugBackdropEl = document.getElementById("debugBackdrop");
+const debugCloseBtnEl = document.getElementById("debugCloseBtn");
+const debugTokenInputEl = document.getElementById("debugTokenInput");
+const debugLoginBtnEl = document.getElementById("debugLoginBtn");
+const debugClearTokenBtnEl = document.getElementById("debugClearTokenBtn");
+const debugAuthErrorEl = document.getElementById("debugAuthError");
+const debugSummaryEl = document.getElementById("debugSummary");
+const debugChartEl = document.getElementById("debugChart");
+const debugRoomsTextEl = document.getElementById("debugRoomsText");
+const debugPlayersTextEl = document.getElementById("debugPlayersText");
+const debugEventsTextEl = document.getElementById("debugEventsText");
+const debugMetaEl = document.getElementById("debugMeta");
 const gameHudEl = document.getElementById("gameHud");
 const aliveOthersTextEl = document.getElementById("aliveOthersText");
 const gameChatMessagesEl = document.getElementById("gameChatMessages");
@@ -32,6 +46,7 @@ const gameChatInputRowEl = document.getElementById("gameChatInputRow");
 const gameChatInputEl = document.getElementById("gameChatInput");
 
 const PLAYER_NAME_KEY = "hidden_player_name";
+const DEBUG_TOKEN_KEY = "hidden_debug_token";
 
 const sceneSystem = createSceneSystem(canvas);
 const { renderer, scene, camera, resize } = sceneSystem;
@@ -48,6 +63,9 @@ let myCharacterId = null;
 let myName = "";
 let activePlayersInGame = 0;
 let gameChatOpen = false;
+let debugOpen = false;
+let debugPollTimer = null;
+let debugLoading = false;
 
 const input = {
   forward: false,
@@ -142,6 +160,33 @@ function setConnectError(text) {
   connectErrorEl.textContent = text || "";
 }
 
+function getDebugToken() {
+  return localStorage.getItem(DEBUG_TOKEN_KEY) || "";
+}
+
+function setDebugToken(token) {
+  if (!token) {
+    localStorage.removeItem(DEBUG_TOKEN_KEY);
+    return;
+  }
+  localStorage.setItem(DEBUG_TOKEN_KEY, token);
+}
+
+function setDebugError(text) {
+  if (!debugAuthErrorEl) return;
+  debugAuthErrorEl.textContent = text || "";
+}
+
+function formatDateTime(at) {
+  if (!at || !Number.isFinite(at)) return "-";
+  const date = new Date(at);
+  return `${date.toLocaleDateString("sv-SE")} ${date.toLocaleTimeString("sv-SE")}`;
+}
+
+function fmtN(value) {
+  return Number(value || 0).toLocaleString("sv-SE");
+}
+
 function requestPointerLockSafe(targetEl = canvas) {
   try {
     const maybePromise = targetEl?.requestPointerLock?.();
@@ -234,21 +279,97 @@ function setAppMode(mode) {
     myCharacterId = null;
   }
 
+  if (mode !== "lobby" && debugOpen) {
+    closeDebugView();
+  }
+
   if (mode !== "playing") setGameChatOpen(false);
   updateInGameHud();
   updateDocumentTitle();
 }
 
+async function fetchAndRenderDebugData() {
+  if (!debugOpen || debugLoading) return;
+  debugLoading = true;
+  try {
+    const inputToken = debugTokenInputEl?.value?.trim() || "";
+    const storedToken = getDebugToken().trim();
+    const token = inputToken || storedToken;
+    if (token) setDebugToken(token);
+
+    const debugUrl = new URL("/api/debug/stats", location.origin);
+    if (token) debugUrl.searchParams.set("token", token);
+
+    const response = await fetch(debugUrl, {
+      method: "GET",
+      cache: "no-store",
+      headers: { Accept: "application/json" }
+    });
+
+    if (response.status === 401) {
+      setDebugError("Fel token för debug-vyn.");
+      return;
+    }
+    if (!response.ok) {
+      setDebugError(`Kunde inte läsa debugdata (${response.status}).`);
+      return;
+    }
+
+    const payload = await response.json();
+    setDebugError("");
+    renderDebugData(payload);
+  } catch {
+    setDebugError("Nätverksfel när debugdata skulle hämtas.");
+  } finally {
+    debugLoading = false;
+  }
+}
+
+function startDebugPolling() {
+  if (debugPollTimer) {
+    clearInterval(debugPollTimer);
+    debugPollTimer = null;
+  }
+  fetchAndRenderDebugData();
+  debugPollTimer = setInterval(fetchAndRenderDebugData, 5000);
+}
+
+function stopDebugPolling() {
+  if (!debugPollTimer) return;
+  clearInterval(debugPollTimer);
+  debugPollTimer = null;
+}
+
+function openDebugView() {
+  if (!debugBackdropEl) return;
+  debugOpen = true;
+  debugBackdropEl.classList.remove("hidden");
+  closeLobbyDialog();
+  if (debugTokenInputEl && !debugTokenInputEl.value) {
+    debugTokenInputEl.value = getDebugToken();
+  }
+  setDebugError("");
+  startDebugPolling();
+}
+
+function closeDebugView() {
+  debugOpen = false;
+  stopDebugPolling();
+  debugBackdropEl?.classList.add("hidden");
+}
+
 function setCountdownTextFromSession(state) {
-  if (!countdownTextEl || !playBtnEl) return;
+  if (!countdownTextEl || !playBtnEl || !countdownOverlayEl) return;
   if (state?.state === "countdown") {
     const ms = state.countdownMsRemaining ?? 3000;
     const sec = Math.max(1, Math.ceil(ms / 1000));
-    countdownTextEl.textContent = `Spel startar om ${sec}`;
+    countdownTextEl.textContent = String(sec);
+    countdownOverlayEl.classList.remove("hidden");
     playBtnEl.disabled = true;
     return;
   }
   countdownTextEl.textContent = "";
+  countdownOverlayEl.classList.add("hidden");
   playBtnEl.disabled = false;
 }
 
@@ -281,6 +402,182 @@ function renderScoreboard(players) {
     tr.appendChild(statusCell);
 
     scoreBodyEl.appendChild(tr);
+  }
+}
+
+function renderDebugSummary(data) {
+  if (!debugSummaryEl) return;
+  const cards = [
+    ["Anslutna nu", fmtN(data?.current?.connected)],
+    ["Inloggade nu", fmtN(data?.current?.authenticated)],
+    ["Spelar nu", fmtN(data?.current?.active)],
+    ["Peak anslutna", fmtN(data?.peaks?.connected)],
+    ["Totala besök", fmtN(data?.totals?.totalConnections)],
+    ["Totala logins", fmtN(data?.totals?.totalLogins)],
+    ["Unika namn", fmtN(data?.totals?.uniqueNames)],
+    ["Aktiva rum nu", fmtN(data?.current?.roomCountWithSessions)],
+    ["Server start", formatDateTime(data?.startedAt)]
+  ];
+  debugSummaryEl.textContent = "";
+  for (const [k, v] of cards) {
+    const card = document.createElement("div");
+    card.className = "debugStatCard";
+    const keyEl = document.createElement("span");
+    keyEl.className = "k";
+    keyEl.textContent = k;
+    const valueEl = document.createElement("span");
+    valueEl.className = "v";
+    valueEl.textContent = v;
+    card.appendChild(keyEl);
+    card.appendChild(valueEl);
+    debugSummaryEl.appendChild(card);
+  }
+}
+
+function drawDebugChart(samples) {
+  const canvasEl = debugChartEl;
+  if (!canvasEl) return;
+  const ctx = canvasEl.getContext("2d");
+  if (!ctx) return;
+
+  const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+  const cssWidth = Math.max(300, Math.floor(canvasEl.clientWidth || 960));
+  const cssHeight = Math.max(180, Math.floor(canvasEl.clientHeight || 240));
+  canvasEl.width = cssWidth * dpr;
+  canvasEl.height = cssHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
+  ctx.fillStyle = "#0d1117";
+  ctx.fillRect(0, 0, cssWidth, cssHeight);
+
+  const points = Array.isArray(samples) ? samples.slice(-200) : [];
+  if (points.length < 2) {
+    ctx.fillStyle = "#a9b2c3";
+    ctx.font = "12px JetBrains Mono";
+    ctx.fillText("Ingen historik än - data fylls på över tid.", 12, 22);
+    return;
+  }
+
+  const values = [];
+  for (const sample of points) {
+    values.push(Number(sample.connected || 0));
+    values.push(Number(sample.authenticated || 0));
+    values.push(Number(sample.active || 0));
+  }
+  const maxY = Math.max(1, ...values);
+  const padX = 38;
+  const padY = 16;
+  const innerW = cssWidth - padX - 10;
+  const innerH = cssHeight - padY * 2 - 18;
+
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i += 1) {
+    const y = padY + (innerH * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(padX, y);
+    ctx.lineTo(padX + innerW, y);
+    ctx.stroke();
+    const value = Math.round(maxY * (1 - i / 4));
+    ctx.fillStyle = "#9ca6b8";
+    ctx.font = "11px JetBrains Mono";
+    ctx.fillText(String(value), 4, y + 4);
+  }
+
+  function drawLine(field, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < points.length; i += 1) {
+      const sample = points[i];
+      const x = padX + (innerW * i) / (points.length - 1);
+      const value = Number(sample[field] || 0);
+      const y = padY + innerH - (value / maxY) * innerH;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  drawLine("connected", "#7ad8ff");
+  drawLine("authenticated", "#8de16f");
+  drawLine("active", "#ffcf6a");
+
+  const firstAt = Number(points[0].at || 0);
+  const lastAt = Number(points[points.length - 1].at || 0);
+  const spanMin = Math.max(1, Math.round((lastAt - firstAt) / 60000));
+  ctx.fillStyle = "#a9b2c3";
+  ctx.font = "11px JetBrains Mono";
+  ctx.fillText(`Tidsfönster: ~${spanMin} min`, padX, cssHeight - 5);
+  ctx.fillText("anslutna", cssWidth - 274, cssHeight - 5);
+  ctx.fillStyle = "#7ad8ff";
+  ctx.fillRect(cssWidth - 286, cssHeight - 13, 8, 8);
+  ctx.fillStyle = "#a9b2c3";
+  ctx.fillText("inloggade", cssWidth - 198, cssHeight - 5);
+  ctx.fillStyle = "#8de16f";
+  ctx.fillRect(cssWidth - 210, cssHeight - 13, 8, 8);
+  ctx.fillStyle = "#a9b2c3";
+  ctx.fillText("spelar", cssWidth - 104, cssHeight - 5);
+  ctx.fillStyle = "#ffcf6a";
+  ctx.fillRect(cssWidth - 116, cssHeight - 13, 8, 8);
+}
+
+function renderDebugData(data) {
+  renderDebugSummary(data);
+  drawDebugChart(data?.samples || []);
+
+  if (debugRoomsTextEl) {
+    const rows = Array.isArray(data?.liveRooms) ? data.liveRooms : data?.rooms || [];
+    if (rows.length === 0) {
+      debugRoomsTextEl.textContent = "Inga rum.";
+    } else {
+      debugRoomsTextEl.textContent = rows
+        .map((room) => {
+          const current = room.current || {};
+          const label = room.isPrivate ? `privat:${room.roomCode || room.roomId}` : "publik";
+          const names = Array.isArray(room.authenticatedNames)
+            ? room.authenticatedNames
+            : Array.isArray(room.uniqueNames)
+              ? room.uniqueNames
+              : [];
+          return `${label}\nnu: ansl=${current.connected || 0} inlogg=${current.authenticated || 0} spelar=${current.active || 0} lobby=${current.lobby || 0}\ntotal: besok=${room.totalConnections || 0} login=${room.totalLogins || 0}\nnamn: ${
+            names.length > 0 ? names.join(", ") : "-"
+          }`;
+        })
+        .join("\n\n");
+    }
+  }
+
+  if (debugPlayersTextEl) {
+    const players = Array.isArray(data?.players) ? data.players.slice(0, 80) : [];
+    debugPlayersTextEl.textContent =
+      players.length > 0
+        ? players
+            .map(
+              (player) =>
+                `${player.name} | logins=${player.logins} | senast=${formatDateTime(player.lastSeenAt)} | rum=${(player.rooms || []).join(", ")}`
+            )
+            .join("\n")
+        : "Inga namn loggade ännu.";
+  }
+
+  if (debugEventsTextEl) {
+    const events = Array.isArray(data?.recentEvents) ? data.recentEvents.slice(-80).reverse() : [];
+    debugEventsTextEl.textContent =
+      events.length > 0
+        ? events
+            .map((event) => {
+              const label = event.isPrivate ? `privat:${event.roomCode || event.roomId}` : "publik";
+              const snap = event.snapshot || {};
+              return `${formatDateTime(event.at)} | ${event.type} | ${label} | ${event.name || "-"} | ansl=${snap.connected || 0} inlogg=${snap.authenticated || 0} spelar=${snap.active || 0}`;
+            })
+            .join("\n")
+        : "Inga events ännu.";
+  }
+
+  if (debugMetaEl) {
+    debugMetaEl.textContent = `Senast uppdaterad: ${formatDateTime(data?.generatedAt)} | Loggar: logs/debug-events.log + logs/debug-samples.jsonl`;
   }
 }
 
@@ -548,6 +845,7 @@ function sendInput() {
 
 const savedName = localStorage.getItem(PLAYER_NAME_KEY);
 if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
+if (debugTokenInputEl) debugTokenInputEl.value = getDebugToken();
 
 connectBtnEl?.addEventListener("click", connectAndLogin);
 createPrivateRoomBtnEl?.addEventListener("click", () => {
@@ -576,6 +874,26 @@ creditsBtnEl?.addEventListener("click", () => {
     "Credits",
     "Skapat av Robin Reicher.\nInspirerat av Adam Spraggs spel \"Hidden in Plain Sight\"."
   );
+});
+debugBtnEl?.addEventListener("click", openDebugView);
+debugCloseBtnEl?.addEventListener("click", closeDebugView);
+debugLoginBtnEl?.addEventListener("click", () => {
+  setDebugToken(debugTokenInputEl?.value?.trim() || "");
+  fetchAndRenderDebugData();
+});
+debugClearTokenBtnEl?.addEventListener("click", () => {
+  setDebugToken("");
+  if (debugTokenInputEl) debugTokenInputEl.value = "";
+  setDebugError("");
+});
+debugTokenInputEl?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  setDebugToken(debugTokenInputEl.value.trim());
+  fetchAndRenderDebugData();
+});
+debugBackdropEl?.addEventListener("click", (event) => {
+  if (event.target === debugBackdropEl) closeDebugView();
 });
 
 chatSendBtnEl?.addEventListener("click", sendChat);
@@ -606,6 +924,11 @@ window.addEventListener("resize", () => {
 });
 
 window.addEventListener("keydown", (event) => {
+  if (debugOpen && event.key === "Escape") {
+    event.preventDefault();
+    closeDebugView();
+    return;
+  }
   if (appMode !== "playing") return;
   if (event.code === "KeyC" && sessionState === "alive" && !gameChatOpen && !isGameChatFocused()) {
     event.preventDefault();

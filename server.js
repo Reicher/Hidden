@@ -9,13 +9,15 @@ const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const HOST = process.env.HOST || "127.0.0.1";
 
+let gameRuntimeApi = null;
 const server = createStaticHttpServer({
   host: HOST,
   port: PORT,
-  rootDir: __dirname
+  rootDir: __dirname,
+  onBeforeStaticRequest: ({ req, res, requestUrl }) => gameRuntimeApi?.handleHttpRequest?.({ req, res, requestUrl }) || false
 });
 
-attachGameRuntime({ server });
+gameRuntimeApi = attachGameRuntime({ server, rootDir: __dirname });
 
 server.listen(PORT, HOST, () => {
   console.log(`Server running on http://${HOST}:${PORT}`);

@@ -43,11 +43,26 @@ Privata rum: öppna `http://127.0.0.1:3000/<rumskod>` för ett separat rum som t
 - Server: `Node.js` + `ws` (WebSocket, server-authoritative state)
 - Klient: `Three.js` (rendering + enkel FPS-kontroll)
 
+## Debug-vy
+
+- I lobbyn finns en knapp `Debug` som öppnar live-serverstatistik i klienten.
+- Vyn visar bland annat:
+  - hur många som är inne nu / spelar nu
+  - unika namn och senaste inloggningar
+  - per-rum statistik
+  - senaste serverevents
+  - graf över aktivitet över tid
+- Servern exponerar datan via `GET /api/debug/stats`.
+- Persistenta loggar skrivs till:
+  - `logs/debug-events.log` (läsbar eventlogg)
+  - `logs/debug-samples.jsonl` (tidsserie för grafer)
+
 ## Miljövariabler
 
 - `PORT` (default: `3000`)
 - `ALLOWED_ORIGINS` (kommaseparerad lista; default är localhost/127.0.0.1 på aktuell `PORT`, både `http` och `https`)
 - `ALLOW_MISSING_ORIGIN` (default: `false`)
+- `DEBUG_VIEW_TOKEN` (default: tom; om satt kräver debug-vyn token)
 - `SPAM_DROP_WINDOW_MS` (default: `1000`)
 - `SPAM_MAX_DROPS_PER_WINDOW` (default: `40`)
 - `HEARTBEAT_INTERVAL_MS` (default: `5000`)

@@ -24,12 +24,16 @@ function hasFileExtension(pathname) {
   return basename.includes(".");
 }
 
-export function createStaticHttpServer({ host, port, rootDir }) {
+export function createStaticHttpServer({ host, port, rootDir, onBeforeStaticRequest = null }) {
   const publicDir = path.resolve(path.join(rootDir, "public"));
 
   return http.createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url || "/", `http://${host}:${port}`);
+      if (typeof onBeforeStaticRequest === "function") {
+        const handled = await onBeforeStaticRequest({ req, res, requestUrl });
+        if (handled) return;
+      }
       const pathname = decodeURIComponent(requestUrl.pathname || "/");
       const primaryPath = pathname === "/" ? "/index.html" : pathname;
 

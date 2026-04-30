@@ -1,4 +1,6 @@
 import { createRoomRuntime } from "./roomRuntime.js";
+import { createDebugStatsStore } from "./debugStats.js";
+import { DEBUG_VIEW_TOKEN } from "./config.js";
 
 const PUBLIC_ROOM_ID = "public";
 const PRIVATE_CODE_RE = /^[a-z0-9][a-z0-9-]{2,23}$/i;
@@ -24,8 +26,16 @@ function parseRoomFromRequestUrl(rawUrl) {
   return { ok: true, roomId: `private:${roomCode}`, roomCode, isPrivate: true };
 }
 
-export function attachGameRuntime({ server }) {
+export function attachGameRuntime({ server, rootDir }) {
   const rooms = new Map();
+  const debugStats = createDebugStatsStore({ rootDir });
+
+  function writeJson(res, statusCode, payload) {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.writeHead(statusCode);
+    res.end(JSON.stringify(payload));
+  }
 
   function ensureRoom({ roomId, roomCode, isPrivate }) {
     const existing = rooms.get(roomId);
@@ -35,6 +45,9 @@ export function attachGameRuntime({ server }) {
       roomId,
       roomCode,
       isPrivate,
+      onStatsEvent: (event) => {
+        debugStats.recordRoomEvent(event);
+      },
       onRoomEmpty: ({ roomId: emptyRoomId }) => {
         const toRemove = rooms.get(emptyRoomId);
         if (!toRemove) return;
@@ -47,6 +60,37 @@ export function attachGameRuntime({ server }) {
   }
 
   ensureRoom({ roomId: PUBLIC_ROOM_ID, roomCode: null, isPrivate: false });
+
+  function handleHttpRequest({ req, res, requestUrl }) {
+    if (requestUrl.pathname !== "/api/debug/stats") return false;
+    if (req.method !== "GET") {
+      writeJson(res, 405, { error: "method_not_allowed" });
+      return true;
+    }
+
+    const tokenFromQuery = requestUrl.searchParams.get("token");
+    const tokenFromHeader = req.headers["x-debug-token"];
+    const providedToken =
+      typeof tokenFromQuery === "string" && tokenFromQuery.trim()
+        ? tokenFromQuery.trim()
+        : typeof tokenFromHeader === "string"
+          ? tokenFromHeader.trim()
+          : "";
+    if (DEBUG_VIEW_TOKEN && providedToken !== DEBUG_VIEW_TOKEN) {
+      writeJson(res, 401, { error: "unauthorized", authRequired: true });
+      return true;
+    }
+
+    const payload = debugStats.getSnapshot();
+    payload.liveRooms = [...rooms.values()].map((room) => room.getDebugSnapshot()).sort((a, b) => {
+      if (b.current.connected !== a.current.connected) return b.current.connected - a.current.connected;
+      return String(a.roomId).localeCompare(String(b.roomId), "sv");
+    });
+    payload.authRequired = Boolean(DEBUG_VIEW_TOKEN);
+    payload.logFiles = debugStats.logs;
+    writeJson(res, 200, payload);
+    return true;
+  }
 
   server.on("upgrade", (req, socket, head) => {
     const route = parseRoomFromRequestUrl(req.url || "/");
@@ -63,5 +107,10 @@ export function attachGameRuntime({ server }) {
   server.on("close", () => {
     for (const room of rooms.values()) room.close();
     rooms.clear();
+    debugStats.close().catch(() => {});
   });
+
+  return {
+    handleHttpRequest
+  };
 }

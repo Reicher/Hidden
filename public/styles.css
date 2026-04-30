@@ -152,17 +152,29 @@ button:disabled {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 10px;
-  gap: 10px;
+  padding: 8px;
+  gap: 8px;
+}
+
+#countdownOverlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 8, 12, 0.6);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+  z-index: 4;
 }
 
 #countdownText {
-  min-height: 34px;
-  display: grid;
-  place-items: center;
-  font-size: 30px;
-  font-weight: 700;
-  color: var(--ok);
+  font-size: clamp(88px, 22vw, 220px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: #ecf3ff;
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.7);
+  transform: translateY(-4%);
 }
 
 #chatPanel {
@@ -179,9 +191,9 @@ button:disabled {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 8px;
-  font-size: 13px;
-  line-height: 1.35;
+  padding: 7px;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .chat-line {
@@ -199,9 +211,9 @@ button:disabled {
 
 #chatInputRow {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   border-top: 1px solid var(--line);
-  padding: 8px;
+  padding: 7px;
 }
 
 #chatInput {
@@ -210,14 +222,14 @@ button:disabled {
 
 #lobbyActionRow {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-self: stretch;
 }
 
 #lobbyActionRow button {
   flex: 1 1 0;
-  font-size: 15px;
-  padding: 11px 10px;
+  font-size: 14px;
+  padding: 10px 8px;
 }
 
 #lobbyDialogBackdrop {
@@ -226,6 +238,7 @@ button:disabled {
   display: grid;
   place-items: center;
   background: rgba(0, 0, 0, 0.42);
+  z-index: 6;
 }
 
 #lobbyDialogCard {
@@ -252,6 +265,121 @@ button:disabled {
 
 #lobbyDialogCloseBtn {
   min-width: 110px;
+}
+
+#debugBackdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.52);
+  z-index: 7;
+}
+
+#debugCard {
+  width: min(1120px, calc(100vw - 30px));
+  max-height: calc(100vh - 28px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #10141a;
+  padding: 14px;
+  box-sizing: border-box;
+}
+
+#debugHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+#debugHeader h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+#debugAuthRow {
+  display: grid;
+  grid-template-columns: auto minmax(160px, 320px) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+#debugSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.debugStatCard {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #171d27;
+  padding: 8px;
+}
+
+.debugStatCard .k {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.debugStatCard .v {
+  display: block;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+#debugChart {
+  width: 100%;
+  height: 240px;
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0d1117;
+}
+
+#debugGrid {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.debugPane {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #141a23;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+}
+
+.debugPane h3 {
+  margin: 0;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.debugPane pre {
+  margin: 0;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow: auto;
+  flex: 1 1 auto;
+}
+
+#debugMeta {
+  margin: 8px 0 2px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 #gameHud {
@@ -322,4 +450,97 @@ button:disabled {
   background: rgba(10, 12, 18, 0.88);
   color: #f3f5f9;
   padding: 7px 8px;
+}
+
+@media (max-width: 900px), (max-height: 740px) {
+  .card {
+    width: min(470px, calc(100vw - 20px));
+    padding: 14px;
+    gap: 8px;
+  }
+
+  #scoreTable {
+    min-width: 560px;
+  }
+
+  #scoreTable th,
+  #scoreTable td {
+    padding: 6px 7px;
+    font-size: 12px;
+  }
+
+  #scoreTable th {
+    font-size: 11px;
+  }
+
+  #lobbyMain {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  #chatMessages {
+    padding: 6px;
+  }
+
+  #chatInputRow {
+    padding: 6px;
+  }
+
+  #lobbyActionRow {
+    gap: 6px;
+  }
+
+  #lobbyActionRow button {
+    font-size: 13px;
+    padding: 8px 6px;
+  }
+
+  #debugAuthRow {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  #debugSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #debugGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  #scoreTable th,
+  #scoreTable td {
+    padding: 5px 6px;
+    font-size: 11px;
+  }
+
+  #chatMessages {
+    line-height: 1.24;
+  }
+
+  #lobbyActionRow button {
+    font-size: 12px;
+    padding: 7px 6px;
+  }
+
+  #gameChatMessages {
+    max-height: 84px;
+  }
+
+  #gameChatNotice {
+    bottom: 104px;
+  }
+}
+
+@media (max-width: 560px) and (orientation: portrait) {
+  #lobbyActionRow {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #debugSummary {
+    grid-template-columns: 1fr;
+  }
 }

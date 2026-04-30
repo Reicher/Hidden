@@ -27,7 +27,9 @@ import {
   ALLOWED_ORIGINS,
   ALLOW_MISSING_ORIGIN,
   INVARIANT_LOG_COOLDOWN_MS,
-  SHELVES
+  SHELVES,
+  COOLERS,
+  FREEZERS
 } from "./config.js";
 import { normalizeAngle, canAttack, markAttack, collectVictimIds } from "./runtime/combat.js";
 import { rawSizeBytes, rawToText } from "./runtime/net.js";
@@ -37,7 +39,7 @@ const NAME_MAX_LEN = 20;
 const CHAT_MAX_LEN = 220;
 const CHAT_HISTORY_LIMIT = 80;
 
-export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = null }) {
+export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = null, onStatsEvent = null }) {
   const sessions = new Map();
   const sockets = new Map();
   const characters = [];
@@ -128,6 +130,37 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
 
   function stateSummary() {
     return `anslutna=${sockets.size} inloggade=${authenticatedCount()} spelar=${activePlayerCount()} nedrakning=${countdownPlayerCount()}`;
+  }
+
+  function debugStateSnapshot() {
+    const connected = sockets.size;
+    const authenticated = authenticatedCount();
+    const active = activePlayerCount();
+    const countdown = countdownPlayerCount();
+    return {
+      connected,
+      authenticated,
+      active,
+      countdown,
+      lobby: Math.max(0, authenticated - active - countdown)
+    };
+  }
+
+  function emitStatsEvent(type, details = {}) {
+    if (typeof onStatsEvent !== "function") return;
+    try {
+      onStatsEvent({
+        type,
+        roomId,
+        roomCode: roomCode || null,
+        isPrivate,
+        at: Date.now(),
+        ...details,
+        snapshot: debugStateSnapshot()
+      });
+    } catch {
+      // keep game runtime independent from debug tracking errors.
+    }
   }
 
   function nowTime() {
@@ -388,7 +421,7 @@ function sanitizeSystemTextSegment(raw) {
 
     const available = characters.find((c) => c.controllerType === "AI" && c.ownerSessionId == null);
     if (!available) {
-      session.state = "lobby";
+      returnToLobby(session, "no_character_available");
       sendToSession(sessionId, "action_error", { message: "Ingen ledig karaktär just nu." });
       return;
     }
@@ -410,6 +443,10 @@ function sanitizeSystemTextSegment(raw) {
       z: Number(available.z.toFixed(2)),
       yaw: Number(available.yaw.toFixed(2))
     });
+    emitStatsEvent("session_alive", {
+      sessionId: shortSessionId(sessionId),
+      name: session.name
+    });
     sendToSession(sessionId, "possess", { characterId: available.id });
   }
 
@@ -424,15 +461,28 @@ function sanitizeSystemTextSegment(raw) {
       sessionId: shortSessionId(sessionId),
       seconds
     });
+    emitStatsEvent("session_countdown", {
+      sessionId: shortSessionId(sessionId),
+      name: s.name,
+      seconds
+    });
     sendToSession(sessionId, "countdown", { seconds });
   }
 
-  function returnToLobby(session) {
+  function returnToLobby(session, reason = "return_to_lobby") {
     if (!session) return;
+    const previousState = session.state;
     session.state = "lobby";
     session.characterId = null;
     session.readyAt = 0;
     session.input.attackRequested = false;
+    if (previousState !== "lobby") {
+      emitStatsEvent("session_lobby", {
+        sessionId: shortSessionId(session.id),
+        name: session.name,
+        reason
+      });
+    }
   }
 
   function handleCharacterEliminated(charId, now) {
@@ -448,7 +498,7 @@ function sanitizeSystemTextSegment(raw) {
           name: ownerSession.name,
           characterId: charId
         });
-        returnToLobby(ownerSession);
+        returnToLobby(ownerSession, "eliminated");
       }
     }
 
@@ -510,6 +560,19 @@ function sanitizeSystemTextSegment(raw) {
   const ROOM_BOUNDARY_MAX = ROOM_HALF_SIZE - 0.5;
   const WALL_AVOIDANCE_MARGIN = 1.5;
   const SHELF_AVOIDANCE_MARGIN = 0.8;
+  const STATIC_OBSTACLES = [...SHELVES, ...COOLERS, ...FREEZERS];
+
+  function obstacleHalfExtents(obstacle) {
+    const width = typeof obstacle.width === "number" ? obstacle.width : 1;
+    const depth = typeof obstacle.depth === "number" ? obstacle.depth : 1;
+    const yaw = typeof obstacle.yaw === "number" ? obstacle.yaw : 0;
+    const quarterTurns = Math.round(yaw / (Math.PI / 2));
+    const isSwapped = Math.abs(quarterTurns) % 2 === 1;
+    return {
+      halfW: (isSwapped ? depth : width) * 0.5,
+      halfD: (isSwapped ? width : depth) * 0.5
+    };
+  }
 
   function clampInsideRoom(character, { steerOnClamp = false } = {}) {
     let hitMinX = false;
@@ -579,13 +642,12 @@ function sanitizeSystemTextSegment(raw) {
     let ax = 0;
     let az = 0;
 
-    for (const shelf of SHELVES) {
-      const halfW = shelf.width * 0.5;
-      const halfD = shelf.depth * 0.5;
-      const minX = shelf.x - halfW;
-      const maxX = shelf.x + halfW;
-      const minZ = shelf.z - halfD;
-      const maxZ = shelf.z + halfD;
+    for (const obstacle of STATIC_OBSTACLES) {
+      const { halfW, halfD } = obstacleHalfExtents(obstacle);
+      const minX = obstacle.x - halfW;
+      const maxX = obstacle.x + halfW;
+      const minZ = obstacle.z - halfD;
+      const maxZ = obstacle.z + halfD;
 
       const nearestX = Math.max(minX, Math.min(maxX, character.x));
       const nearestZ = Math.max(minZ, Math.min(maxZ, character.z));
@@ -613,13 +675,12 @@ function sanitizeSystemTextSegment(raw) {
     let pushX = 0;
     let pushZ = 0;
 
-    for (const shelf of SHELVES) {
-      const halfW = shelf.width * 0.5;
-      const halfD = shelf.depth * 0.5;
-      const minX = shelf.x - halfW - CHARACTER_RADIUS;
-      const maxX = shelf.x + halfW + CHARACTER_RADIUS;
-      const minZ = shelf.z - halfD - CHARACTER_RADIUS;
-      const maxZ = shelf.z + halfD + CHARACTER_RADIUS;
+    for (const obstacle of STATIC_OBSTACLES) {
+      const { halfW, halfD } = obstacleHalfExtents(obstacle);
+      const minX = obstacle.x - halfW - CHARACTER_RADIUS;
+      const maxX = obstacle.x + halfW + CHARACTER_RADIUS;
+      const minZ = obstacle.z - halfD - CHARACTER_RADIUS;
+      const maxZ = obstacle.z + halfD + CHARACTER_RADIUS;
 
       if (character.x < minX || character.x > maxX || character.z < minZ || character.z > maxZ) continue;
 
@@ -795,6 +856,10 @@ function sanitizeSystemTextSegment(raw) {
       sessionId: shortSessionId(sessionId),
       name: normalizedName
     });
+    emitStatsEvent("session_login", {
+      sessionId: shortSessionId(sessionId),
+      name: normalizedName
+    });
 
     sendToSession(sessionId, "login_ok", {
       name: normalizedName,
@@ -958,6 +1023,8 @@ function sanitizeSystemTextSegment(raw) {
     const worldState = {
       roomHalfSize: ROOM_HALF_SIZE,
       shelves: SHELVES,
+      coolers: COOLERS,
+      freezers: FREEZERS,
       scoreboard,
       characters: characters.map((c) => ({
         id: c.id,
@@ -1023,6 +1090,7 @@ function sanitizeSystemTextSegment(raw) {
     maxPlayers: MAX_PLAYERS,
     totalCharacters: TOTAL_CHARACTERS
   });
+  emitStatsEvent("runtime_started");
 
   wss.on("connection", (ws, req) => {
     const sessionId = randomUUID();
@@ -1058,6 +1126,11 @@ function sanitizeSystemTextSegment(raw) {
         name: closingSession?.name || null,
         reason,
         ...details
+      });
+      emitStatsEvent("session_disconnected", {
+        sessionId: shortSessionId(sessionId),
+        name: closingSession?.name || null,
+        reason
       });
       if (isPrivate && sessions.size === 0 && typeof onRoomEmpty === "function") {
         onRoomEmpty({ roomId, roomCode });
@@ -1105,6 +1178,9 @@ function sanitizeSystemTextSegment(raw) {
       origin: req.headers.origin || "<missing>",
       ip: req.socket?.remoteAddress || null,
       userAgent: req.headers["user-agent"] || null
+    });
+    emitStatsEvent("session_connected", {
+      sessionId: shortSessionId(sessionId)
     });
     send(ws, "welcome", {
       sessionId,
@@ -1188,6 +1264,16 @@ function sanitizeSystemTextSegment(raw) {
     isPrivate,
     handleUpgrade,
     close,
-    getSessionCount: () => sessions.size
+    getSessionCount: () => sessions.size,
+    getDebugSnapshot: () => ({
+      roomId,
+      roomCode: roomCode || null,
+      isPrivate,
+      current: debugStateSnapshot(),
+      authenticatedNames: authenticatedSessions()
+        .map((session) => session.name)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, "sv"))
+    })
   };
 }
