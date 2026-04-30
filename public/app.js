@@ -8,8 +8,10 @@ const screenRootEl = document.getElementById("screenRoot");
 const connectViewEl = document.getElementById("connectView");
 const lobbyViewEl = document.getElementById("lobbyView");
 const connectErrorEl = document.getElementById("connectError");
+const roomInfoEl = document.getElementById("roomInfo");
 const nameInputEl = document.getElementById("nameInput");
 const connectBtnEl = document.getElementById("connectBtn");
+const createPrivateRoomBtnEl = document.getElementById("createPrivateRoomBtn");
 const scoreBodyEl = document.getElementById("scoreBody");
 const chatMessagesEl = document.getElementById("chatMessages");
 const chatInputEl = document.getElementById("chatInput");
@@ -94,6 +96,45 @@ function normalizeAngle(angle) {
 
 function wsScheme() {
   return location.protocol === "https:" ? "wss" : "ws";
+}
+
+function activeRoomCodeFromPath() {
+  const segments = location.pathname
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (segments.length !== 1) return null;
+  return decodeURIComponent(segments[0]);
+}
+
+function activeRoomPath() {
+  const code = activeRoomCodeFromPath();
+  if (!code) return "/";
+  return `/${encodeURIComponent(code)}`;
+}
+
+function randomPrivateRoomCode() {
+  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (const value of bytes) out += alphabet[value % alphabet.length];
+  return out;
+}
+
+function setRoomInfo() {
+  if (!roomInfoEl) return;
+  const code = activeRoomCodeFromPath();
+  if (code) {
+    roomInfoEl.textContent = `Privat rum: ${code}`;
+    return;
+  }
+  roomInfoEl.textContent = "Offentligt rum";
+}
+
+function setPrivateRoomButtonVisible(visible) {
+  if (!createPrivateRoomBtnEl) return;
+  createPrivateRoomBtnEl.classList.toggle("hidden", !visible);
 }
 
 function setConnectError(text) {
@@ -337,6 +378,7 @@ function attachSocket(wsUrl, loginName) {
         myName = msg.name || loginName;
         replaceChat(msg.chatHistory || []);
         setConnectError("");
+        setPrivateRoomButtonVisible(false);
         setAppMode("lobby");
         return;
       }
@@ -346,6 +388,7 @@ function attachSocket(wsUrl, loginName) {
         myName = "";
         setAppMode("connect");
         setConnectError(msg.message || "Inloggning misslyckades.");
+        setPrivateRoomButtonVisible(msg.reason === "room_full");
         return;
       }
 
@@ -431,6 +474,7 @@ function attachSocket(wsUrl, loginName) {
       updateConnectButton();
       setAppMode("disconnected");
       setConnectError("Anslutningen bröts.");
+      setPrivateRoomButtonVisible(false);
       updateDocumentTitle();
     },
     onError: () => {
@@ -439,6 +483,7 @@ function attachSocket(wsUrl, loginName) {
       updateConnectButton();
       setConnectError("Kunde inte ansluta till servern.");
       setAppMode("connect");
+      setPrivateRoomButtonVisible(false);
       updateDocumentTitle();
     }
   });
@@ -454,7 +499,7 @@ function connectAndLogin() {
     return;
   }
 
-  const wsUrl = `${wsScheme()}://${location.host}`;
+  const wsUrl = `${wsScheme()}://${location.host}${activeRoomPath()}`;
 
   localStorage.setItem(PLAYER_NAME_KEY, rawName);
 
@@ -466,6 +511,7 @@ function connectAndLogin() {
   activePlayersInGame = 0;
   updateConnectButton();
   setConnectError("");
+  setPrivateRoomButtonVisible(false);
   resetInputState();
   setAppMode("connect");
   attachSocket(wsUrl, rawName);
@@ -504,6 +550,10 @@ const savedName = localStorage.getItem(PLAYER_NAME_KEY);
 if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
 
 connectBtnEl?.addEventListener("click", connectAndLogin);
+createPrivateRoomBtnEl?.addEventListener("click", () => {
+  const code = randomPrivateRoomCode();
+  location.assign(`/${encodeURIComponent(code)}`);
+});
 nameInputEl?.addEventListener("keydown", (event) => {
   if (event.key === "Enter") connectAndLogin();
 });
@@ -663,5 +713,7 @@ function animate() {
 
 animate();
 updateConnectButton();
+setRoomInfo();
+setPrivateRoomButtonVisible(false);
 setAppMode("connect");
 updateDocumentTitle();

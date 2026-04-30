@@ -11,6 +11,8 @@ npm start
 
 Öppna: `http://127.0.0.1:3000`
 
+Privata rum: öppna `http://127.0.0.1:3000/<rumskod>` för ett separat rum som tas bort automatiskt när sista spelaren lämnar.
+
 ## Tester
 
 - Kör alla tester: `npm run test:all`
@@ -24,7 +26,7 @@ npm start
 - Varje karaktär är antingen AI-styrd eller spelarkontrollerad.
 - Vid anslutning startar en nedräkning: **"Startar spel om 3...2...1..."**.
 - När nedräkningen är klar tar spelaren över en ledig AI-karaktär sömlöst (samma position/riktning).
-- Om servern är full **eller om kö redan finns** visas: **"Spelet är fullt."** Sessionen ställs i kö direkt, tas bort ur kön vid disconnect, och får countdown först när plats reserverats.
+- Om rummet är fullt visas tydligt fel i startvyn, med möjlighet att skapa nytt privat rum direkt.
 - Attack: vänsterklick, träffar mål framför spelaren inom fast zon, cooldown **1 sekund**.
 - När en karaktär tas bort respawnar den direkt som AI på slumpmässig position.
 - När en spelare dör förloras kontrollen och samma 3-sekunders startnedräkning körs igen.
@@ -48,6 +50,8 @@ npm start
 - `ALLOW_MISSING_ORIGIN` (default: `false`)
 - `SPAM_DROP_WINDOW_MS` (default: `1000`)
 - `SPAM_MAX_DROPS_PER_WINDOW` (default: `40`)
+- `HEARTBEAT_INTERVAL_MS` (default: `5000`)
+- `IDLE_SESSION_TIMEOUT_MS` (default: `1800000`, dvs 30 min)
 
 Exempel (produktion):
 

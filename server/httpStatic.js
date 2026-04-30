@@ -15,16 +15,39 @@ const CONTENT_TYPES = new Map([
   [".ico", "image/x-icon"]
 ]);
 
+function normalizeToRelativePath(pathname) {
+  return path.posix.normalize(pathname).replace(/^\/+/, "");
+}
+
+function hasFileExtension(pathname) {
+  const basename = pathname.split("/").filter(Boolean).at(-1) || "";
+  return basename.includes(".");
+}
+
 export function createStaticHttpServer({ host, port, rootDir }) {
   const publicDir = path.resolve(path.join(rootDir, "public"));
 
   return http.createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url || "/", `http://${host}:${port}`);
-      let pathname = decodeURIComponent(requestUrl.pathname);
-      if (pathname === "/") pathname = "/index.html";
+      const pathname = decodeURIComponent(requestUrl.pathname || "/");
+      const primaryPath = pathname === "/" ? "/index.html" : pathname;
 
-      const relativePath = path.posix.normalize(pathname).replace(/^\/+/, "");
+      const tryReadPath = async (absolutePath) => {
+        const data = await readFile(absolutePath);
+        const ext = path.extname(absolutePath).toLowerCase();
+        const contentType = CONTENT_TYPES.get(ext);
+        if (contentType) res.setHeader("Content-Type", contentType);
+        if (ext === ".html") {
+          res.setHeader("Cache-Control", "no-cache");
+        } else {
+          res.setHeader("Cache-Control", "public, max-age=86400");
+        }
+        res.writeHead(200);
+        res.end(data);
+      };
+
+      const relativePath = normalizeToRelativePath(primaryPath);
       const fullPath = path.resolve(path.join(publicDir, relativePath));
 
       if (!fullPath.startsWith(publicDir + path.sep) && fullPath !== publicDir) {
@@ -33,19 +56,18 @@ export function createStaticHttpServer({ host, port, rootDir }) {
         return;
       }
 
-      const data = await readFile(fullPath);
-      const ext = path.extname(fullPath).toLowerCase();
-      const contentType = CONTENT_TYPES.get(ext);
-      if (contentType) res.setHeader("Content-Type", contentType);
+      try {
+        await tryReadPath(fullPath);
+        return;
+      } catch (error) {
+        const code = error && typeof error === "object" ? error.code : null;
+        const canFallbackToSpa = (code === "ENOENT" || code === "ENOTDIR" || code === "EISDIR") && !hasFileExtension(pathname);
+        if (!canFallbackToSpa) throw error;
 
-      if (ext === ".html") {
-        res.setHeader("Cache-Control", "no-cache");
-      } else {
-        res.setHeader("Cache-Control", "public, max-age=86400");
+        const indexPath = path.resolve(path.join(publicDir, "index.html"));
+        await tryReadPath(indexPath);
+        return;
       }
-
-      res.writeHead(200);
-      res.end(data);
     } catch (error) {
       const code = error && typeof error === "object" ? error.code : null;
       if (code === "ENOENT" || code === "ENOTDIR" || code === "EISDIR") {

@@ -4,7 +4,7 @@ import process from "node:process";
 import { WebSocket } from "ws";
 
 const HOST = "127.0.0.1";
-const PORT = 3900 + Math.floor(Math.random() * 200);
+const PORT = 3200 + Math.floor(Math.random() * 120);
 const URL = `ws://${HOST}:${PORT}`;
 const ORIGIN = `http://${HOST}:${PORT}`;
 

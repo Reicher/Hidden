@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import process from "node:process";
 
 const HOST = "127.0.0.1";
-const PORT = 3600 + Math.floor(Math.random() * 300);
+const PORT = 3200 + Math.floor(Math.random() * 120);
 
 function startServer() {
   const child = spawn("node", ["server.js"], {

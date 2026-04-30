@@ -20,6 +20,12 @@ const PUPIL_RANGE_Y_PX = 4.6;
 const SKIN_TONE_HEX = [
   0xfad7c4, 0xf1c7a5, 0xe6b88a, 0xd8a676, 0xbf8a5d, 0xa9744d, 0x8c603f, 0x714c34, 0x573a2a, 0x3f2b1f
 ];
+const HAT_TYPES = ["CylinderHatt", "Trollkarlshatt", "Sombrero"];
+const HAT_COLOR_HEX_BY_TYPE = {
+  CylinderHatt: [0x111111, 0x232323, 0x3a3a3a, 0x3f2f24],
+  Trollkarlshatt: [0x1f2b44, 0x2d3561, 0x4a2f44, 0x2c2f36],
+  Sombrero: [0xd9c39a, 0xc5a77f, 0xb89365, 0x9f7b54]
+};
 
 export function createAvatarSystem({ scene, camera }) {
   const avatars = new Map();
@@ -61,6 +67,14 @@ export function createAvatarSystem({ scene, camera }) {
     pants.setHSL(rng(), 0.18 + rng() * 0.24, 0.25 + rng() * 0.22);
     const shoe = new THREE.Color();
     shoe.setHSL(rng(), 0.08 + rng() * 0.12, 0.08 + rng() * 0.18);
+    const hatRoll = rng();
+    let hatType = "none";
+    let hat = null;
+    if (hatRoll >= 0.28) {
+      hatType = HAT_TYPES[Math.floor(rng() * HAT_TYPES.length)];
+      const palette = HAT_COLOR_HEX_BY_TYPE[hatType] || HAT_COLOR_HEX_BY_TYPE.CylinderHatt;
+      hat = new THREE.Color(palette[Math.floor(rng() * palette.length)]);
+    }
 
     return {
       rng,
@@ -75,8 +89,66 @@ export function createAvatarSystem({ scene, camera }) {
       skin,
       shirt,
       pants,
-      shoe
+      shoe,
+      hat: hat || new THREE.Color(0x2a2a2a),
+      hatType
     };
+  }
+
+  function createHatMesh(profile, headRadius) {
+    if (profile.hatType === "none") return null;
+    const hatMaterial = new THREE.MeshStandardMaterial({ color: profile.hat, roughness: 0.7, metalness: 0.06 });
+    const hatGroup = new THREE.Group();
+
+    if (profile.hatType === "CylinderHatt") {
+      const brim = new THREE.Mesh(
+        new THREE.CylinderGeometry(headRadius * 0.95, headRadius * 0.95, headRadius * 0.1, 20),
+        hatMaterial
+      );
+      brim.position.y = headRadius * 0.02;
+      hatGroup.add(brim);
+      const crown = new THREE.Mesh(
+        new THREE.CylinderGeometry(headRadius * 0.58, headRadius * 0.64, headRadius * 1.05, 20),
+        hatMaterial
+      );
+      crown.position.y = headRadius * 0.54;
+      hatGroup.add(crown);
+      return hatGroup;
+    }
+
+    if (profile.hatType === "Trollkarlshatt") {
+      const brim = new THREE.Mesh(
+        new THREE.CylinderGeometry(headRadius * 1.02, headRadius * 1.02, headRadius * 0.08, 20),
+        hatMaterial
+      );
+      brim.position.y = headRadius * 0.02;
+      hatGroup.add(brim);
+      const cone = new THREE.Mesh(
+        new THREE.ConeGeometry(headRadius * 0.76, headRadius * 1.5, 20),
+        hatMaterial
+      );
+      cone.position.y = headRadius * 0.78;
+      hatGroup.add(cone);
+      return hatGroup;
+    }
+
+    if (profile.hatType === "Sombrero") {
+      const brim = new THREE.Mesh(
+        new THREE.CylinderGeometry(headRadius * 1.34, headRadius * 1.44, headRadius * 0.1, 28),
+        hatMaterial
+      );
+      brim.position.y = headRadius * 0.08;
+      hatGroup.add(brim);
+      const crown = new THREE.Mesh(
+        new THREE.CylinderGeometry(headRadius * 0.46, headRadius * 0.64, headRadius * 0.72, 22),
+        hatMaterial
+      );
+      crown.position.y = headRadius * 0.44;
+      hatGroup.add(crown);
+      return hatGroup;
+    }
+
+    return null;
   }
 
   function createHeadFaceTexture(skinColor) {
@@ -144,11 +216,12 @@ export function createAvatarSystem({ scene, camera }) {
     const legTotal = 0.84 * profile.heightScale * profile.legScale;
     const legCore = Math.max(0.05, legTotal - legRadius * 2);
     const hipY = shoeHeight + legTotal + 0.03 * profile.heightScale;
-    const legGap = 0.17 * profile.heightScale * (0.95 + profile.fatness * 0.1);
 
     const torsoRadius = 0.14 * profile.heightScale * profile.torsoScale;
     const torsoTotal = 0.9 * profile.heightScale * profile.torsoScale;
     const torsoCore = Math.max(0.06, torsoTotal - torsoRadius * 2);
+    const torsoHalfWidth = torsoRadius * profile.torsoWidthScale;
+    const legGap = Math.max(legRadius * 0.56, torsoHalfWidth * 0.56 - legRadius * 0.12);
     const shoulderY = hipY + torsoTotal * 0.8;
 
     const armRadius = 0.066 * profile.heightScale * profile.armScale;
@@ -170,6 +243,11 @@ export function createAvatarSystem({ scene, camera }) {
     head.scale.set(0.92, 1.06, 0.95);
     head.position.set(0, headY, 0);
     group.add(head);
+    const hat = createHatMesh(profile, headRadius);
+    if (hat) {
+      hat.position.set(0, headY + headRadius * 0.84, 0);
+      group.add(hat);
+    }
 
     const leftArmPivot = new THREE.Group();
     leftArmPivot.position.set(-shoulderX, shoulderY, 0);

@@ -9,8 +9,9 @@
     "test:browser": "node tests/browser-smoke.js",
     "test:combat": "node tests/combat.unit.js",
     "test:heartbeat": "node tests/heartbeat-timeout.js",
+    "test:private-rooms": "node tests/private-rooms.js",
     "test:rate-limit": "node tests/rate-limit.js",
-    "test:all": "npm run test:combat && npm run test:smoke && npm run test:browser && npm run test:heartbeat && npm run test:rate-limit"
+    "test:all": "npm run test:combat && npm run test:smoke && npm run test:private-rooms && npm run test:browser && npm run test:heartbeat && npm run test:rate-limit"
   },
   "dependencies": {
     "ws": "^8.18.0"

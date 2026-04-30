@@ -70,6 +70,12 @@ body.overlay-active #game {
   font-size: 26px;
 }
 
+.room-info {
+  margin: -2px 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 label {
   color: var(--muted);
   font-size: 12px;

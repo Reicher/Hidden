@@ -56,7 +56,8 @@ export const SHELVES = Object.freeze([
   Object.freeze({ x: 2.8, z: 0, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT })
 ]);
 
-export const HEARTBEAT_INTERVAL_MS = envInt("HEARTBEAT_INTERVAL_MS", 10000);
+export const HEARTBEAT_INTERVAL_MS = envInt("HEARTBEAT_INTERVAL_MS", 5000);
+export const IDLE_SESSION_TIMEOUT_MS = envInt("IDLE_SESSION_TIMEOUT_MS", 30 * 60 * 1000);
 export const MAX_MESSAGE_BYTES = envInt("MAX_MESSAGE_BYTES", 2048);
 export const INPUT_UPDATE_MIN_MS = envInt("INPUT_UPDATE_MIN_MS", 20);
 export const ATTACK_MESSAGE_MIN_MS = envInt("ATTACK_MESSAGE_MIN_MS", 60);
