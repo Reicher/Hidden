@@ -54,6 +54,7 @@ Privata rum: öppna `http://127.0.0.1:3000/<rumskod>` för ett separat rum som t
   - senaste serverevents
   - graf över aktivitet över tid
 - Servern exponerar datan via `GET /api/debug/stats`.
+- Endpointen är avstängd tills `DEBUG_VIEW_TOKEN` är satt (annars returneras `503`).
 - Persistenta loggar skrivs till:
   - `logs/debug-events.log` (läsbar eventlogg)
   - `logs/debug-samples.jsonl` (tidsserie för grafer)

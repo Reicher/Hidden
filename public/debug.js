@@ -216,6 +216,10 @@ async function refresh() {
     const url = new URL("/api/debug/stats", location.origin);
     if (token) url.searchParams.set("token", token);
     const res = await fetch(url, { cache: "no-store", headers: { Accept: "application/json" } });
+    if (res.status === 503) {
+      setError("Servern saknar DEBUG_VIEW_TOKEN. Sätt den i miljön och starta om.");
+      return;
+    }
     if (res.status === 401) {
       setError("Fel eller saknad token.");
       return;

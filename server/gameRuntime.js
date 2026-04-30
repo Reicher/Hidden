@@ -78,7 +78,12 @@ export function attachGameRuntime({ server, rootDir }) {
         : typeof tokenFromHeader === "string"
           ? tokenFromHeader.trim()
           : "";
-    if (DEBUG_VIEW_TOKEN && providedToken !== DEBUG_VIEW_TOKEN) {
+    const configuredToken = String(DEBUG_VIEW_TOKEN || "").trim();
+    if (!configuredToken) {
+      writeJson(res, 503, { error: "debug_token_not_configured", authRequired: true });
+      return true;
+    }
+    if (providedToken !== configuredToken) {
       writeJson(res, 401, { error: "unauthorized", authRequired: true });
       return true;
     }
@@ -89,7 +94,7 @@ export function attachGameRuntime({ server, rootDir }) {
       if (b.current.connected !== a.current.connected) return b.current.connected - a.current.connected;
       return String(a.roomId).localeCompare(String(b.roomId), "sv");
     });
-    payload.authRequired = Boolean(DEBUG_VIEW_TOKEN);
+    payload.authRequired = true;
     payload.logFiles = debugStats.logs;
     writeJson(res, 200, payload);
     return true;
