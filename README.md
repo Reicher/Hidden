@@ -58,6 +58,7 @@ Privata rum: öppna `http://127.0.0.1:3000/<rumskod>` för ett separat rum som t
 - Persistenta loggar skrivs till:
   - `logs/debug-events.log` (läsbar eventlogg)
   - `logs/debug-samples.jsonl` (tidsserie för grafer)
+  - `logs/debug-state.json` (persistenta totals, namn och per-rum-statistik mellan serverstarter)
 
 ## Miljövariabler
 

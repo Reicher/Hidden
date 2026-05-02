@@ -1,9 +1,10 @@
 import path from "node:path";
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 
 const DEFAULT_SAMPLE_INTERVAL_MS = 15_000;
 const SAMPLE_RETENTION = 24 * 60 * 6; // 24h with 15-second sampling.
 const RECENT_EVENT_LIMIT = 240;
+const PERSISTED_STATE_VERSION = 1;
 
 function safeInt(value, fallback = 0) {
   const out = Number(value);
@@ -34,6 +35,8 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
   const logsDir = path.resolve(path.join(rootDir, "logs"));
   const eventsLogPath = path.join(logsDir, "debug-events.log");
   const samplesLogPath = path.join(logsDir, "debug-samples.jsonl");
+  const statePath = path.join(logsDir, "debug-state.json");
+  const stateTmpPath = path.join(logsDir, "debug-state.json.tmp");
 
   const state = {
     startedAt: Date.now(),
@@ -95,11 +98,153 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     }
   }
 
+  function buildPersistedState() {
+    return {
+      version: PERSISTED_STATE_VERSION,
+      persistedAt: Date.now(),
+      totals: {
+        totalConnections: safeInt(state.totals.totalConnections, 0),
+        totalLogins: safeInt(state.totals.totalLogins, 0)
+      },
+      peaks: {
+        connected: safeInt(state.peaks.connected, 0),
+        authenticated: safeInt(state.peaks.authenticated, 0),
+        active: safeInt(state.peaks.active, 0)
+      },
+      rooms: [...state.rooms.values()].map((room) => ({
+        roomId: room.roomId,
+        roomCode: room.roomCode || null,
+        isPrivate: Boolean(room.isPrivate),
+        totalConnections: safeInt(room.totalConnections, 0),
+        totalLogins: safeInt(room.totalLogins, 0),
+        uniqueNames: [...room.uniqueNames].sort((a, b) => a.localeCompare(b, "sv")),
+        lastEventAt: safeInt(room.lastEventAt, 0)
+      })),
+      players: [...state.names.entries()].map(([name, value]) => ({
+        name,
+        logins: safeInt(value.logins, 0),
+        lastSeenAt: safeInt(value.lastSeenAt, 0),
+        rooms: [...value.rooms].sort((a, b) => a.localeCompare(b, "sv"))
+      })),
+      recentEvents: state.recentEvents.slice(-RECENT_EVENT_LIMIT)
+    };
+  }
+
+  async function persistStateToDisk() {
+    const payload = `${JSON.stringify(buildPersistedState())}\n`;
+    await writeFile(stateTmpPath, payload, "utf8");
+    await rename(stateTmpPath, statePath);
+  }
+
+  function loadCurrentSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return;
+    const connected = Math.max(0, safeInt(snapshot.connected, 0));
+    const authenticated = Math.max(0, safeInt(snapshot.authenticated, 0));
+    const active = Math.max(0, safeInt(snapshot.active, 0));
+    const countdown = Math.max(0, safeInt(snapshot.countdown, 0));
+    const lobby = Math.max(0, safeInt(snapshot.lobby, authenticated - active - countdown));
+    return { connected, authenticated, active, countdown, lobby };
+  }
+
+  async function loadPersistedStateFromDisk() {
+    let text = "";
+    try {
+      text = await readFile(statePath, "utf8");
+    } catch (error) {
+      if (error && typeof error === "object" && error.code === "ENOENT") return;
+      throw error;
+    }
+
+    const parsed = parseJsonLine(text.trim());
+    if (!parsed || safeInt(parsed.version, 0) !== PERSISTED_STATE_VERSION) return;
+
+    const totals = parsed.totals && typeof parsed.totals === "object" ? parsed.totals : {};
+    state.totals.totalConnections = Math.max(0, safeInt(totals.totalConnections, 0));
+    state.totals.totalLogins = Math.max(0, safeInt(totals.totalLogins, 0));
+
+    const peaks = parsed.peaks && typeof parsed.peaks === "object" ? parsed.peaks : {};
+    state.peaks.connected = Math.max(0, safeInt(peaks.connected, 0));
+    state.peaks.authenticated = Math.max(0, safeInt(peaks.authenticated, 0));
+    state.peaks.active = Math.max(0, safeInt(peaks.active, 0));
+
+    state.rooms.clear();
+    const rooms = Array.isArray(parsed.rooms) ? parsed.rooms : [];
+    for (const row of rooms) {
+      if (!row || typeof row !== "object") continue;
+      const roomId = typeof row.roomId === "string" && row.roomId.trim() ? row.roomId.trim() : null;
+      if (!roomId) continue;
+      const room = ensureRoom({
+        roomId,
+        roomCode: typeof row.roomCode === "string" && row.roomCode.trim() ? row.roomCode.trim() : null,
+        isPrivate: Boolean(row.isPrivate)
+      });
+      room.totalConnections = Math.max(0, safeInt(row.totalConnections, room.totalConnections));
+      room.totalLogins = Math.max(0, safeInt(row.totalLogins, room.totalLogins));
+      room.lastEventAt = Math.max(0, safeInt(row.lastEventAt, room.lastEventAt));
+      const uniqueNames = Array.isArray(row.uniqueNames) ? row.uniqueNames : [];
+      for (const name of uniqueNames) {
+        if (typeof name !== "string" || !name.trim()) continue;
+        room.uniqueNames.add(name.trim());
+      }
+      const snapshot = loadCurrentSnapshot(row.current);
+      if (snapshot) {
+        room.current.connected = snapshot.connected;
+        room.current.authenticated = snapshot.authenticated;
+        room.current.active = snapshot.active;
+        room.current.countdown = snapshot.countdown;
+        room.current.lobby = snapshot.lobby;
+      }
+    }
+
+    state.names.clear();
+    const players = Array.isArray(parsed.players) ? parsed.players : [];
+    for (const row of players) {
+      if (!row || typeof row !== "object") continue;
+      const name = typeof row.name === "string" ? row.name.trim() : "";
+      if (!name) continue;
+      const player = {
+        logins: Math.max(0, safeInt(row.logins, 0)),
+        lastSeenAt: Math.max(0, safeInt(row.lastSeenAt, 0)),
+        rooms: new Set()
+      };
+      const roomsForPlayer = Array.isArray(row.rooms) ? row.rooms : [];
+      for (const roomId of roomsForPlayer) {
+        if (typeof roomId !== "string" || !roomId.trim()) continue;
+        player.rooms.add(roomId.trim());
+      }
+      state.names.set(name, player);
+    }
+
+    state.recentEvents = [];
+    const recentEvents = Array.isArray(parsed.recentEvents) ? parsed.recentEvents : [];
+    for (const event of recentEvents.slice(-RECENT_EVENT_LIMIT)) {
+      if (!event || typeof event !== "object") continue;
+      const type = typeof event.type === "string" && event.type.trim() ? event.type.trim() : null;
+      const roomId = typeof event.roomId === "string" && event.roomId.trim() ? event.roomId.trim() : null;
+      if (!type || !roomId) continue;
+      const snapshot = loadCurrentSnapshot(event.snapshot);
+      if (!snapshot) continue;
+      pushRecentEvent({
+        at: Math.max(0, safeInt(event.at, Date.now())),
+        type,
+        roomId,
+        roomCode: typeof event.roomCode === "string" && event.roomCode.trim() ? event.roomCode.trim() : null,
+        isPrivate: Boolean(event.isPrivate),
+        name: typeof event.name === "string" && event.name.trim() ? event.name.trim() : null,
+        sessionId: typeof event.sessionId === "string" && event.sessionId.trim() ? event.sessionId.trim() : null,
+        snapshot
+      });
+    }
+  }
+
   const startupReady = (async () => {
     await mkdir(logsDir, { recursive: true });
     await loadSamplesFromDisk();
+    await loadPersistedStateFromDisk();
+    recomputeCurrentTotals();
     const bootLine = `${isoAt(Date.now())} event=debug_runtime_started room=- connected=0 authenticated=0 active=0\n`;
     await appendFile(eventsLogPath, bootLine, "utf8");
+    captureSample("startup");
   })().catch((error) => {
     console.warn(`[debug-stats] startup failed: ${error?.message || error}`);
   });
@@ -108,12 +253,15 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     writeQueue = writeQueue
       .then(async () => {
         await startupReady;
-        if (closed) return;
         await task();
       })
       .catch((error) => {
         console.warn(`[debug-stats] write failed: ${error?.message || error}`);
       });
+  }
+
+  function persistSoon() {
+    queueWrite(() => persistStateToDisk());
   }
 
   function ensureRoom({ roomId, roomCode, isPrivate }) {
@@ -218,8 +366,6 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
   }, sampleIntervalMs);
   sampleTimer.unref?.();
 
-  captureSample("startup");
-
   function recordRoomEvent({
     type,
     roomId,
@@ -279,6 +425,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     };
     pushRecentEvent(eventRecord);
     appendEventLog(eventRecord);
+    persistSoon();
   }
 
   function getSnapshot() {
@@ -330,6 +477,8 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     if (closed) return;
     closed = true;
     clearInterval(sampleTimer);
+    captureSample("shutdown");
+    persistSoon();
     await writeQueue;
   }
 
@@ -340,7 +489,8 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     logs: {
       logsDir,
       eventsLogPath,
-      samplesLogPath
+      samplesLogPath,
+      statePath
     }
   };
 }
