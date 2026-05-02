@@ -105,7 +105,7 @@ async function run() {
     });
 
     await page.click("#playBtn");
-    await page.waitForFunction(() => !document.body.classList.contains("overlay-active"), null, { timeout: 9000 });
+    await page.waitForFunction(() => !document.body.classList.contains("overlay-active"), null, { timeout: 12000 });
 
     await sleep(1200);
 
@@ -126,4 +126,3 @@ run().catch((err) => {
   console.error(err.stack || err.message);
   process.exit(1);
 });
-

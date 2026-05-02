@@ -503,9 +503,10 @@ button:disabled {
   border-radius: 12px;
   background: rgba(12, 16, 24, 0.86);
   color: #f3f5f9;
-  min-height: 42px;
-  font-size: 15px;
+  min-height: 36px;
+  font-size: 14px;
   font-weight: 600;
+  padding: 6px 8px;
 }
 
 #mobileJoystickWrap {
@@ -545,11 +546,14 @@ button:disabled {
 
 #mobileCombatPad {
   pointer-events: none;
-  align-self: flex-end;
-  width: min(30vw, 170px);
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  transform: translateX(-50%);
+  width: min(24vw, 132px);
   display: grid;
   grid-template-columns: 1fr;
-  gap: 8px;
+  gap: 6px;
 }
 
 #mobileActionPad {

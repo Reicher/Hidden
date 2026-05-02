@@ -28,7 +28,7 @@ Privata rum: öppna `http://127.0.0.1:3000/<rumskod>` för ett separat rum som t
 - När nedräkningen är klar tar spelaren över en ledig AI-karaktär sömlöst (samma position/riktning).
 - Om rummet är fullt visas tydligt fel i startvyn, med möjlighet att skapa nytt privat rum direkt.
 - Attack: vänsterklick, träffar mål framför spelaren inom fast zon, cooldown **1 sekund**.
-- När en karaktär tas bort respawnar den direkt som AI på slumpmässig position.
+- När en karaktär dödas faller den ner bort från angriparen, ligger nere i 5 sekunder och reser sig sedan igen på samma plats.
 - När en spelare dör förloras kontrollen och samma 3-sekunders startnedräkning körs igen.
 
 ## Kontroller

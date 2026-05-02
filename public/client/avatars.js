@@ -8,6 +8,12 @@ const MOVE_SPEED_REFERENCE = 3.5;
 const POSITION_SMOOTH_RATE = 15;
 const ROTATION_SMOOTH_RATE = 11;
 const MAX_ROTATION_SPEED = 10;
+const KNOCKDOWN_FALL_MS = 430;
+const KNOCKDOWN_RISE_MS = 420;
+const KNOCKDOWN_MAX_TILT_RAD = Math.PI * 0.5;
+const KNOCKDOWN_STAR_COUNT = 3;
+const KNOCKDOWN_STAR_ORBIT_RADIUS = 0.24;
+const KNOCKDOWN_STAR_HEAD_OFFSET_Y = 0.3;
 const AVATAR_VISUAL_SCALE = 1.2;
 const HEAD_TEX_SIZE = 256;
 const FACE_U = 0.25;
@@ -30,7 +36,22 @@ const HAT_COLOR_HEX_BY_TYPE = {
 
 export function createAvatarSystem({ scene, camera }) {
   const avatars = new Map();
+  const UP_AXIS = new THREE.Vector3(0, 1, 0);
+  const tmpFallAwayWorld = new THREE.Vector3();
+  const tmpFallAwayLocal = new THREE.Vector3();
+  const tmpFallAxis = new THREE.Vector3();
+  const tmpFootPivot = new THREE.Vector3();
+  const tmpRotatedFootPivot = new THREE.Vector3();
+  const tmpFallQuat = new THREE.Quaternion();
+  const tmpHeadWorld = new THREE.Vector3();
+  const tmpHeadLocal = new THREE.Vector3();
   const firstPersonArmPivot = new THREE.Group();
+  const knockdownStarTexture = createKnockdownStarTexture();
+  const knockdownStarMaterial = new THREE.SpriteMaterial({
+    map: knockdownStarTexture,
+    transparent: true,
+    depthWrite: false
+  });
   firstPersonArmPivot.position.set(0.22, -0.18, -0.38);
   firstPersonArmPivot.rotation.set(-0.08, -0.12, -0.12);
   const firstPersonArm = new THREE.Mesh(
@@ -169,7 +190,7 @@ export function createAvatarSystem({ scene, camera }) {
     const leftEyeCx = faceCx - EYE_U_OFFSET * HEAD_TEX_SIZE;
     const rightEyeCx = faceCx + EYE_U_OFFSET * HEAD_TEX_SIZE;
 
-    function drawEyes(lookX, lookY) {
+    function drawEyes(lookX, lookY, closed = false) {
       const ox = THREE.MathUtils.clamp(lookX, -1, 1) * PUPIL_RANGE_X_PX;
       const oy = THREE.MathUtils.clamp(lookY, -1, 1) * PUPIL_RANGE_Y_PX;
 
@@ -177,17 +198,29 @@ export function createAvatarSystem({ scene, camera }) {
       ctx.fillStyle = skinStyle;
       ctx.fillRect(0, 0, HEAD_TEX_SIZE, HEAD_TEX_SIZE);
 
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.ellipse(leftEyeCx, faceCy, EYE_RADIUS_X_PX, EYE_RADIUS_Y_PX, 0, 0, Math.PI * 2);
-      ctx.ellipse(rightEyeCx, faceCy, EYE_RADIUS_X_PX, EYE_RADIUS_Y_PX, 0, 0, Math.PI * 2);
-      ctx.fill();
+      if (closed) {
+        ctx.strokeStyle = "#2a1f1a";
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(leftEyeCx - EYE_RADIUS_X_PX * 0.95, faceCy);
+        ctx.lineTo(leftEyeCx + EYE_RADIUS_X_PX * 0.95, faceCy);
+        ctx.moveTo(rightEyeCx - EYE_RADIUS_X_PX * 0.95, faceCy);
+        ctx.lineTo(rightEyeCx + EYE_RADIUS_X_PX * 0.95, faceCy);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.ellipse(leftEyeCx, faceCy, EYE_RADIUS_X_PX, EYE_RADIUS_Y_PX, 0, 0, Math.PI * 2);
+        ctx.ellipse(rightEyeCx, faceCy, EYE_RADIUS_X_PX, EYE_RADIUS_Y_PX, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-      ctx.fillStyle = "#111111";
-      ctx.beginPath();
-      ctx.arc(leftEyeCx + ox, faceCy + oy, PUPIL_RADIUS_PX, 0, Math.PI * 2);
-      ctx.arc(rightEyeCx + ox, faceCy + oy, PUPIL_RADIUS_PX, 0, Math.PI * 2);
-      ctx.fill();
+        ctx.fillStyle = "#111111";
+        ctx.beginPath();
+        ctx.arc(leftEyeCx + ox, faceCy + oy, PUPIL_RADIUS_PX, 0, Math.PI * 2);
+        ctx.arc(rightEyeCx + ox, faceCy + oy, PUPIL_RADIUS_PX, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       if (texture.image) texture.needsUpdate = true;
     }
@@ -196,9 +229,56 @@ export function createAvatarSystem({ scene, camera }) {
     return { texture, drawEyes };
   }
 
+  function createKnockdownStarTexture() {
+    const size = 96;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    const cx = size * 0.5;
+    const cy = size * 0.5;
+    const outer = size * 0.34;
+    const inner = size * 0.15;
+
+    ctx.clearRect(0, 0, size, size);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.beginPath();
+    for (let i = 0; i < 10; i += 1) {
+      const angle = -Math.PI * 0.5 + (i * Math.PI) / 5;
+      const radius = i % 2 === 0 ? outer : inner;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    const fill = ctx.createRadialGradient(0, -6, 4, 0, 0, outer);
+    fill.addColorStop(0, "rgba(255,255,200,1)");
+    fill.addColorStop(0.45, "rgba(255,222,85,1)");
+    fill.addColorStop(1, "rgba(240,160,20,0.96)");
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = 3.2;
+    ctx.strokeStyle = "rgba(255,245,190,0.95)";
+    ctx.stroke();
+    ctx.restore();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    return texture;
+  }
+
   function createAvatar(id) {
     const profile = buildCharacterProfile(id);
     const group = new THREE.Group();
+    const yawGroup = new THREE.Group();
+    const poseRoot = new THREE.Group();
+    group.add(yawGroup);
+    yawGroup.add(poseRoot);
 
     const torsoMaterial = new THREE.MeshStandardMaterial({ color: profile.shirt, roughness: 0.85 });
     const pantsMaterial = new THREE.MeshStandardMaterial({ color: profile.pants, roughness: 0.9 });
@@ -238,16 +318,27 @@ export function createAvatarSystem({ scene, camera }) {
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(torsoRadius, torsoCore, 6, 14), torsoMaterial);
     torso.scale.set(profile.torsoWidthScale, 1, profile.torsoDepthScale);
     torso.position.set(0, hipY + torsoTotal * 0.5, 0);
-    group.add(torso);
+    poseRoot.add(torso);
 
     const head = new THREE.Mesh(new THREE.SphereGeometry(headRadius, 24, 18), skinMaterial);
     head.scale.set(0.92, 1.06, 0.95);
     head.position.set(0, headY, 0);
-    group.add(head);
+    poseRoot.add(head);
     const hat = createHatMesh(profile, headRadius);
     if (hat) {
       hat.position.set(0, headY + headRadius * 0.84, 0);
-      group.add(hat);
+      poseRoot.add(hat);
+    }
+    const knockdownStarOrbit = new THREE.Group();
+    knockdownStarOrbit.visible = false;
+    group.add(knockdownStarOrbit);
+    const knockdownStars = [];
+    for (let i = 0; i < KNOCKDOWN_STAR_COUNT; i += 1) {
+      const star = new THREE.Sprite(knockdownStarMaterial);
+      star.scale.setScalar(0.2);
+      star.userData.phase = (i * Math.PI * 2) / KNOCKDOWN_STAR_COUNT;
+      knockdownStarOrbit.add(star);
+      knockdownStars.push(star);
     }
 
     const leftArmPivot = new THREE.Group();
@@ -258,7 +349,7 @@ export function createAvatarSystem({ scene, camera }) {
     const leftHand = new THREE.Mesh(new THREE.SphereGeometry(handRadius, 12, 10), skinMaterialPlain);
     leftHand.position.set(0, -armTotal + handRadius * 0.55, 0);
     leftArmPivot.add(leftHand);
-    group.add(leftArmPivot);
+    poseRoot.add(leftArmPivot);
 
     const rightArmPivot = new THREE.Group();
     rightArmPivot.position.set(shoulderX, shoulderY, 0);
@@ -268,7 +359,7 @@ export function createAvatarSystem({ scene, camera }) {
     const rightHand = new THREE.Mesh(new THREE.SphereGeometry(handRadius, 12, 10), skinMaterialPlain);
     rightHand.position.set(0, -armTotal + handRadius * 0.55, 0);
     rightArmPivot.add(rightHand);
-    group.add(rightArmPivot);
+    poseRoot.add(rightArmPivot);
 
     const leftLegPivot = new THREE.Group();
     leftLegPivot.position.set(-legGap, hipY, 0);
@@ -278,7 +369,7 @@ export function createAvatarSystem({ scene, camera }) {
     const leftShoe = new THREE.Mesh(new THREE.BoxGeometry(shoeWidth, shoeHeight, shoeLength), shoeMaterial);
     leftShoe.position.set(0, -legTotal - shoeHeight * 0.35, shoeLength * 0.08);
     leftLegPivot.add(leftShoe);
-    group.add(leftLegPivot);
+    poseRoot.add(leftLegPivot);
 
     const rightLegPivot = new THREE.Group();
     rightLegPivot.position.set(legGap, hipY, 0);
@@ -288,12 +379,14 @@ export function createAvatarSystem({ scene, camera }) {
     const rightShoe = new THREE.Mesh(new THREE.BoxGeometry(shoeWidth, shoeHeight, shoeLength), shoeMaterial);
     rightShoe.position.set(0, -legTotal - shoeHeight * 0.35, shoeLength * 0.08);
     rightLegPivot.add(rightShoe);
-    group.add(rightLegPivot);
+    poseRoot.add(rightLegPivot);
     group.scale.setScalar(AVATAR_VISUAL_SCALE);
 
     return {
       id,
       group,
+      yawGroup,
+      poseRoot,
       leftArmPivot,
       rightArmPivot,
       leftLegPivot,
@@ -312,6 +405,22 @@ export function createAvatarSystem({ scene, camera }) {
       lastServerAt: 0,
       seenAtTick: false,
       controllerType: "AI",
+      downedMsRemaining: 0,
+      downedTotalMs: 0,
+      downedEnteredAt: 0,
+      isDowned: false,
+      isRisingFromDowned: false,
+      riseStartedAt: 0,
+      riseStartTiltRad: 0,
+      currentTiltRad: 0,
+      fallAwayX: 0,
+      fallAwayZ: 1,
+      footPivotX: legGap,
+      footPivotY: 0,
+      footPivotZ: shoeLength * 0.08,
+      headMesh: head,
+      knockdownStarOrbit,
+      knockdownStars,
       gazeTargetId: null,
       gazeRetargetAt: 0,
       eyeX: 0,
@@ -320,6 +429,7 @@ export function createAvatarSystem({ scene, camera }) {
       eyeTargetY: 0,
       lastDrawnEyeX: 999,
       lastDrawnEyeY: 999,
+      lastDrawnEyesClosed: null,
       headFace,
       eyeHeight: eyeHeight * AVATAR_VISUAL_SCALE,
       skinColor: profile.skin
@@ -331,12 +441,46 @@ export function createAvatarSystem({ scene, camera }) {
     avatar.targetYaw = character.yaw;
     avatar.attackFlashMsRemaining = character.attackFlashMsRemaining || 0;
     avatar.controllerType = character.controllerType || "AI";
+    const downedMsRemaining = Math.max(0, Number(character.downedMsRemaining || 0));
+    const downedDurationMs = Math.max(downedMsRemaining, Number(character.downedDurationMs || 0));
 
     if (!avatar.initialized) {
       avatar.group.position.set(character.x, 0, character.z);
       avatar.currentYaw = character.yaw;
-      avatar.group.rotation.y = character.yaw;
+      avatar.yawGroup.rotation.y = character.yaw;
       avatar.initialized = true;
+    }
+
+    if (downedMsRemaining > 0) {
+      const fallX = Number.isFinite(character.fallAwayX) ? Number(character.fallAwayX) : 0;
+      const fallZ = Number.isFinite(character.fallAwayZ) ? Number(character.fallAwayZ) : 1;
+      const fallLen = Math.hypot(fallX, fallZ);
+      if (fallLen > 0.001) {
+        avatar.fallAwayX = fallX / fallLen;
+        avatar.fallAwayZ = fallZ / fallLen;
+      } else {
+        avatar.fallAwayX = 0;
+        avatar.fallAwayZ = 1;
+      }
+      if (!avatar.isDowned) {
+        avatar.downedEnteredAt = nowMs;
+        avatar.downedTotalMs = Math.max(1, downedDurationMs);
+        avatar.isRisingFromDowned = false;
+      } else if (downedDurationMs > 0) {
+        avatar.downedTotalMs = Math.max(avatar.downedTotalMs, downedDurationMs);
+      }
+      avatar.isDowned = true;
+      avatar.downedMsRemaining = downedMsRemaining;
+      avatar.knockdownStarOrbit.visible = true;
+    } else {
+      if (avatar.isDowned) {
+        avatar.isRisingFromDowned = true;
+        avatar.riseStartedAt = nowMs;
+        avatar.riseStartTiltRad = avatar.currentTiltRad;
+      }
+      avatar.isDowned = false;
+      avatar.downedMsRemaining = 0;
+      avatar.knockdownStarOrbit.visible = false;
     }
 
     if (avatar.lastServerAt > 0 && avatar.lastServerX != null && avatar.lastServerZ != null) {
@@ -356,7 +500,8 @@ export function createAvatarSystem({ scene, camera }) {
       const dt = Math.max(0.001, (nowMs - avatar.lastServerAt) / 1000);
       const dist = Math.hypot(character.x - avatar.lastServerX, character.z - avatar.lastServerZ);
       const speedRatio = clamp01((dist / dt) / MOVE_SPEED_REFERENCE);
-      avatar.moveAmount = THREE.MathUtils.lerp(avatar.moveAmount, speedRatio, 0.5);
+      const moveTarget = avatar.isDowned ? 0 : speedRatio;
+      avatar.moveAmount = THREE.MathUtils.lerp(avatar.moveAmount, moveTarget, 0.5);
     } else {
       avatar.targetX = character.x;
       avatar.targetZ = character.z;
@@ -426,6 +571,58 @@ export function createAvatarSystem({ scene, camera }) {
     setAvatarEyeTarget(avatar, lookX, lookY);
   }
 
+  function applyDownedPose(avatar, tiltRad) {
+    if (tiltRad <= 0.0001) {
+      avatar.poseRoot.quaternion.identity();
+      avatar.poseRoot.position.set(0, 0, 0);
+      return;
+    }
+    tmpFallAwayWorld.set(avatar.fallAwayX, 0, avatar.fallAwayZ);
+    if (tmpFallAwayWorld.lengthSq() < 0.000001) {
+      tmpFallAwayWorld.set(0, 0, 1);
+    } else {
+      tmpFallAwayWorld.normalize();
+    }
+    tmpFallAwayLocal.copy(tmpFallAwayWorld).applyAxisAngle(UP_AXIS, -avatar.currentYaw);
+    tmpFallAwayLocal.y = 0;
+    if (tmpFallAwayLocal.lengthSq() < 0.000001) {
+      tmpFallAwayLocal.set(0, 0, 1);
+    } else {
+      tmpFallAwayLocal.normalize();
+    }
+    tmpFallAxis.set(tmpFallAwayLocal.z, 0, -tmpFallAwayLocal.x).normalize();
+    tmpFallQuat.setFromAxisAngle(tmpFallAxis, tiltRad);
+
+    const footX = tmpFallAwayLocal.x >= 0 ? avatar.footPivotX : -avatar.footPivotX;
+    tmpFootPivot.set(footX, avatar.footPivotY, avatar.footPivotZ);
+    tmpRotatedFootPivot.copy(tmpFootPivot).applyQuaternion(tmpFallQuat);
+
+    avatar.poseRoot.quaternion.copy(tmpFallQuat);
+    avatar.poseRoot.position.copy(tmpFootPivot).sub(tmpRotatedFootPivot);
+  }
+
+  function updateKnockdownStars(avatar, nowMs) {
+    if (!avatar.knockdownStarOrbit.visible) return;
+    avatar.headMesh.getWorldPosition(tmpHeadWorld);
+    tmpHeadLocal.copy(tmpHeadWorld);
+    avatar.group.worldToLocal(tmpHeadLocal);
+    avatar.knockdownStarOrbit.position.copy(tmpHeadLocal);
+    avatar.knockdownStarOrbit.position.y += KNOCKDOWN_STAR_HEAD_OFFSET_Y;
+
+    const spin = nowMs * 0.0034;
+    for (const star of avatar.knockdownStars) {
+      const phase = Number(star.userData.phase || 0);
+      const angle = spin + phase;
+      star.position.set(
+        Math.cos(angle) * KNOCKDOWN_STAR_ORBIT_RADIUS,
+        Math.sin(angle * 1.6 + phase) * 0.045,
+        Math.sin(angle) * KNOCKDOWN_STAR_ORBIT_RADIUS
+      );
+      const pulse = 0.88 + 0.22 * Math.sin(nowMs * 0.008 + phase * 2.1);
+      star.scale.setScalar(0.18 * pulse);
+    }
+  }
+
   function animateAvatar(avatar, deltaSec, charactersById, nowMs) {
     if (!avatar.initialized) return;
     if (avatar.respawnHideMsRemaining > 0) {
@@ -444,17 +641,39 @@ export function createAvatarSystem({ scene, camera }) {
     const maxStep = MAX_ROTATION_SPEED * deltaSec;
     const clampedStep = THREE.MathUtils.clamp(desiredStep, -maxStep, maxStep);
     avatar.currentYaw = normalizeAngle(avatar.currentYaw + clampedStep);
-    avatar.group.rotation.y = avatar.currentYaw;
+    avatar.yawGroup.rotation.y = avatar.currentYaw;
 
-    avatar.walkPhase += deltaSec * (2.2 + avatar.moveAmount * 7.2);
-    const stride = Math.sin(avatar.walkPhase) * 0.72 * avatar.moveAmount;
+    if (avatar.isDowned) {
+      avatar.downedMsRemaining = Math.max(0, avatar.downedMsRemaining - deltaSec * 1000);
+    }
+
+    let tiltRad = 0;
+    if (avatar.isDowned) {
+      const elapsedMs = Math.max(0, avatar.downedTotalMs - avatar.downedMsRemaining);
+      const fallT = clamp01(elapsedMs / KNOCKDOWN_FALL_MS);
+      tiltRad = KNOCKDOWN_MAX_TILT_RAD * fallT;
+    } else if (avatar.isRisingFromDowned) {
+      const riseT = clamp01((nowMs - avatar.riseStartedAt) / KNOCKDOWN_RISE_MS);
+      tiltRad = avatar.riseStartTiltRad * (1 - riseT);
+      if (riseT >= 1) {
+        avatar.isRisingFromDowned = false;
+        tiltRad = 0;
+      }
+    }
+    avatar.currentTiltRad = tiltRad;
+    applyDownedPose(avatar, tiltRad);
+    updateKnockdownStars(avatar, nowMs);
+
+    const locomotion = tiltRad > 0.001 ? 0 : avatar.moveAmount;
+    avatar.walkPhase += deltaSec * (2.2 + locomotion * 7.2);
+    const stride = Math.sin(avatar.walkPhase) * 0.72 * locomotion;
     const armBase = -stride * 0.82;
 
     avatar.leftLegPivot.rotation.x = stride;
     avatar.rightLegPivot.rotation.x = -stride;
 
     let punch = 0;
-    if (avatar.attackFlashMsRemaining > 0) {
+    if (tiltRad <= 0.001 && avatar.attackFlashMsRemaining > 0) {
       const progress = 1 - clamp01(avatar.attackFlashMsRemaining / ATTACK_ANIM_MS);
       const extension = progress < 0.38 ? progress / 0.38 : 1 - (progress - 0.38) / 0.62;
       punch = clamp01(extension) * 1.9;
@@ -469,13 +688,16 @@ export function createAvatarSystem({ scene, camera }) {
     const eyeSmooth = 1 - Math.exp(-deltaSec * 14);
     avatar.eyeX = THREE.MathUtils.lerp(avatar.eyeX, avatar.eyeTargetX, eyeSmooth);
     avatar.eyeY = THREE.MathUtils.lerp(avatar.eyeY, avatar.eyeTargetY, eyeSmooth);
+    const eyesClosed = avatar.isDowned;
     if (
+      eyesClosed !== avatar.lastDrawnEyesClosed ||
       Math.abs(avatar.eyeX - avatar.lastDrawnEyeX) > 0.01 ||
       Math.abs(avatar.eyeY - avatar.lastDrawnEyeY) > 0.01
     ) {
-      avatar.headFace?.drawEyes?.(avatar.eyeX, avatar.eyeY);
+      avatar.headFace?.drawEyes?.(avatar.eyeX, avatar.eyeY, eyesClosed);
       avatar.lastDrawnEyeX = avatar.eyeX;
       avatar.lastDrawnEyeY = avatar.eyeY;
+      avatar.lastDrawnEyesClosed = eyesClosed;
     }
   }
 

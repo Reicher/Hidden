@@ -51,6 +51,7 @@ export const ATTACK_COOLDOWN_MS = 1000;
 export const ATTACK_RANGE = 2.8;
 export const ATTACK_HALF_ANGLE = Math.PI / 4;
 export const ATTACK_FLASH_MS = 140;
+export const KNOCKDOWN_DURATION_MS = 5000;
 export const CHARACTER_RADIUS = 0.41;
 
 function freezeFixture(fixture) {

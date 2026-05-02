@@ -315,10 +315,11 @@ function isGameChatFocused() {
 
 function updateMobileControlsVisibility() {
   if (!mobileControlsEl) return;
+  const wasShown = !mobileControlsEl.classList.contains("hidden");
   const show = mobileControlsEnabledByPreference() && appMode === "playing" && sessionState === "alive" && !gameChatOpen;
   mobileControlsEl.classList.toggle("hidden", !show);
   document.body.classList.toggle("mobile-controls-enabled", show);
-  if (!show) resetJoystickState();
+  if (wasShown && !show) resetJoystickState();
 }
 
 function isMobileChatDisabledInGame() {

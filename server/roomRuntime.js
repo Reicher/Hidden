@@ -14,6 +14,7 @@ import {
   ATTACK_RANGE,
   ATTACK_HALF_ANGLE,
   ATTACK_FLASH_MS,
+  KNOCKDOWN_DURATION_MS,
   CHARACTER_RADIUS,
   HEARTBEAT_INTERVAL_MS,
   IDLE_SESSION_TIMEOUT_MS,
@@ -111,6 +112,9 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
       controllerType: "AI",
       ownerSessionId: null,
       lastAttackAt: 0,
+      downedUntil: 0,
+      fallAwayX: 0,
+      fallAwayZ: 1,
       ai: {
         mode: "move",
         desiredYaw: p.yaw,
@@ -121,18 +125,45 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
 
   for (let i = 0; i < TOTAL_CHARACTERS; i += 1) characters.push(createCharacter(i));
 
-  function respawnAsAI(charId) {
-    const c = characters[charId];
-    const p = randomSpawn();
-    c.x = p.x;
-    c.z = p.z;
-    c.yaw = p.yaw;
-    c.controllerType = "AI";
-    c.ownerSessionId = null;
-    c.lastAttackAt = 0;
-    c.ai.mode = "move";
-    c.ai.desiredYaw = p.yaw;
-    c.ai.nextDecisionAt = Date.now() + rand(AI_DECISION_MS_MIN, AI_DECISION_MS_MAX);
+  function isCharacterDowned(character, now) {
+    return Boolean(character) && now < (character.downedUntil || 0);
+  }
+
+  function normalizeHorizontalVector(x, z, fallbackX = 0, fallbackZ = 1) {
+    const len = Math.hypot(x, z);
+    if (len < 0.0001) return { x: fallbackX, z: fallbackZ };
+    return { x: x / len, z: z / len };
+  }
+
+  function computeFallAwayVector(attacker, victim) {
+    if (attacker && victim) {
+      const rawAwayX = victim.x - attacker.x;
+      const rawAwayZ = victim.z - attacker.z;
+      const normalized = normalizeHorizontalVector(
+        rawAwayX,
+        rawAwayZ,
+        Math.sin(victim.yaw),
+        Math.cos(victim.yaw)
+      );
+      return normalized;
+    }
+    return normalizeHorizontalVector(Math.sin(victim?.yaw || 0), Math.cos(victim?.yaw || 0), 0, 1);
+  }
+
+  function downCharacter(victim, now, fallAwayX, fallAwayZ) {
+    victim.downedUntil = now + KNOCKDOWN_DURATION_MS;
+    victim.fallAwayX = fallAwayX;
+    victim.fallAwayZ = fallAwayZ;
+    victim.lastAttackAt = now;
+    victim.ai.mode = "stop";
+    victim.ai.desiredYaw = victim.yaw;
+    victim.ai.nextDecisionAt = victim.downedUntil + rand(120, 360);
+  }
+
+  function clearDownedState(character) {
+    character.downedUntil = 0;
+    character.fallAwayX = 0;
+    character.fallAwayZ = 1;
   }
 
   function shortSessionId(sessionId) {
@@ -458,12 +489,17 @@ function sanitizeSystemTextSegment(raw) {
     if (!session || !session.authenticated) return;
     if (session.state === "alive") return;
 
-    const available = characters.find((c) => c.controllerType === "AI" && c.ownerSessionId == null);
+    const standingAvailable = characters.find(
+      (c) => c.controllerType === "AI" && c.ownerSessionId == null && !isCharacterDowned(c, now)
+    );
+    const available =
+      standingAvailable || characters.find((c) => c.controllerType === "AI" && c.ownerSessionId == null);
     if (!available) {
       returnToLobby(session, "no_character_available");
       sendToSession(sessionId, "action_error", { message: "Ingen ledig karaktär just nu." });
       return;
     }
+    clearDownedState(available);
 
     available.controllerType = "PLAYER";
     available.ownerSessionId = sessionId;
@@ -524,8 +560,10 @@ function sanitizeSystemTextSegment(raw) {
     }
   }
 
-  function handleCharacterEliminated(charId, now) {
+  function handleCharacterEliminated(charId, attackerId, now) {
     const c = characters[charId];
+    const attacker = attackerId != null ? characters[attackerId] : null;
+    const fallAway = computeFallAwayVector(attacker, c);
     const owner = c.ownerSessionId;
 
     if (owner) {
@@ -540,20 +578,15 @@ function sanitizeSystemTextSegment(raw) {
         returnToLobby(ownerSession, "eliminated");
       }
     }
-
-    respawnAsAI(charId);
-    const respawned = characters[charId];
-    logEvent("character_respawn", {
-      characterId: charId,
-      x: Number(respawned.x.toFixed(2)),
-      z: Number(respawned.z.toFixed(2)),
-      yaw: Number(respawned.yaw.toFixed(2))
-    });
+    c.controllerType = "AI";
+    c.ownerSessionId = null;
+    downCharacter(c, now, fallAway.x, fallAway.z);
   }
 
   function handleAttack(attackerId, now) {
     const attacker = characters[attackerId];
     if (!attacker) return;
+    if (isCharacterDowned(attacker, now)) return;
     if (!canAttack({ attacker, now, cooldownMs: ATTACK_COOLDOWN_MS })) return;
     markAttack(attacker, now);
 
@@ -562,7 +595,7 @@ function sanitizeSystemTextSegment(raw) {
       attackerId,
       attackRange: ATTACK_RANGE,
       attackHalfAngle: ATTACK_HALF_ANGLE
-    });
+    }).filter((victimId) => !isCharacterDowned(characters[victimId], now));
 
     const attackerSessionId = attacker.ownerSessionId;
     const attackerSession = attackerSessionId ? sessions.get(attackerSessionId) : null;
@@ -584,7 +617,7 @@ function sanitizeSystemTextSegment(raw) {
           attackerSession.stats.innocents += 1;
         }
       }
-      handleCharacterEliminated(victimId, now);
+      handleCharacterEliminated(victimId, attackerId, now);
     }
 
     logEvent("attack", {
@@ -1037,6 +1070,10 @@ function sanitizeSystemTextSegment(raw) {
     }
 
     for (const c of characters) {
+      if (isCharacterDowned(c, now)) {
+        continue;
+      }
+
       if (c.controllerType === "AI") {
         updateAI(c, dt, now);
         continue;
@@ -1079,7 +1116,11 @@ function sanitizeSystemTextSegment(raw) {
         yaw: Number(c.yaw.toFixed(3)),
         controllerType: c.controllerType,
         cooldownMsRemaining: Math.max(0, ATTACK_COOLDOWN_MS - (now - c.lastAttackAt)),
-        attackFlashMsRemaining: Math.max(0, ATTACK_FLASH_MS - (now - c.lastAttackAt))
+        attackFlashMsRemaining: Math.max(0, ATTACK_FLASH_MS - (now - c.lastAttackAt)),
+        downedMsRemaining: Math.max(0, c.downedUntil - now),
+        downedDurationMs: KNOCKDOWN_DURATION_MS,
+        fallAwayX: Number((c.fallAwayX || 0).toFixed(3)),
+        fallAwayZ: Number((c.fallAwayZ || 1).toFixed(3))
       }))
     };
 
