@@ -48,10 +48,15 @@
             </div>
           </div>
           <div id="lobbyActionRow">
-            <button id="playBtn" type="button">Spela</button>
+            <button id="playBtn" type="button">Ready</button>
             <button id="controlsBtn" type="button">Kontroller</button>
             <button id="settingsBtn" type="button">Inställningar</button>
             <button id="creditsBtn" type="button">Credits</button>
+          </div>
+          <div id="lobbyMatchStatus" class="hidden" aria-live="polite">
+            <span id="lobbyMatchStatusTitle">Match pågår</span>
+            <span id="lobbyMatchStatusPlayers">Spelare kvar: 0</span>
+            <span id="lobbyMatchStatusTime">Tid: 00:00</span>
           </div>
 
           <div id="lobbyDialogBackdrop" class="hidden">
@@ -79,11 +84,20 @@
 
     <div id="gameHud" class="hidden" aria-live="polite">
       <div id="aliveOthersText">0 andra spelar just nu</div>
-      <div id="gameChatNotice">Tryck C för chat</div>
+      <div id="gameChatNotice">Systemhändelser</div>
+      <button id="gameMenuBtn" type="button" aria-label="Spelmeny">⚙</button>
       <div id="gameChatBox">
         <div id="gameChatMessages"></div>
         <div id="gameChatInputRow" class="hidden">
           <input id="gameChatInput" type="text" placeholder="Skriv meddelande..." maxlength="220" autocomplete="off" />
+        </div>
+      </div>
+      <div id="gameMenuBackdrop" class="hidden">
+        <div id="gameMenuCard" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
+          <h2 id="gameMenuTitle">Spelmeny</h2>
+          <button id="gameMenuResumeBtn" type="button">Fortsätt spela</button>
+          <button id="gameMenuLobbyBtn" type="button">Återgå till lobby</button>
+          <button id="gameMenuLeaveBtn" type="button">Lämna spelet</button>
         </div>
       </div>
       <div id="mobileControls" class="hidden" aria-hidden="true">

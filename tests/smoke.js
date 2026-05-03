@@ -116,9 +116,22 @@ async function run() {
     await waitFor(() => clients.slice(0, 10).every((c) => c.loggedIn), 8000, "first 10 clients logged in");
     await waitFor(() => clients[10].fullRejected, 5000, "11th client rejected when full");
 
-    clients[0].send({ type: "play" });
-    await waitFor(() => clients[0].state === "countdown", 4000, "countdown starts after play click");
-    await waitFor(() => clients[0].state === "alive", 7000, "client becomes alive after countdown");
+    for (const client of clients.slice(0, 10)) client.send({ type: "ready" });
+    await waitFor(() => clients[0].state === "countdown", 4000, "countdown starts after all are ready");
+
+    clients[1].close();
+    await sleep(180);
+    const reconnectingClient = new Client("p1");
+    clients.push(reconnectingClient);
+    await reconnectingClient.opened;
+    reconnectingClient.send({ type: "login", name: "p1" });
+    await waitFor(() => reconnectingClient.loggedIn, 5000, "reconnected player logs in during countdown");
+
+    await waitFor(
+      () => clients[0].state === "alive" && reconnectingClient.state === "alive",
+      13000,
+      "ready reconnect joins and becomes alive after countdown"
+    );
 
     clients[0].close();
     await sleep(250);
@@ -126,7 +139,7 @@ async function run() {
     clients[10].send({ type: "login", name: clients[10].name });
     await waitFor(() => clients[10].loggedIn, 7000, "login succeeds after slot is freed");
 
-    console.log("Smoke test passed: login/full/lobby->play flow is correct.");
+    console.log("Smoke test passed: login/full/lobby->ready flow is correct.");
   } finally {
     for (const client of clients) client.close();
     await sleep(100);

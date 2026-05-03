@@ -149,6 +149,31 @@ button:disabled {
   font-weight: 600;
 }
 
+.status-cell {
+  white-space: nowrap;
+}
+
+.ready-lamp {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #4bd36b;
+  border-radius: 999px;
+  margin-right: 7px;
+  vertical-align: -1px;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.ready-lamp.on {
+  background: #4bd36b;
+  box-shadow: 0 0 7px rgba(75, 211, 107, 0.5);
+}
+
+.status-label {
+  color: #d9dfeb;
+}
+
 #lobbyMain {
   flex: 1 1 auto;
   min-height: 0;
@@ -232,6 +257,24 @@ button:disabled {
   flex: 1 1 0;
   font-size: 14px;
   padding: 10px 8px;
+}
+
+#lobbyMatchStatus {
+  align-self: flex-end;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(15, 18, 24, 0.78);
+  color: #d8deea;
+  font-size: 11px;
+}
+
+#lobbyMatchStatusTitle {
+  color: #f0f4fd;
+  font-weight: 600;
 }
 
 #lobbyDialogBackdrop {
@@ -440,6 +483,50 @@ button:disabled {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
+#gameMenuBtn {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 7px;
+  background: rgba(8, 10, 14, 0.56);
+  color: rgba(236, 241, 250, 0.86);
+  font-size: 13px;
+  line-height: 1;
+  padding: 6px 8px;
+  min-width: 34px;
+  pointer-events: auto;
+  z-index: 7;
+}
+
+#gameMenuBackdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.42);
+  pointer-events: auto;
+}
+
+#gameMenuCard {
+  width: min(320px, calc(100vw - 28px));
+  background: rgba(16, 21, 29, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+#gameMenuTitle {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+#gameMenuCard button {
+  width: 100%;
+}
+
 #gameChatBox {
   position: absolute;
   right: 12px;
@@ -453,8 +540,8 @@ button:disabled {
 }
 
 #gameChatMessages {
-  max-height: 116px;
-  overflow: auto;
+  max-height: none;
+  overflow: hidden;
   padding: 8px;
   font-size: 12px;
   line-height: 1.3;

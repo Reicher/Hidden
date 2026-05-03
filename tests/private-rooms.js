@@ -108,8 +108,9 @@ async function run() {
     const roomCode = "private-room-check";
     const sameRoomA = new Client("sameA", `/${roomCode}`);
     const sameRoomB = new Client("sameB", `/${roomCode}`);
-    const otherRoom = new Client("otherA", "/other-room-check");
-    clients.push(sameRoomA, sameRoomB, otherRoom);
+    const otherRoomA = new Client("otherA", "/other-room-check");
+    const otherRoomB = new Client("otherB", "/other-room-check");
+    clients.push(sameRoomA, sameRoomB, otherRoomA, otherRoomB);
 
     await Promise.all(clients.map((c) => c.opened));
     clients.forEach((c) => c.send({ type: "login", name: c.name }));
@@ -117,14 +118,16 @@ async function run() {
     await waitFor(() => clients.every((c) => c.loggedIn), 6000, "all clients logged in");
 
     sameRoomA.send({ type: "chat", text: "hej privat" });
-    otherRoom.send({ type: "chat", text: "hej andra" });
+    otherRoomA.send({ type: "chat", text: "hej andra" });
     await sleep(250);
 
-    sameRoomA.send({ type: "play" });
-    otherRoom.send({ type: "play" });
+    sameRoomA.send({ type: "ready" });
+    sameRoomB.send({ type: "ready" });
+    otherRoomA.send({ type: "ready" });
+    otherRoomB.send({ type: "ready" });
 
-    await waitFor(() => sameRoomA.state === "alive", 7000, "sameRoomA becomes alive");
-    await waitFor(() => otherRoom.state === "alive", 7000, "otherRoom becomes alive");
+    await waitFor(() => sameRoomA.state === "alive", 13000, "sameRoomA becomes alive");
+    await waitFor(() => otherRoomA.state === "alive", 13000, "otherRoomA becomes alive");
 
     sameRoomA.close();
     sameRoomB.close();

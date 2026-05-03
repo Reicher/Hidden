@@ -20,6 +20,9 @@ const playBtnEl = document.getElementById("playBtn");
 const controlsBtnEl = document.getElementById("controlsBtn");
 const settingsBtnEl = document.getElementById("settingsBtn");
 const creditsBtnEl = document.getElementById("creditsBtn");
+const lobbyMatchStatusEl = document.getElementById("lobbyMatchStatus");
+const lobbyMatchStatusPlayersEl = document.getElementById("lobbyMatchStatusPlayers");
+const lobbyMatchStatusTimeEl = document.getElementById("lobbyMatchStatusTime");
 const debugBtnEl = document.getElementById("debugBtn");
 const countdownOverlayEl = document.getElementById("countdownOverlay");
 const countdownTextEl = document.getElementById("countdownText");
@@ -44,6 +47,11 @@ const debugEventsTextEl = document.getElementById("debugEventsText");
 const debugMetaEl = document.getElementById("debugMeta");
 const gameHudEl = document.getElementById("gameHud");
 const aliveOthersTextEl = document.getElementById("aliveOthersText");
+const gameMenuBtnEl = document.getElementById("gameMenuBtn");
+const gameMenuBackdropEl = document.getElementById("gameMenuBackdrop");
+const gameMenuResumeBtnEl = document.getElementById("gameMenuResumeBtn");
+const gameMenuLobbyBtnEl = document.getElementById("gameMenuLobbyBtn");
+const gameMenuLeaveBtnEl = document.getElementById("gameMenuLeaveBtn");
 const gameChatMessagesEl = document.getElementById("gameChatMessages");
 const gameChatInputRowEl = document.getElementById("gameChatInputRow");
 const gameChatInputEl = document.getElementById("gameChatInput");
@@ -71,11 +79,16 @@ let appMode = "connect"; // connect | lobby | playing | disconnected
 let sessionState = "auth"; // auth | lobby | countdown | alive
 let myCharacterId = null;
 let myName = "";
+let sessionReady = false;
 let activePlayersInGame = 0;
 let gameChatOpen = false;
+let gameMenuOpen = false;
 let debugOpen = false;
 let debugPollTimer = null;
 let debugLoading = false;
+let leavingGameManually = false;
+let forceYawSyncOnNextWorld = false;
+let currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
 
 const input = {
   forward: false,
@@ -88,6 +101,7 @@ const input = {
 
 const INPUT_SEND_INTERVAL_MS = 33;
 const INPUT_HEARTBEAT_MS = 120;
+const GAME_CHAT_MAX_LINES = 5;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
 const JOYSTICK_DEADZONE = 0.16;
@@ -310,42 +324,97 @@ function closeLobbyDialog() {
 }
 
 function isGameChatFocused() {
-  return document.activeElement === gameChatInputEl;
+  return false;
 }
 
 function updateMobileControlsVisibility() {
   if (!mobileControlsEl) return;
   const wasShown = !mobileControlsEl.classList.contains("hidden");
-  const show = mobileControlsEnabledByPreference() && appMode === "playing" && sessionState === "alive" && !gameChatOpen;
+  const show =
+    mobileControlsEnabledByPreference() &&
+    appMode === "playing" &&
+    sessionState === "alive" &&
+    !gameChatOpen &&
+    !gameMenuOpen;
   mobileControlsEl.classList.toggle("hidden", !show);
   document.body.classList.toggle("mobile-controls-enabled", show);
   if (wasShown && !show) resetJoystickState();
 }
 
 function isMobileChatDisabledInGame() {
-  return IS_TOUCH_DEVICE;
+  return true;
 }
 
 function setGameChatOpen(open, { restorePointerLock = false } = {}) {
-  if (!gameChatInputRowEl || !gameChatInputEl) return;
-  if (open && isMobileChatDisabledInGame()) return;
-  gameChatOpen = Boolean(open);
-  gameChatInputRowEl.classList.toggle("hidden", !gameChatOpen);
+  if (!gameChatInputRowEl) return;
+  gameChatOpen = false;
+  gameChatInputRowEl.classList.add("hidden");
+  gameChatInputEl?.blur();
+  if (restorePointerLock && appMode === "playing" && sessionState === "alive") requestPointerLockSafe(canvas);
+  updateMobileControlsVisibility();
+}
 
-  if (gameChatOpen) {
+function setGameMenuOpen(open, { restorePointerLock = false } = {}) {
+  if (!gameMenuBackdropEl) return;
+  gameMenuOpen = Boolean(open);
+  gameMenuBackdropEl.classList.toggle("hidden", !gameMenuOpen);
+  if (gameMenuOpen) {
     resetInputState();
     sendInput();
     if (document.pointerLockElement) document.exitPointerLock?.();
-    gameChatInputEl.focus();
+    gameMenuResumeBtnEl?.focus();
     updateMobileControlsVisibility();
     return;
   }
-
-  gameChatInputEl.blur();
-  if (restorePointerLock && appMode === "playing" && sessionState === "alive") {
-    requestPointerLockSafe(canvas);
-  }
+  if (restorePointerLock && appMode === "playing" && sessionState === "alive") requestPointerLockSafe(canvas);
   updateMobileControlsVisibility();
+}
+
+function formatDurationShort(ms) {
+  const totalSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function updateLobbyMatchStatus() {
+  if (!lobbyMatchStatusEl || !lobbyMatchStatusPlayersEl || !lobbyMatchStatusTimeEl) return;
+  const show = appMode === "lobby" && currentMatch.inProgress;
+  lobbyMatchStatusEl.classList.toggle("hidden", !show);
+  if (!show) return;
+  lobbyMatchStatusPlayersEl.textContent = `Spelare kvar: ${Math.max(0, Number(currentMatch.alivePlayers || 0))}`;
+  lobbyMatchStatusTimeEl.textContent = `Tid: ${formatDurationShort(currentMatch.elapsedMs || 0)}`;
+}
+
+function updateReadyButton() {
+  if (!playBtnEl) return;
+  if (!authenticated) {
+    playBtnEl.disabled = true;
+    playBtnEl.textContent = "Ready";
+    return;
+  }
+  if (sessionState === "alive") {
+    playBtnEl.disabled = true;
+    playBtnEl.textContent = "Spelar...";
+    return;
+  }
+  if (currentMatch.inProgress) {
+    playBtnEl.disabled = true;
+    playBtnEl.textContent = "Match pågår";
+    return;
+  }
+  if (sessionState === "countdown" && sessionReady) {
+    playBtnEl.disabled = true;
+    playBtnEl.textContent = "Nedräkning...";
+    return;
+  }
+  if (sessionReady) {
+    playBtnEl.disabled = false;
+    playBtnEl.textContent = "Inte redo";
+    return;
+  }
+  playBtnEl.disabled = false;
+  playBtnEl.textContent = "Ready";
 }
 
 function updateInGameHud() {
@@ -384,9 +453,12 @@ function setAppMode(mode) {
   }
 
   if (mode !== "playing") setGameChatOpen(false);
+  if (mode !== "playing") setGameMenuOpen(false);
   if (mode === "playing" && isMobileChatDisabledInGame() && gameChatOpen) setGameChatOpen(false);
   if (mode === "connect" || mode === "disconnected") setCountdownTextFromSession({ state: "lobby" });
+  updateReadyButton();
   updateMobileControlsVisibility();
+  updateLobbyMatchStatus();
   updateInGameHud();
   updateDocumentTitle();
 }
@@ -463,17 +535,17 @@ function closeDebugView() {
 
 function setCountdownTextFromSession(state) {
   if (!countdownTextEl || !countdownOverlayEl) return;
-  if (state?.state === "countdown") {
-    const ms = state.countdownMsRemaining ?? 3000;
+  const ms = Number(state?.countdownMsRemaining || 0);
+  if (ms > 0) {
     const sec = Math.max(1, Math.ceil(ms / 1000));
     countdownTextEl.textContent = String(sec);
     countdownOverlayEl.classList.remove("hidden");
-    if (playBtnEl) playBtnEl.disabled = true;
+    updateReadyButton();
     return;
   }
   countdownTextEl.textContent = "";
   countdownOverlayEl.classList.add("hidden");
-  if (playBtnEl) playBtnEl.disabled = false;
+  updateReadyButton();
 }
 
 function renderScoreboard(players) {
@@ -501,7 +573,15 @@ function renderScoreboard(players) {
     tr.appendChild(innocentsCell);
 
     const statusCell = document.createElement("td");
-    statusCell.textContent = p.status || "-";
+    statusCell.className = "status-cell";
+    const readyLamp = document.createElement("span");
+    readyLamp.className = `ready-lamp ${p.ready ? "on" : "off"}`;
+    readyLamp.setAttribute("aria-hidden", "true");
+    statusCell.appendChild(readyLamp);
+    const statusText = document.createElement("span");
+    statusText.className = "status-label";
+    statusText.textContent = p.status || "-";
+    statusCell.appendChild(statusText);
     tr.appendChild(statusCell);
 
     scoreBodyEl.appendChild(tr);
@@ -730,7 +810,14 @@ function appendChatLine(container, entry) {
 
 function appendChat(entry) {
   appendChatLine(chatMessagesEl, entry);
-  appendChatLine(gameChatMessagesEl, entry);
+  if (entry?.system) {
+    appendChatLine(gameChatMessagesEl, entry);
+    if (gameChatMessagesEl) {
+      while (gameChatMessagesEl.children.length > GAME_CHAT_MAX_LINES) {
+        gameChatMessagesEl.removeChild(gameChatMessagesEl.firstElementChild);
+      }
+    }
+  }
 }
 
 function replaceChat(history) {
@@ -777,6 +864,8 @@ function attachSocket(wsUrl, loginName) {
       if (msg.type === "login_ok") {
         authenticated = true;
         myName = msg.name || loginName;
+        sessionReady = false;
+        currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
         replaceChat(msg.chatHistory || []);
         setConnectError("");
         setPrivateRoomButtonVisible(false);
@@ -787,6 +876,8 @@ function attachSocket(wsUrl, loginName) {
       if (msg.type === "login_error") {
         authenticated = false;
         myName = "";
+        sessionReady = false;
+        currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
         setAppMode("connect");
         setConnectError(msg.message || "Inloggning misslyckades.");
         setPrivateRoomButtonVisible(msg.reason === "room_full");
@@ -806,23 +897,36 @@ function attachSocket(wsUrl, loginName) {
 
       if (msg.type === "countdown") {
         // world-session hanterar själva visningen; detta är bara om world dröjer.
-        setCountdownTextFromSession({ state: "countdown", countdownMsRemaining: 3000 });
+        setCountdownTextFromSession({ countdownMsRemaining: Number(msg.seconds || 1) * 1000 });
         return;
       }
 
       if (msg.type === "possess") {
         myCharacterId = msg.characterId ?? null;
+        forceYawSyncOnNextWorld = myCharacterId != null;
         return;
       }
 
       if (msg.type !== "world") return;
 
       const previousCharacterId = myCharacterId;
+      const previousSessionState = sessionState;
       const state = msg.session;
+      if (msg.match && typeof msg.match === "object") {
+        currentMatch = {
+          inProgress: Boolean(msg.match.inProgress),
+          alivePlayers: Number(msg.match.alivePlayers || 0),
+          startedAt: msg.match.startedAt || null,
+          elapsedMs: Number(msg.match.elapsedMs || 0)
+        };
+      } else {
+        currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
+      }
       if (state) {
         sessionState = state.state;
         authenticated = Boolean(state.authenticated);
         myName = state.name || myName;
+        sessionReady = Boolean(state.ready);
         myCharacterId = state.characterId ?? null;
         activePlayersInGame = Number(state.activePlayers || 0);
         updateInGameHud();
@@ -838,6 +942,7 @@ function attachSocket(wsUrl, loginName) {
         setAppMode("lobby");
       }
       setCountdownTextFromSession(state);
+      updateLobbyMatchStatus();
 
       try {
         roomSystem.syncFromWorld({
@@ -855,11 +960,15 @@ function attachSocket(wsUrl, loginName) {
 
         if (controlledYaw != null) {
           const gainedNewCharacter = myCharacterId != null && myCharacterId !== previousCharacterId;
-          if (gainedNewCharacter) {
+          const enteredAlive = previousSessionState !== "alive" && sessionState === "alive" && myCharacterId != null;
+          if (gainedNewCharacter || enteredAlive || forceYawSyncOnNextWorld) {
             yaw = controlledYaw;
             viewYaw = controlledYaw;
             input.yaw = yaw;
+            forceYawSyncOnNextWorld = false;
           }
+        } else if (forceYawSyncOnNextWorld && myCharacterId == null) {
+          forceYawSyncOnNextWorld = false;
         }
       } catch (err) {
         console.error("[client:world-render]", err);
@@ -870,11 +979,19 @@ function attachSocket(wsUrl, loginName) {
       connecting = false;
       authenticated = false;
       sessionState = "auth";
+      sessionReady = false;
       myCharacterId = null;
       activePlayersInGame = 0;
+      currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
       updateConnectButton();
-      setAppMode("disconnected");
-      setConnectError("Anslutningen bröts.");
+      if (leavingGameManually) {
+        leavingGameManually = false;
+        setAppMode("connect");
+        setConnectError("");
+      } else {
+        setAppMode("disconnected");
+        setConnectError("Anslutningen bröts.");
+      }
       setPrivateRoomButtonVisible(false);
       updateDocumentTitle();
     },
@@ -907,6 +1024,7 @@ function connectAndLogin() {
   connecting = true;
   authenticated = false;
   sessionState = "auth";
+  sessionReady = false;
   myCharacterId = null;
   myName = "";
   activePlayersInGame = 0;
@@ -926,12 +1044,21 @@ function sendChat() {
   chatInputEl.value = "";
 }
 
-function sendGameChat() {
-  if (!gameChatInputEl) return;
-  const text = gameChatInputEl.value.trim();
-  if (!text || !socket) return;
-  socket.sendJson({ type: "chat", text });
-  gameChatInputEl.value = "";
+function requestReturnToLobby() {
+  if (!socket || !authenticated) return;
+  socket.sendJson({ type: "leave_match" });
+  setGameMenuOpen(false);
+}
+
+function leaveGameCompletely() {
+  if (!socket) return;
+  setGameMenuOpen(false);
+  leavingGameManually = true;
+  try {
+    socket.close(1000, "left_game");
+  } catch {
+    // no-op
+  }
 }
 
 function sendInput() {
@@ -1023,6 +1150,7 @@ function bindMobileControls() {
     mobileAttackBtnEl.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       if (appMode !== "playing" || sessionState !== "alive") return;
+      if (gameMenuOpen) return;
       if (gameChatOpen || isGameChatFocused()) return;
       socket?.sendJson({ type: "attack" });
     });
@@ -1046,6 +1174,7 @@ function bindMobileControls() {
 
     mobileJoystickBaseEl.addEventListener("pointerdown", (event) => {
       event.preventDefault();
+      if (gameMenuOpen) return;
       if (mobileMovePointerId != null) return;
       mobileMovePointerId = event.pointerId;
       mobileJoystickBaseEl.setPointerCapture?.(event.pointerId);
@@ -1055,6 +1184,7 @@ function bindMobileControls() {
     mobileJoystickBaseEl.addEventListener("pointermove", (event) => {
       if (event.pointerId !== mobileMovePointerId) return;
       if (appMode !== "playing" || sessionState !== "alive") return;
+      if (gameMenuOpen) return;
       event.preventDefault();
       updateFromPointer(event);
       const now = performance.now();
@@ -1081,6 +1211,7 @@ function bindMobileControls() {
   if (!mobileLookPadEl) return;
   mobileLookPadEl.addEventListener("pointerdown", (event) => {
     event.preventDefault();
+    if (gameMenuOpen) return;
     if (mobileLookPointerId != null) return;
     mobileLookPointerId = event.pointerId;
     mobileLookLastX = event.clientX;
@@ -1090,6 +1221,7 @@ function bindMobileControls() {
 
   mobileLookPadEl.addEventListener("pointermove", (event) => {
     if (event.pointerId !== mobileLookPointerId) return;
+    if (gameMenuOpen) return;
     if (appMode !== "playing" || sessionState !== "alive" || gameChatOpen || isGameChatFocused()) return;
 
     event.preventDefault();
@@ -1138,13 +1270,17 @@ nameInputEl?.addEventListener("keydown", (event) => {
 });
 playBtnEl?.addEventListener("click", () => {
   if (!socket || !authenticated) return;
-  socket.sendJson({ type: "play" });
-  requestPointerLockSafe(canvas);
+  if (sessionState === "alive") return;
+  if (sessionReady && sessionState === "countdown") return;
+  const nextReady = !sessionReady;
+  socket.sendJson({ type: "ready", ready: nextReady });
+  sessionReady = nextReady;
+  updateReadyButton();
 });
 controlsBtnEl?.addEventListener("click", () => {
   openLobbyDialog(
     "Kontroller",
-    "PC: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack, C öppnar chat.\nMobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta. Chat i match är avstängd på mobil."
+    "PC: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack, kugghjulet uppe till höger öppnar spelmenyn.\nMobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta, kugghjulet uppe till höger öppnar spelmenyn. Under match visas bara systemhändelser i chatten."
   );
 });
 settingsBtnEl?.addEventListener("click", () => {
@@ -1183,17 +1319,17 @@ chatInputEl?.addEventListener("keydown", (event) => {
   event.preventDefault();
   sendChat();
 });
-gameChatInputEl?.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    sendGameChat();
-    setGameChatOpen(false, { restorePointerLock: true });
-    return;
-  }
-  if (event.key === "Escape") {
-    event.preventDefault();
-    setGameChatOpen(false, { restorePointerLock: true });
-  }
+gameMenuBtnEl?.addEventListener("click", () => {
+  if (appMode !== "playing") return;
+  setGameMenuOpen(!gameMenuOpen);
+});
+gameMenuResumeBtnEl?.addEventListener("click", () => {
+  setGameMenuOpen(false, { restorePointerLock: true });
+});
+gameMenuLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
+gameMenuLeaveBtnEl?.addEventListener("click", leaveGameCompletely);
+gameMenuBackdropEl?.addEventListener("click", (event) => {
+  if (event.target === gameMenuBackdropEl) setGameMenuOpen(false, { restorePointerLock: true });
 });
 lobbyDialogCloseBtnEl?.addEventListener("click", closeLobbyDialog);
 lobbyDialogBackdropEl?.addEventListener("click", (event) => {
@@ -1217,12 +1353,13 @@ window.addEventListener("keydown", (event) => {
     closeDebugView();
     return;
   }
-  if (appMode !== "playing") return;
-  if (event.code === "KeyC" && sessionState === "alive" && !gameChatOpen && !isGameChatFocused() && !isMobileChatDisabledInGame()) {
+  if (appMode === "playing" && event.key === "Escape") {
     event.preventDefault();
-    setGameChatOpen(true);
+    setGameMenuOpen(!gameMenuOpen, { restorePointerLock: true });
     return;
   }
+  if (appMode !== "playing") return;
+  if (gameMenuOpen) return;
   if (gameChatOpen || isGameChatFocused()) return;
   let changed = false;
   if (event.code === "KeyW" && !input.forward) {
@@ -1250,6 +1387,7 @@ window.addEventListener("keydown", (event) => {
 
 window.addEventListener("keyup", (event) => {
   if (appMode !== "playing") return;
+  if (gameMenuOpen) return;
   if (gameChatOpen || isGameChatFocused()) return;
   let changed = false;
   if (event.code === "KeyW" && input.forward) {
@@ -1277,6 +1415,7 @@ window.addEventListener("keyup", (event) => {
 
 canvas.addEventListener("click", () => {
   if (appMode !== "playing") return;
+  if (gameMenuOpen) return;
   if (gameChatOpen) return;
   if (!document.pointerLockElement) {
     requestPointerLockSafe(canvas);
@@ -1285,6 +1424,7 @@ canvas.addEventListener("click", () => {
 
 document.addEventListener("mousemove", (event) => {
   if (appMode !== "playing") return;
+  if (gameMenuOpen) return;
   if (!document.pointerLockElement) return;
   yaw -= event.movementX * 0.0022;
   pitch = clampPitch(pitch - event.movementY * 0.002);
@@ -1298,6 +1438,7 @@ document.addEventListener("mousemove", (event) => {
 window.addEventListener("mousedown", (event) => {
   if (event.button !== 0) return;
   if (appMode !== "playing" || sessionState !== "alive") return;
+  if (gameMenuOpen) return;
   if (gameChatOpen || isGameChatFocused()) return;
   socket?.sendJson({ type: "attack" });
 });

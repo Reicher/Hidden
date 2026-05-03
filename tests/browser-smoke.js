@@ -79,38 +79,55 @@ async function run() {
   try {
     browser = await launchBrowser();
     const context = await browser.newContext();
-    const page = await context.newPage();
-
     const clientErrors = [];
+    const pageA = await context.newPage();
+    const pageB = await context.newPage();
 
-    page.on("console", (msg) => {
-      const text = msg.text();
-      const type = msg.type();
-      if (type === "error" || text.includes("[client:world-render]")) {
-        clientErrors.push(`[console:${type}] ${text}`);
-      }
-    });
-    page.on("pageerror", (err) => {
-      clientErrors.push(`[pageerror] ${err?.message || String(err)}`);
-    });
+    const attachErrorCapture = (page, label) => {
+      page.on("console", (msg) => {
+        const text = msg.text();
+        const type = msg.type();
+        if (type === "error" || text.includes("[client:world-render]")) {
+          clientErrors.push(`[${label}:console:${type}] ${text}`);
+        }
+      });
+      page.on("pageerror", (err) => {
+        clientErrors.push(`[${label}:pageerror] ${err?.message || String(err)}`);
+      });
+    };
+    attachErrorCapture(pageA, "A");
+    attachErrorCapture(pageB, "B");
 
-    await page.goto(HTTP_URL, { waitUntil: "domcontentloaded" });
+    await pageA.goto(HTTP_URL, { waitUntil: "domcontentloaded" });
+    await pageB.goto(HTTP_URL, { waitUntil: "domcontentloaded" });
 
-    const name = `pw_${Date.now().toString().slice(-6)}`;
-    await page.fill("#nameInput", name);
-    await page.click("#connectBtn");
+    const suffix = Date.now().toString().slice(-6);
+    await pageA.fill("#nameInput", `pwA_${suffix}`);
+    await pageB.fill("#nameInput", `pwB_${suffix}`);
+    await pageA.click("#connectBtn");
+    await pageB.click("#connectBtn");
 
-    await page.waitForFunction(() => !document.getElementById("lobbyView")?.classList.contains("hidden"), null, {
-      timeout: 8000
-    });
+    await Promise.all([
+      pageA.waitForFunction(() => !document.getElementById("lobbyView")?.classList.contains("hidden"), null, {
+        timeout: 8000
+      }),
+      pageB.waitForFunction(() => !document.getElementById("lobbyView")?.classList.contains("hidden"), null, {
+        timeout: 8000
+      })
+    ]);
 
-    await page.click("#playBtn");
-    await page.waitForFunction(() => !document.body.classList.contains("overlay-active"), null, { timeout: 12000 });
+    await pageA.click("#playBtn");
+    await pageB.click("#playBtn");
+
+    await Promise.all([
+      pageA.waitForFunction(() => !document.body.classList.contains("overlay-active"), null, { timeout: 18000 }),
+      pageB.waitForFunction(() => !document.body.classList.contains("overlay-active"), null, { timeout: 18000 })
+    ]);
 
     await sleep(1200);
 
     assert.equal(clientErrors.length, 0, `Client runtime errors found:\n${clientErrors.join("\n")}`);
-    console.log("Browser smoke test passed: client renders and enters playing state without runtime errors.");
+    console.log("Browser smoke test passed: ready flow starts match and client renders without runtime errors.");
   } finally {
     try {
       await browser?.close();

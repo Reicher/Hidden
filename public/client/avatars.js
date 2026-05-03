@@ -24,6 +24,7 @@ const EYE_RADIUS_Y_PX = 15;
 const PUPIL_RADIUS_PX = 5.2;
 const PUPIL_RANGE_X_PX = 5.8;
 const PUPIL_RANGE_Y_PX = 4.6;
+const AVATAR_YAW_OFFSET = Math.PI;
 const SKIN_TONE_HEX = [
   0xfad7c4, 0xf1c7a5, 0xe6b88a, 0xd8a676, 0xbf8a5d, 0xa9744d, 0x8c603f, 0x714c34, 0x573a2a, 0x3f2b1f
 ];
@@ -71,6 +72,11 @@ export function createAvatarSystem({ scene, camera }) {
   firstPersonArmPivot.visible = false;
   camera.add(firstPersonArmPivot);
   let firstPersonAttackMs = 0;
+
+  function visualYaw(serverYaw, controllerType) {
+    if (controllerType === "PLAYER") return normalizeAngle(serverYaw + AVATAR_YAW_OFFSET);
+    return serverYaw;
+  }
 
   function buildCharacterProfile(id) {
     const rng = seededRandom(id * 4093 + 17);
@@ -438,7 +444,7 @@ export function createAvatarSystem({ scene, camera }) {
 
   function updateFromServer(avatar, character, nowMs) {
     avatar.seenAtTick = true;
-    avatar.targetYaw = character.yaw;
+    avatar.targetYaw = visualYaw(character.yaw, character.controllerType);
     avatar.attackFlashMsRemaining = character.attackFlashMsRemaining || 0;
     avatar.controllerType = character.controllerType || "AI";
     const downedMsRemaining = Math.max(0, Number(character.downedMsRemaining || 0));
@@ -446,8 +452,8 @@ export function createAvatarSystem({ scene, camera }) {
 
     if (!avatar.initialized) {
       avatar.group.position.set(character.x, 0, character.z);
-      avatar.currentYaw = character.yaw;
-      avatar.yawGroup.rotation.y = character.yaw;
+      avatar.currentYaw = avatar.targetYaw;
+      avatar.yawGroup.rotation.y = avatar.targetYaw;
       avatar.initialized = true;
     }
 
