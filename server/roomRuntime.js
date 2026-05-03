@@ -386,11 +386,15 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
       }
 
       const session = sessions.get(sessionId);
-      if (!session || session.state !== "alive" || session.characterId == null) {
+      const ownsCharacterWhileActive =
+        session &&
+        (session.state === "alive" || session.state === "countdown") &&
+        session.characterId != null;
+      if (!ownsCharacterWhileActive) {
         warnInvariant(
           "owner_without_alive_session",
           now,
-          `Character owner ${sessionId} missing valid alive session.`
+          `Character owner ${sessionId} missing valid active session.`
         );
         continue;
       }
@@ -1206,7 +1210,8 @@ function sanitizeSystemTextSegment(raw) {
 
     if (msg.type === "input") {
       if (at - session.net.lastInputAt < INPUT_UPDATE_MIN_MS) {
-        return dropMessage(session, "rate_input") ? "abuse" : "dropped";
+        // Frequent input updates are benign; ignore extras instead of counting them as abuse.
+        return "ok";
       }
       session.net.lastInputAt = at;
 
