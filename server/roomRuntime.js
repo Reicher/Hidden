@@ -509,6 +509,7 @@ function sanitizeSystemTextSegment(raw) {
   function toCountdownState(session, endsAt) {
     if (!session?.authenticated || !session.ready) return;
     if (session.state === "alive") return;
+    if (!assignCharacterForCountdown(session, Date.now())) return;
     session.state = "countdown";
     session.readyAt = endsAt;
     session.input.attackRequested = false;
@@ -523,6 +524,10 @@ function sanitizeSystemTextSegment(raw) {
     for (const session of sessions.values()) {
       if (!session.authenticated) continue;
       if (session.state !== "countdown") continue;
+      if (session.characterId != null) {
+        releaseOwnedCharacter(session.id);
+        session.characterId = null;
+      }
       session.state = "lobby";
       session.readyAt = 0;
     }
@@ -565,13 +570,21 @@ function sanitizeSystemTextSegment(raw) {
 
   function finalizeLobbyCountdown(now) {
     if (!lobbyCountdown) return;
-    const participants = authenticatedSessions()
-      .filter((session) => session.state === "countdown" && session.ready)
-      .map((session) => session.id);
+    const participants = authenticatedSessions().filter((session) => session.state === "countdown" && session.ready);
     lobbyCountdown = null;
     countdownReadyNames.clear();
     appendSystemChat([{ type: "text", text: "Spel startat" }]);
-    for (const sessionId of participants) assignCharacterToSession(sessionId, now);
+    for (const session of participants) {
+      if (session.characterId == null && !assignCharacterForCountdown(session, now)) continue;
+      session.state = "alive";
+      session.ready = false;
+      session.readyAt = now;
+      session.input.attackRequested = false;
+      emitStatsEvent("session_alive", {
+        sessionId: shortSessionId(session.id),
+        name: session.name
+      });
+    }
   }
 
   function releaseOwnedCharacter(sessionId) {
@@ -627,10 +640,18 @@ function sanitizeSystemTextSegment(raw) {
     resetArenaForNextRound(now);
   }
 
-  function assignCharacterToSession(sessionId, now) {
-    const session = sessions.get(sessionId);
-    if (!session || !session.authenticated) return;
-    if (session.state === "alive") return;
+  function assignCharacterForCountdown(session, now) {
+    if (!session || !session.authenticated) return false;
+    if (session.characterId != null) {
+      const owned = characters[session.characterId];
+      if (owned?.ownerSessionId === session.id && owned?.controllerType === "PLAYER") {
+        session.input.yaw = owned.yaw;
+        session.input.pitch = owned.pitch;
+        sendToSession(session.id, "possess", { characterId: owned.id });
+        return true;
+      }
+      session.characterId = null;
+    }
 
     const standingAvailable = characters.find(
       (c) => c.controllerType === "AI" && c.ownerSessionId == null && !isCharacterDowned(c, now)
@@ -638,17 +659,16 @@ function sanitizeSystemTextSegment(raw) {
     const available =
       standingAvailable || characters.find((c) => c.controllerType === "AI" && c.ownerSessionId == null);
     if (!available) {
-      returnToLobby(session, "no_character_available");
-      sendToSession(sessionId, "action_error", { message: "Ingen ledig karaktär just nu." });
-      return;
+      session.ready = false;
+      session.state = "lobby";
+      session.readyAt = 0;
+      sendToSession(session.id, "action_error", { message: "Ingen ledig karaktär just nu." });
+      return false;
     }
     clearDownedState(available);
 
     available.controllerType = "PLAYER";
-    available.ownerSessionId = sessionId;
-
-    session.state = "alive";
-    session.ready = false;
+    available.ownerSessionId = session.id;
     session.characterId = available.id;
     session.readyAt = now;
     session.input.yaw = available.yaw;
@@ -656,18 +676,15 @@ function sanitizeSystemTextSegment(raw) {
     session.input.attackRequested = false;
 
     logEvent("session_possess", {
-      sessionId: shortSessionId(sessionId),
+      sessionId: shortSessionId(session.id),
       name: session.name,
       characterId: available.id,
       x: Number(available.x.toFixed(2)),
       z: Number(available.z.toFixed(2)),
       yaw: Number(available.yaw.toFixed(2))
     });
-    emitStatsEvent("session_alive", {
-      sessionId: shortSessionId(sessionId),
-      name: session.name
-    });
-    sendToSession(sessionId, "possess", { characterId: available.id });
+    sendToSession(session.id, "possess", { characterId: available.id });
+    return true;
   }
 
   function returnToLobby(session, reason = "return_to_lobby") {
@@ -1259,15 +1276,15 @@ function sanitizeSystemTextSegment(raw) {
       }
 
       const ownerSession = c.ownerSessionId ? sessions.get(c.ownerSessionId) : null;
-      if (!ownerSession || ownerSession.state !== "alive") {
+      if (!ownerSession || (ownerSession.state !== "alive" && ownerSession.state !== "countdown")) {
         c.controllerType = "AI";
         c.ownerSessionId = null;
         continue;
       }
 
-      updatePlayer(c, ownerSession, dt);
+      if (ownerSession.state === "alive") updatePlayer(c, ownerSession, dt);
 
-      if (ownerSession.input.attackRequested) {
+      if (ownerSession.state === "alive" && ownerSession.input.attackRequested) {
         handleAttack(c.id, now);
         ownerSession.input.attackRequested = false;
       }

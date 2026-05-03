@@ -36,6 +36,128 @@ const HAT_COLOR_HEX_BY_TYPE = {
   Sombrero: [0xd9c39a, 0xc5a77f, 0xb89365, 0x9f7b54]
 };
 
+function hexToCss(hex) {
+  const safe = Math.max(0, Math.min(0xffffff, Number(hex) || 0));
+  return `#${safe.toString(16).padStart(6, "0")}`;
+}
+
+function previewStyleForCharacter(characterId) {
+  const rng = seededRandom(Number(characterId || 0) * 4093 + 17);
+  rng();
+  rng();
+  rng();
+  rng();
+  rng();
+  rng();
+  const skinHex = SKIN_TONE_HEX[Math.floor(rng() * SKIN_TONE_HEX.length)];
+  const shirtHue = Math.round(rng() * 360);
+  const shirtSat = Math.round((0.4 + rng() * 0.3) * 100);
+  const shirtLight = Math.round((0.36 + rng() * 0.24) * 100);
+  rng();
+  rng();
+  rng();
+  rng();
+  rng();
+  rng();
+  const hatRoll = rng();
+  let hatType = "none";
+  let hatHex = null;
+  if (hatRoll >= 0.28) {
+    hatType = HAT_TYPES[Math.floor(rng() * HAT_TYPES.length)];
+    const palette = HAT_COLOR_HEX_BY_TYPE[hatType] || HAT_COLOR_HEX_BY_TYPE.CylinderHatt;
+    hatHex = palette[Math.floor(rng() * palette.length)];
+  }
+  return {
+    skin: hexToCss(skinHex),
+    shirt: `hsl(${shirtHue} ${shirtSat}% ${shirtLight}%)`,
+    hatType,
+    hat: hatHex == null ? null : hexToCss(hatHex)
+  };
+}
+
+function fillRoundedRect(ctx, x, y, w, h, r) {
+  const radius = Math.max(0, Math.min(Number(r) || 0, w * 0.5, h * 0.5));
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+export function drawCountdownCharacterPreview(canvas, characterId) {
+  if (!canvas || characterId == null) return false;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return false;
+  const width = canvas.width;
+  const height = canvas.height;
+  if (width <= 0 || height <= 0) return false;
+  const style = previewStyleForCharacter(characterId);
+  const cx = width * 0.5;
+  const headCy = height * 0.44;
+  const headR = Math.min(width, height) * 0.23;
+
+  ctx.clearRect(0, 0, width, height);
+
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
+  bgGrad.addColorStop(0, "#20273a");
+  bgGrad.addColorStop(1, "#111722");
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = style.shirt;
+  fillRoundedRect(ctx, width * 0.22, height * 0.56, width * 0.56, height * 0.34, 16);
+
+  ctx.fillStyle = style.skin;
+  ctx.beginPath();
+  ctx.arc(cx, headCy, headR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.ellipse(cx - headR * 0.35, headCy - headR * 0.05, headR * 0.21, headR * 0.26, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx + headR * 0.35, headCy - headR * 0.05, headR * 0.21, headR * 0.26, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#111111";
+  ctx.beginPath();
+  ctx.arc(cx - headR * 0.35, headCy - headR * 0.03, headR * 0.08, 0, Math.PI * 2);
+  ctx.arc(cx + headR * 0.35, headCy - headR * 0.03, headR * 0.08, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (style.hat) {
+    ctx.fillStyle = style.hat;
+    if (style.hatType === "CylinderHatt") {
+      fillRoundedRect(ctx, cx - headR * 0.58, headCy - headR * 1.25, headR * 1.16, headR * 0.6, 8);
+      fillRoundedRect(ctx, cx - headR * 0.88, headCy - headR * 0.76, headR * 1.76, headR * 0.16, 6);
+    } else if (style.hatType === "Trollkarlshatt") {
+      ctx.beginPath();
+      ctx.moveTo(cx, headCy - headR * 1.52);
+      ctx.lineTo(cx - headR * 0.82, headCy - headR * 0.62);
+      ctx.lineTo(cx + headR * 0.82, headCy - headR * 0.62);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx, headCy - headR * 0.62, headR * 0.88, headR * 0.15, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.ellipse(cx, headCy - headR * 0.66, headR * 0.62, headR * 0.24, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx, headCy - headR * 0.56, headR * 1.08, headR * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  return true;
+}
+
 export function createAvatarSystem({ scene, camera }) {
   const avatars = new Map();
   const UP_AXIS = new THREE.Vector3(0, 1, 0);

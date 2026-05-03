@@ -1,6 +1,6 @@
 import { createSceneSystem } from "./client/scene.js";
 import { createRoomSystem } from "./client/room.js";
-import { createAvatarSystem } from "./client/avatars.js";
+import { createAvatarSystem, drawCountdownCharacterPreview } from "./client/avatars.js";
 import { createGameSocket } from "./client/network.js";
 
 const canvas = document.getElementById("game");
@@ -29,6 +29,9 @@ const lobbyMatchStatusTimeEl = document.getElementById("lobbyMatchStatusTime");
 const debugBtnEl = document.getElementById("debugBtn");
 const countdownOverlayEl = document.getElementById("countdownOverlay");
 const countdownTextEl = document.getElementById("countdownText");
+const countdownCharacterCanvasEl = document.getElementById("countdownCharacterCanvas");
+const countdownCharacterMetaEl = document.getElementById("countdownCharacterMeta");
+const countdownControlsTextEl = document.getElementById("countdownControlsText");
 const lobbyDialogBackdropEl = document.getElementById("lobbyDialogBackdrop");
 const lobbyDialogTitleEl = document.getElementById("lobbyDialogTitle");
 const lobbyDialogTextEl = document.getElementById("lobbyDialogText");
@@ -143,6 +146,7 @@ let joystickCurrentY = 0;
 let mobileControlsPreference = normalizeMobileControlsPreference(localStorage.getItem(MOBILE_CONTROLS_PREF_KEY));
 const CONTROLS_TEXT =
   "PC: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack. I lobbyn öppnar Settings-knappen inställningsmenyn och i match öppnar kugghjulet uppe till höger spelmenyn.\nMobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta. Under match visas bara systemhändelser i chatten.";
+let lastCountdownPreviewCharacterId = null;
 
 function hashString(str) {
   let h = 2166136261;
@@ -574,13 +578,26 @@ function closeDebugView() {
 function setCountdownTextFromSession(state) {
   if (!countdownTextEl || !countdownOverlayEl) return;
   const ms = Number(state?.countdownMsRemaining || 0);
+  if (countdownControlsTextEl) countdownControlsTextEl.textContent = CONTROLS_TEXT;
   if (ms > 0) {
     const sec = Math.max(1, Math.ceil(ms / 1000));
     countdownTextEl.textContent = String(sec);
+    const characterId = state?.characterId ?? myCharacterId;
+    if (countdownCharacterCanvasEl && characterId != null) {
+      if (characterId !== lastCountdownPreviewCharacterId) {
+        drawCountdownCharacterPreview(countdownCharacterCanvasEl, characterId);
+        lastCountdownPreviewCharacterId = characterId;
+      }
+      if (countdownCharacterMetaEl) countdownCharacterMetaEl.textContent = `Karaktär #${characterId + 1}`;
+    } else {
+      lastCountdownPreviewCharacterId = null;
+      if (countdownCharacterMetaEl) countdownCharacterMetaEl.textContent = "Väljer karaktär...";
+    }
     countdownOverlayEl.classList.remove("hidden");
     updateReadyButton();
     return;
   }
+  lastCountdownPreviewCharacterId = null;
   countdownTextEl.textContent = "";
   countdownOverlayEl.classList.add("hidden");
   updateReadyButton();

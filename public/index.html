@@ -86,7 +86,20 @@
       </section>
     </div>
     <div id="countdownOverlay" class="hidden" aria-live="polite">
-      <div id="countdownText"></div>
+      <div id="countdownContent">
+        <div id="countdownTopRow">
+          <div id="countdownText"></div>
+          <div id="countdownCharacterCard">
+            <span id="countdownCharacterLabel">Din karaktär</span>
+            <canvas id="countdownCharacterCanvas" width="164" height="164" aria-label="Karaktärspreview"></canvas>
+            <span id="countdownCharacterMeta">Väljer karaktär...</span>
+          </div>
+        </div>
+        <div id="countdownControlsCard">
+          <h3 id="countdownControlsTitle">Kontroller</h3>
+          <p id="countdownControlsText"></p>
+        </div>
+      </div>
     </div>
 
     <div id="gameHud" class="hidden" aria-live="polite">

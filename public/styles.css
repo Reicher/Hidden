@@ -189,20 +189,87 @@ button:disabled {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(5, 8, 12, 0.6);
-  backdrop-filter: blur(2px);
+  background: rgba(5, 8, 12, 0.78);
+  backdrop-filter: blur(3px);
   pointer-events: none;
   z-index: 12;
 }
 
+#countdownContent {
+  width: min(920px, calc(100vw - 32px));
+  display: grid;
+  gap: 14px;
+}
+
+#countdownTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
 #countdownText {
-  font-size: clamp(88px, 22vw, 220px);
+  font-size: clamp(84px, 20vw, 210px);
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0.04em;
   color: #ecf3ff;
-  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.7);
-  transform: translateY(-4%);
+  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.72);
+  min-width: 0.8em;
+  text-align: center;
+}
+
+#countdownCharacterCard {
+  pointer-events: auto;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  background: rgba(15, 20, 29, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  padding: 10px 10px 9px;
+  min-width: 186px;
+}
+
+#countdownCharacterLabel {
+  color: #d5deed;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+#countdownCharacterCanvas {
+  width: 164px;
+  height: 164px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #111722;
+}
+
+#countdownCharacterMeta {
+  color: rgba(228, 236, 247, 0.88);
+  font-size: 12px;
+}
+
+#countdownControlsCard {
+  pointer-events: auto;
+  background: rgba(15, 20, 29, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+#countdownControlsTitle {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: #f0f4fd;
+}
+
+#countdownControlsText {
+  margin: 0;
+  color: rgba(227, 233, 244, 0.9);
+  font-size: 13px;
+  line-height: 1.42;
+  white-space: pre-line;
 }
 
 #chatPanel {
@@ -786,6 +853,19 @@ body.touch-device #gameChatNotice {
     gap: 6px;
   }
 
+  #countdownTopRow {
+    gap: 12px;
+  }
+
+  #countdownCharacterCanvas {
+    width: 136px;
+    height: 136px;
+  }
+
+  #countdownControlsText {
+    font-size: 12px;
+  }
+
   #chatMessages {
     padding: 6px;
   }
@@ -847,6 +927,24 @@ body.touch-device #gameChatNotice {
 }
 
 @media (max-width: 560px) and (orientation: portrait) {
+  #countdownTopRow {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #countdownText {
+    font-size: clamp(74px, 26vw, 150px);
+  }
+
+  #countdownCharacterCanvas {
+    width: 124px;
+    height: 124px;
+  }
+
+  #countdownControlsText {
+    font-size: 11px;
+  }
+
   #lobbyActionRow {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
