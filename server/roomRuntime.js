@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { WebSocketServer } from "ws";
 import {
-  ROOM_HALF_SIZE,
+  WORLD_SIZE_METERS,
   MAX_PLAYERS,
+  MIN_PLAYERS_TO_START,
+  NPC_DOWNED_RESPAWN_MS,
   TOTAL_CHARACTERS,
   TICK_MS,
   MOVE_SPEED,
@@ -14,7 +16,6 @@ import {
   ATTACK_RANGE,
   ATTACK_HALF_ANGLE,
   ATTACK_FLASH_MS,
-  KNOCKDOWN_DURATION_MS,
   CHARACTER_RADIUS,
   HEARTBEAT_INTERVAL_MS,
   IDLE_SESSION_TIMEOUT_MS,
@@ -88,8 +89,8 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   }
 
   function randomSpawn() {
-    const min = -ROOM_HALF_SIZE + 1;
-    const max = ROOM_HALF_SIZE - 1;
+    const min = -WORLD_SIZE_METERS * 0.5 + 0.5;
+    const max = WORLD_SIZE_METERS * 0.5 - 0.5;
     for (let i = 0; i < 180; i += 1) {
       const x = rand(min, max);
       const z = rand(min, max);
@@ -118,6 +119,7 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
       pitch: 0,
       controllerType: "AI",
       ownerSessionId: null,
+      everPlayerControlled: false,
       lastAttackAt: 0,
       downedUntil: 0,
       fallAwayX: 0,
@@ -164,7 +166,8 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   }
 
   function downCharacter(victim, now, fallAwayX, fallAwayZ) {
-    victim.downedUntil = activeMatchStartedAt > 0 ? PERMANENT_DOWNED_UNTIL : now + KNOCKDOWN_DURATION_MS;
+    const shouldStayDownPermanentlyInMatch = activeMatchStartedAt > 0 && victim.everPlayerControlled;
+    victim.downedUntil = shouldStayDownPermanentlyInMatch ? PERMANENT_DOWNED_UNTIL : now + NPC_DOWNED_RESPAWN_MS;
     victim.fallAwayX = fallAwayX;
     victim.fallAwayZ = fallAwayZ;
     victim.lastAttackAt = now;
@@ -261,7 +264,10 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   function logEvent(event, details = {}) {
     const sid = details.sessionId || "-";
     if (event === "runtime_started") {
-      logInfo("runtime", `start roomHalf=${details.roomHalfSize} maxPlayers=${details.maxPlayers} chars=${details.totalCharacters}`);
+      logInfo(
+        "runtime",
+        `start world=${details.worldSizeMeters}x${details.worldSizeMeters}m maxPlayers=${details.maxPlayers} chars=${details.totalCharacters}`
+      );
       return;
     }
     if (event === "session_connected") {
@@ -563,7 +569,7 @@ function sanitizeSystemTextSegment(raw) {
     if (lobbyCountdown) return;
     if (activeMatchStartedAt > 0) return;
     const lobbyPlayers = authenticatedSessions().filter((session) => session.state === "lobby");
-    if (lobbyPlayers.length <= 1) return;
+    if (lobbyPlayers.length < MIN_PLAYERS_TO_START) return;
     if (lobbyPlayers.some((session) => !session.ready)) return;
     startLobbyCountdown(now);
   }
@@ -605,6 +611,7 @@ function sanitizeSystemTextSegment(raw) {
       c.pitch = 0;
       c.controllerType = "AI";
       c.ownerSessionId = null;
+      c.everPlayerControlled = false;
       c.lastAttackAt = 0;
       clearDownedState(c);
       c.ai.mode = "move";
@@ -669,6 +676,7 @@ function sanitizeSystemTextSegment(raw) {
 
     available.controllerType = "PLAYER";
     available.ownerSessionId = session.id;
+    available.everPlayerControlled = true;
     session.characterId = available.id;
     session.readyAt = now;
     session.input.yaw = available.yaw;
@@ -772,8 +780,8 @@ function sanitizeSystemTextSegment(raw) {
     });
   }
 
-  const ROOM_BOUNDARY_MIN = -ROOM_HALF_SIZE + 0.5;
-  const ROOM_BOUNDARY_MAX = ROOM_HALF_SIZE - 0.5;
+  const ROOM_BOUNDARY_MIN = -WORLD_SIZE_METERS * 0.5;
+  const ROOM_BOUNDARY_MAX = WORLD_SIZE_METERS * 0.5;
   const WALL_AVOIDANCE_MARGIN = 1.5;
   const SHELF_AVOIDANCE_MARGIN = 1.1;
   const STATIC_OBSTACLES = [...SHELVES, ...COOLERS, ...FREEZERS];
@@ -1256,7 +1264,7 @@ function sanitizeSystemTextSegment(raw) {
     disconnectIdleSessions(now);
 
     if (lobbyCountdown) {
-      if (countdownPlayerCount() <= 1) {
+      if (countdownPlayerCount() < MIN_PLAYERS_TO_START) {
         cancelLobbyCountdown();
       } else {
         if (now >= lobbyCountdown.endsAt) finalizeLobbyCountdown(now);
@@ -1317,7 +1325,7 @@ function sanitizeSystemTextSegment(raw) {
     const scoreboard = cachedScoreboard;
 
     const worldState = {
-      roomHalfSize: ROOM_HALF_SIZE,
+      worldSizeMeters: WORLD_SIZE_METERS,
       shelves: SHELVES,
       coolers: COOLERS,
       freezers: FREEZERS,
@@ -1332,7 +1340,7 @@ function sanitizeSystemTextSegment(raw) {
         cooldownMsRemaining: Math.max(0, ATTACK_COOLDOWN_MS - (now - c.lastAttackAt)),
         attackFlashMsRemaining: Math.max(0, ATTACK_FLASH_MS - (now - c.lastAttackAt)),
         downedMsRemaining: Math.max(0, c.downedUntil - now),
-        downedDurationMs: KNOCKDOWN_DURATION_MS,
+        downedDurationMs: NPC_DOWNED_RESPAWN_MS,
         fallAwayX: Number((c.fallAwayX || 0).toFixed(3)),
         fallAwayZ: Number((c.fallAwayZ || 1).toFixed(3))
       }))
@@ -1389,7 +1397,7 @@ function sanitizeSystemTextSegment(raw) {
   });
 
   logEvent("runtime_started", {
-    roomHalfSize: ROOM_HALF_SIZE,
+    worldSizeMeters: WORLD_SIZE_METERS,
     maxPlayers: MAX_PLAYERS,
     totalCharacters: TOTAL_CHARACTERS
   });
@@ -1424,7 +1432,7 @@ function sanitizeSystemTextSegment(raw) {
       sessions.delete(sessionId);
       sockets.delete(sessionId);
       if (lobbyCountdown) {
-        if (countdownPlayerCount() <= 1) {
+        if (countdownPlayerCount() < MIN_PLAYERS_TO_START) {
           cancelLobbyCountdown();
         }
       } else {

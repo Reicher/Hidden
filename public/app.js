@@ -1006,6 +1006,7 @@ function attachSocket(wsUrl, loginName) {
 
       try {
         roomSystem.syncFromWorld({
+          worldSizeMeters: msg.worldSizeMeters,
           roomHalfSize: msg.roomHalfSize,
           shelves: msg.shelves,
           coolers: msg.coolers,

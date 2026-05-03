@@ -45,10 +45,10 @@
         gap: 8px;
         align-items: center;
       }
-      input, button {
+      input, button, select {
         font: inherit;
       }
-      input {
+      input, select {
         border: 1px solid var(--line);
         border-radius: 7px;
         background: #0d1320;
@@ -66,6 +66,25 @@
       #error {
         min-height: 20px;
         color: var(--error);
+        margin-top: 8px;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .tabs {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+      }
+      .tabBtn {
+        border-color: var(--line);
+        background: #131a24;
+      }
+      .tabBtn.active {
+        border-color: #4f7b54;
+        background: #203024;
+      }
+      .tabPane {
         margin-top: 8px;
       }
       #summary {
@@ -118,6 +137,27 @@
         color: var(--muted);
         border-bottom: 1px solid var(--line);
       }
+      .settingsBody {
+        padding: 10px;
+        display: grid;
+        gap: 10px;
+      }
+      .settingsRow {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: minmax(0, 220px) minmax(0, 280px) auto;
+        align-items: center;
+      }
+      .settingsHint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      #settingsStatus {
+        min-height: 20px;
+      }
+      #settingsStatus.error {
+        color: var(--error);
+      }
       pre {
         margin: 0;
         padding: 8px;
@@ -137,6 +177,10 @@
         }
         .grid {
           grid-template-columns: 1fr;
+        }
+        .settingsRow {
+          grid-template-columns: 1fr;
+          align-items: stretch;
         }
       }
       @media (max-width: 620px) {
@@ -162,23 +206,63 @@
         <button id="clearBtn" type="button">Glöm token</button>
       </div>
       <div id="error" aria-live="polite"></div>
-      <div id="summary"></div>
-      <canvas id="chart" width="960" height="240"></canvas>
-      <div class="grid">
-        <section class="pane">
-          <h2>Rum nu</h2>
-          <pre id="rooms"></pre>
-        </section>
-        <section class="pane">
-          <h2>Spelare (senast sedda)</h2>
-          <pre id="players"></pre>
-        </section>
-        <section class="pane">
-          <h2>Senaste events</h2>
-          <pre id="events"></pre>
-        </section>
+      <div class="tabs">
+        <button id="tabStatsBtn" class="tabBtn active" type="button">Statistik</button>
+        <button id="tabSettingsBtn" class="tabBtn" type="button">Settings</button>
       </div>
-      <div id="meta" class="muted"></div>
+      <section id="statsTab" class="tabPane">
+        <div id="summary"></div>
+        <canvas id="chart" width="960" height="240"></canvas>
+        <div class="grid">
+          <section class="pane">
+            <h2>Rum nu</h2>
+            <pre id="rooms"></pre>
+          </section>
+          <section class="pane">
+            <h2>Spelare (senast sedda)</h2>
+            <pre id="players"></pre>
+          </section>
+          <section class="pane">
+            <h2>Senaste events</h2>
+            <pre id="events"></pre>
+          </section>
+        </div>
+        <div id="meta" class="muted"></div>
+      </section>
+      <section id="settingsTab" class="tabPane hidden">
+        <section class="pane">
+          <h2>Kartinställningar</h2>
+          <div class="settingsBody">
+            <div class="settingsRow">
+              <label for="layoutSelect">Aktiv karta</label>
+              <select id="layoutSelect"></select>
+              <span class="settingsHint">Byter världsstorlek</span>
+            </div>
+            <div class="settingsRow">
+              <label for="totalCharactersInput">Antal karaktärer</label>
+              <input id="totalCharactersInput" type="number" min="2" step="1" />
+              <span class="settingsHint">Totala NPC + spelarkroppar</span>
+            </div>
+            <div class="settingsRow">
+              <label for="maxPlayersInput">Max antal spelare</label>
+              <input id="maxPlayersInput" type="number" min="1" step="1" />
+              <span class="settingsHint">Måste vara mindre än antal karaktärer</span>
+            </div>
+            <div class="settingsRow">
+              <label for="minPlayersToStartInput">Min spelare för spelstart</label>
+              <input id="minPlayersToStartInput" type="number" min="2" step="1" />
+              <span class="settingsHint">Krav för att nedräkning ska starta</span>
+            </div>
+            <div class="settingsRow">
+              <label for="npcDownedRespawnSecondsInput">NPC återresning (sek)</label>
+              <input id="npcDownedRespawnSecondsInput" type="number" min="1" step="1" />
+              <button id="saveSettingsBtn" type="button">Spara</button>
+            </div>
+            <div id="settingsInfo" class="muted"></div>
+            <div id="settingsStatus" aria-live="polite"></div>
+          </div>
+        </section>
+      </section>
     </main>
     <script type="module" src="/debug.js"></script>
   </body>

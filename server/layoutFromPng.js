@@ -1,7 +1,7 @@
 import fs from "node:fs";
+import { basename } from "node:path";
 import { PNG } from "pngjs";
 
-const LAYOUT_SIZE = 50;
 const EMPTY_RGB = [255, 255, 255];
 const SHELF_COLORS = Object.freeze([
   [0, 0, 0]
@@ -240,9 +240,13 @@ export function loadLayoutFromPng({
   const buffer = fs.readFileSync(filePath);
   const png = PNG.sync.read(buffer);
   const { width, height, data } = png;
+  const layoutName = basename(filePath || "layout.png");
 
-  if (width !== LAYOUT_SIZE || height !== LAYOUT_SIZE) {
-    throw new Error(`[layout] Expected ${LAYOUT_SIZE}x${LAYOUT_SIZE}, got ${width}x${height}`);
+  if (width !== height) {
+    throw new Error(`[layout] ${layoutName} måste vara kvadratisk. Fick ${width}x${height}.`);
+  }
+  if (width < SEGMENT_LEN) {
+    throw new Error(`[layout] ${layoutName} är för liten. Minst ${SEGMENT_LEN}x${SEGMENT_LEN} krävs.`);
   }
 
   const occupied = Array.from({ length: height }, () => Array.from({ length: width }, () => false));
@@ -282,7 +286,7 @@ export function loadLayoutFromPng({
       .map((p) => `(${p.x},${p.y}) rgb(${p.rgb[0]},${p.rgb[1]},${p.rgb[2]})`)
       .join(", ");
     throw new Error(
-      `[layout] Okända färger i layout-50.png (${unknownPixels.length} px). Exempel: ${examples}`
+      `[layout] Okända färger i ${layoutName} (${unknownPixels.length} px). Exempel: ${examples}`
     );
   }
 
@@ -316,7 +320,7 @@ export function loadLayoutFromPng({
   );
 
   return Object.freeze({
-    roomHalfSize: width / 2 + 0.5,
+    worldSizeMeters: width,
     shelves,
     coolers,
     freezers

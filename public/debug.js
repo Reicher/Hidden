@@ -11,8 +11,25 @@ const playersEl = document.getElementById("players");
 const eventsEl = document.getElementById("events");
 const metaEl = document.getElementById("meta");
 
+const tabStatsBtnEl = document.getElementById("tabStatsBtn");
+const tabSettingsBtnEl = document.getElementById("tabSettingsBtn");
+const statsTabEl = document.getElementById("statsTab");
+const settingsTabEl = document.getElementById("settingsTab");
+const layoutSelectEl = document.getElementById("layoutSelect");
+const totalCharactersInputEl = document.getElementById("totalCharactersInput");
+const maxPlayersInputEl = document.getElementById("maxPlayersInput");
+const minPlayersToStartInputEl = document.getElementById("minPlayersToStartInput");
+const npcDownedRespawnSecondsInputEl = document.getElementById("npcDownedRespawnSecondsInput");
+const saveSettingsBtnEl = document.getElementById("saveSettingsBtn");
+const settingsInfoEl = document.getElementById("settingsInfo");
+const settingsStatusEl = document.getElementById("settingsStatus");
+
 let loading = false;
 let pollTimer = null;
+let settingsLoading = false;
+let settingsSaving = false;
+let activeTab = "stats";
+let cachedSettings = null;
 
 function getToken() {
   return localStorage.getItem(TOKEN_KEY) || "";
@@ -23,9 +40,37 @@ function setToken(token) {
   else localStorage.setItem(TOKEN_KEY, token);
 }
 
+function resolveToken() {
+  const typed = tokenEl?.value?.trim() || "";
+  const saved = getToken().trim();
+  const token = typed || saved;
+  if (token) setToken(token);
+  return token;
+}
+
+function buildDebugUrl(path, token) {
+  const url = new URL(path, location.origin);
+  if (token) url.searchParams.set("token", token);
+  return url;
+}
+
 function setError(text) {
   if (!errorEl) return;
   errorEl.textContent = text || "";
+}
+
+function setSettingsStatus(text, isError = false) {
+  if (!settingsStatusEl) return;
+  settingsStatusEl.textContent = text || "";
+  settingsStatusEl.classList.toggle("error", Boolean(text) && isError);
+}
+
+function parseIntField(inputEl, fieldName) {
+  const raw = inputEl?.value?.trim() || "";
+  if (!raw) throw new Error(`${fieldName} saknas.`);
+  const num = Number(raw);
+  if (!Number.isInteger(num) || num < 1) throw new Error(`${fieldName} måste vara ett heltal >= 1.`);
+  return num;
 }
 
 function fmtN(value) {
@@ -199,22 +244,87 @@ function renderText(data) {
   }
 }
 
+function renderSettings(settings) {
+  if (!layoutSelectEl) return;
+  const available = Array.isArray(settings?.availableLayouts) ? settings.availableLayouts : [];
+  const activeLayoutId = String(settings?.layout?.id || "");
+
+  layoutSelectEl.textContent = "";
+  for (const entry of available) {
+    const option = document.createElement("option");
+    option.value = entry.id;
+    option.textContent = `${entry.label} (${entry.worldSizeMeters}x${entry.worldSizeMeters} m)`;
+    layoutSelectEl.appendChild(option);
+  }
+  if (activeLayoutId) layoutSelectEl.value = activeLayoutId;
+
+  const gameplay = settings?.gameplaySettings || {};
+  if (totalCharactersInputEl && Number.isFinite(Number(gameplay.totalCharacters))) {
+    totalCharactersInputEl.value = String(gameplay.totalCharacters);
+  }
+  if (maxPlayersInputEl && Number.isFinite(Number(gameplay.maxPlayers))) {
+    maxPlayersInputEl.value = String(gameplay.maxPlayers);
+  }
+  if (minPlayersToStartInputEl && Number.isFinite(Number(gameplay.minPlayersToStart))) {
+    minPlayersToStartInputEl.value = String(gameplay.minPlayersToStart);
+  }
+  if (npcDownedRespawnSecondsInputEl && Number.isFinite(Number(gameplay.npcDownedRespawnSeconds))) {
+    npcDownedRespawnSecondsInputEl.value = String(gameplay.npcDownedRespawnSeconds);
+  }
+
+  if (settingsInfoEl) {
+    const activeLabel = settings?.layout?.label || activeLayoutId || "-";
+    const activeSize = settings?.layout?.worldSizeMeters;
+    const infoMax = Number.isFinite(Number(gameplay.maxPlayers)) ? gameplay.maxPlayers : "-";
+    const infoChars = Number.isFinite(Number(gameplay.totalCharacters)) ? gameplay.totalCharacters : "-";
+    const infoMinStart = Number.isFinite(Number(gameplay.minPlayersToStart)) ? gameplay.minPlayersToStart : "-";
+    const infoNpcRespawn = Number.isFinite(Number(gameplay.npcDownedRespawnSeconds))
+      ? gameplay.npcDownedRespawnSeconds
+      : "-";
+    settingsInfoEl.textContent = `Aktiv karta: ${activeLabel}${activeSize ? ` (${activeSize}x${activeSize} meter)` : ""}. Karaktärer: ${infoChars}, max spelare: ${infoMax}, min start: ${infoMinStart}, NPC återresning: ${infoNpcRespawn}s. Ändringar startar om aktiva rum.`;
+  }
+}
+
+function mergeSettingsFromStats(data) {
+  if (!data || typeof data !== "object") return;
+  const layout = data.layout;
+  const gameplaySettings = data.gameplaySettings;
+  const hasLayout = layout && typeof layout === "object";
+  const hasGameplay = gameplaySettings && typeof gameplaySettings === "object";
+  if (!hasLayout && !hasGameplay) return;
+  const source = cachedSettings || {};
+  const availableLayouts = Array.isArray(source.availableLayouts) ? source.availableLayouts : [];
+  cachedSettings = {
+    layout: hasLayout ? layout : source.layout,
+    gameplaySettings: hasGameplay ? gameplaySettings : source.gameplaySettings,
+    availableLayouts
+  };
+  renderSettings(cachedSettings);
+}
+
 function render(data) {
   renderSummary(data);
   drawChart(data?.samples || []);
   renderText(data);
+  mergeSettingsFromStats(data);
+}
+
+function setActiveTab(tab) {
+  activeTab = tab;
+  const showSettings = tab === "settings";
+  statsTabEl?.classList.toggle("hidden", showSettings);
+  settingsTabEl?.classList.toggle("hidden", !showSettings);
+  tabStatsBtnEl?.classList.toggle("active", !showSettings);
+  tabSettingsBtnEl?.classList.toggle("active", showSettings);
+  if (showSettings) loadSettings();
 }
 
 async function refresh() {
   if (loading) return;
   loading = true;
   try {
-    const typed = tokenEl?.value?.trim() || "";
-    const saved = getToken().trim();
-    const token = typed || saved;
-    if (token) setToken(token);
-    const url = new URL("/api/debug/stats", location.origin);
-    if (token) url.searchParams.set("token", token);
+    const token = resolveToken();
+    const url = buildDebugUrl("/api/debug/stats", token);
     const res = await fetch(url, { cache: "no-store", headers: { Accept: "application/json" } });
     if (res.status === 503) {
       setError("Servern saknar DEBUG_VIEW_TOKEN. Sätt den i miljön och starta om.");
@@ -238,6 +348,124 @@ async function refresh() {
   }
 }
 
+async function loadSettings() {
+  if (settingsLoading) return;
+  settingsLoading = true;
+  try {
+    const token = resolveToken();
+    if (!token) {
+      setSettingsStatus("Fyll i token för att läsa settings.", true);
+      return;
+    }
+    const url = buildDebugUrl("/api/debug/settings", token);
+    const res = await fetch(url, { cache: "no-store", headers: { Accept: "application/json" } });
+    if (res.status === 401) {
+      setSettingsStatus("Fel token för settings.", true);
+      return;
+    }
+    if (res.status === 503) {
+      setSettingsStatus("Servern saknar DEBUG_VIEW_TOKEN.", true);
+      return;
+    }
+    if (!res.ok) {
+      setSettingsStatus(`Kunde inte läsa settings (${res.status}).`, true);
+      return;
+    }
+    const data = await res.json();
+    cachedSettings = data;
+    renderSettings(data);
+    setSettingsStatus("");
+  } catch {
+    setSettingsStatus("Nätverksfel vid läsning av settings.", true);
+  } finally {
+    settingsLoading = false;
+  }
+}
+
+async function saveSettings() {
+  if (settingsSaving) return;
+  settingsSaving = true;
+  try {
+    const token = resolveToken();
+    if (!token) {
+      setSettingsStatus("Fyll i token innan du sparar settings.", true);
+      return;
+    }
+    const layoutId = layoutSelectEl?.value?.trim() || "";
+    if (!layoutId) {
+      setSettingsStatus("Välj en karta först.", true);
+      return;
+    }
+    const totalCharacters = parseIntField(totalCharactersInputEl, "Antal karaktärer");
+    const maxPlayers = parseIntField(maxPlayersInputEl, "Max antal spelare");
+    const minPlayersToStart = parseIntField(minPlayersToStartInputEl, "Min spelare för spelstart");
+    const npcDownedRespawnSeconds = parseIntField(
+      npcDownedRespawnSecondsInputEl,
+      "NPC återresning (sek)"
+    );
+    if (maxPlayers >= totalCharacters) {
+      setSettingsStatus("Max antal spelare måste vara mindre än antal karaktärer.", true);
+      return;
+    }
+    if (minPlayersToStart < 2) {
+      setSettingsStatus("Min spelare för spelstart måste vara minst 2.", true);
+      return;
+    }
+    if (minPlayersToStart > maxPlayers) {
+      setSettingsStatus("Min spelare för spelstart kan inte vara större än max antal spelare.", true);
+      return;
+    }
+    if (npcDownedRespawnSeconds < 1) {
+      setSettingsStatus("NPC återresning måste vara minst 1 sekund.", true);
+      return;
+    }
+    const url = buildDebugUrl("/api/debug/settings", token);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        layoutId,
+        totalCharacters,
+        maxPlayers,
+        minPlayersToStart,
+        npcDownedRespawnSeconds
+      })
+    });
+    if (res.status === 401) {
+      setSettingsStatus("Fel token för settings.", true);
+      return;
+    }
+    if (!res.ok) {
+      let message = `Kunde inte spara settings (${res.status}).`;
+      try {
+        const body = await res.json();
+        if (body?.message) message = body.message;
+      } catch {
+        // ignore parse errors
+      }
+      setSettingsStatus(message, true);
+      return;
+    }
+    const data = await res.json();
+    cachedSettings = data;
+    renderSettings(data);
+    setSettingsStatus("Settings sparade. Rum har startats om.");
+    refresh();
+  } catch (error) {
+    const message = error?.message || "";
+    if (message) {
+      setSettingsStatus(message, true);
+      return;
+    }
+    setSettingsStatus("Nätverksfel vid sparning av settings.", true);
+  } finally {
+    settingsSaving = false;
+  }
+}
+
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
   refresh();
@@ -249,15 +477,20 @@ clearBtnEl?.addEventListener("click", () => {
   setToken("");
   if (tokenEl) tokenEl.value = "";
   setError("");
+  setSettingsStatus("");
 });
 tokenEl?.addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
   event.preventDefault();
   refresh();
 });
+tabStatsBtnEl?.addEventListener("click", () => setActiveTab("stats"));
+tabSettingsBtnEl?.addEventListener("click", () => setActiveTab("settings"));
+saveSettingsBtnEl?.addEventListener("click", saveSettings);
 window.addEventListener("resize", () => {
   refresh();
 });
 
 if (tokenEl) tokenEl.value = getToken();
+setActiveTab("stats");
 startPolling();

@@ -1,10 +1,22 @@
+import fs from "node:fs";
+import path from "node:path";
 import { createRoomRuntime } from "./roomRuntime.js";
 import { createDebugStatsStore } from "./debugStats.js";
 import { createSystemMetricsCollector } from "./systemMetrics.js";
-import { DEBUG_VIEW_TOKEN } from "./config.js";
+import {
+  DEBUG_VIEW_TOKEN,
+  getActiveLayoutInfo,
+  getAvailableLayouts,
+  getGameplaySettings,
+  setActiveLayout,
+  setGameplaySettings
+} from "./config.js";
 
 const PUBLIC_ROOM_ID = "public";
 const PRIVATE_CODE_RE = /^[a-z0-9][a-z0-9-]{2,23}$/i;
+const SETTINGS_DIR_NAME = "logs";
+const SETTINGS_FILE_NAME = "server-settings.json";
+const SETTINGS_TMP_FILE_NAME = "server-settings.json.tmp";
 
 function parseRoomFromRequestUrl(rawUrl) {
   const parsed = new URL(rawUrl || "/", "http://localhost");
@@ -31,6 +43,51 @@ export function attachGameRuntime({ server, rootDir }) {
   const rooms = new Map();
   const debugStats = createDebugStatsStore({ rootDir });
   const systemMetrics = createSystemMetricsCollector();
+  const settingsDir = path.join(rootDir, SETTINGS_DIR_NAME);
+  const settingsPath = path.join(settingsDir, SETTINGS_FILE_NAME);
+  const settingsTmpPath = path.join(settingsDir, SETTINGS_TMP_FILE_NAME);
+
+  function persistedSettingsPayload() {
+    return Object.freeze({
+      layoutId: getActiveLayoutInfo().id,
+      gameplaySettings: getGameplaySettings()
+    });
+  }
+
+  function writePersistedServerSettings() {
+    const payload = persistedSettingsPayload();
+    fs.mkdirSync(settingsDir, { recursive: true });
+    fs.writeFileSync(settingsTmpPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+    fs.renameSync(settingsTmpPath, settingsPath);
+  }
+
+  function loadPersistedServerSettings() {
+    if (!fs.existsSync(settingsPath)) return;
+    const raw = fs.readFileSync(settingsPath, "utf8");
+    let parsed = null;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      throw new Error(`[server-settings] Ogiltig JSON i ${settingsPath}: ${error?.message || error}`);
+    }
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error(`[server-settings] Ogiltigt innehåll i ${settingsPath}.`);
+    }
+
+    const hasLayout = typeof parsed.layoutId === "string" && parsed.layoutId.trim() !== "";
+    if (hasLayout) setActiveLayout(parsed.layoutId);
+
+    const gameplay = parsed.gameplaySettings;
+    if (gameplay && typeof gameplay === "object") {
+      const currentGameplay = getGameplaySettings();
+      setGameplaySettings({
+        totalCharacters: gameplay.totalCharacters ?? currentGameplay.totalCharacters,
+        maxPlayers: gameplay.maxPlayers ?? currentGameplay.maxPlayers,
+        minPlayersToStart: gameplay.minPlayersToStart ?? currentGameplay.minPlayersToStart,
+        npcDownedRespawnSeconds: gameplay.npcDownedRespawnSeconds ?? currentGameplay.npcDownedRespawnSeconds
+      });
+    }
+  }
 
   function writeJson(res, statusCode, payload) {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -61,43 +118,167 @@ export function attachGameRuntime({ server, rootDir }) {
     return runtime;
   }
 
-  ensureRoom({ roomId: PUBLIC_ROOM_ID, roomCode: null, isPrivate: false });
+  function closeAllRooms() {
+    for (const room of rooms.values()) room.close();
+    rooms.clear();
+  }
 
-  async function handleHttpRequest({ req, res, requestUrl }) {
-    if (requestUrl.pathname !== "/api/debug/stats") return false;
-    if (req.method !== "GET") {
-      writeJson(res, 405, { error: "method_not_allowed" });
-      return true;
-    }
+  function restartRoomsForSettingsChange() {
+    closeAllRooms();
+    ensureRoom({ roomId: PUBLIC_ROOM_ID, roomCode: null, isPrivate: false });
+  }
 
+  function getProvidedToken(req, requestUrl) {
     const tokenFromQuery = requestUrl.searchParams.get("token");
     const tokenFromHeader = req.headers["x-debug-token"];
-    const providedToken =
-      typeof tokenFromQuery === "string" && tokenFromQuery.trim()
-        ? tokenFromQuery.trim()
-        : typeof tokenFromHeader === "string"
-          ? tokenFromHeader.trim()
-          : "";
+    return typeof tokenFromQuery === "string" && tokenFromQuery.trim()
+      ? tokenFromQuery.trim()
+      : typeof tokenFromHeader === "string"
+        ? tokenFromHeader.trim()
+        : "";
+  }
+
+  function isDebugAuthorized(req, requestUrl, res) {
     const configuredToken = String(DEBUG_VIEW_TOKEN || "").trim();
     if (!configuredToken) {
       writeJson(res, 503, { error: "debug_token_not_configured", authRequired: true });
-      return true;
+      return false;
     }
-    if (providedToken !== configuredToken) {
+    if (getProvidedToken(req, requestUrl) !== configuredToken) {
       writeJson(res, 401, { error: "unauthorized", authRequired: true });
+      return false;
+    }
+    return true;
+  }
+
+  loadPersistedServerSettings();
+  ensureRoom({ roomId: PUBLIC_ROOM_ID, roomCode: null, isPrivate: false });
+
+  async function handleHttpRequest({ req, res, requestUrl }) {
+    if (requestUrl.pathname === "/api/debug/stats") {
+      if (req.method !== "GET") {
+        writeJson(res, 405, { error: "method_not_allowed" });
+        return true;
+      }
+      if (!isDebugAuthorized(req, requestUrl, res)) return true;
+
+      const payload = debugStats.getSnapshot();
+      payload.systemMetrics = await systemMetrics.collect();
+      payload.liveRooms = [...rooms.values()].map((room) => room.getDebugSnapshot()).sort((a, b) => {
+        if (b.current.connected !== a.current.connected) return b.current.connected - a.current.connected;
+        return String(a.roomId).localeCompare(String(b.roomId), "sv");
+      });
+      payload.authRequired = true;
+      payload.logFiles = debugStats.logs;
+      payload.layout = getActiveLayoutInfo();
+      payload.gameplaySettings = getGameplaySettings();
+      writeJson(res, 200, payload);
       return true;
     }
 
-    const payload = debugStats.getSnapshot();
-    payload.systemMetrics = await systemMetrics.collect();
-    payload.liveRooms = [...rooms.values()].map((room) => room.getDebugSnapshot()).sort((a, b) => {
-      if (b.current.connected !== a.current.connected) return b.current.connected - a.current.connected;
-      return String(a.roomId).localeCompare(String(b.roomId), "sv");
-    });
-    payload.authRequired = true;
-    payload.logFiles = debugStats.logs;
-    writeJson(res, 200, payload);
-    return true;
+    if (requestUrl.pathname === "/api/debug/settings") {
+      if (!isDebugAuthorized(req, requestUrl, res)) return true;
+      if (req.method === "GET") {
+        writeJson(res, 200, {
+          authRequired: true,
+          layout: getActiveLayoutInfo(),
+          availableLayouts: getAvailableLayouts(),
+          gameplaySettings: getGameplaySettings()
+        });
+        return true;
+      }
+      if (req.method !== "POST") {
+        writeJson(res, 405, { error: "method_not_allowed" });
+        return true;
+      }
+
+      let bodyText = "";
+      for await (const chunk of req) bodyText += chunk;
+
+      let parsedBody = null;
+      try {
+        parsedBody = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        writeJson(res, 400, { error: "invalid_json" });
+        return true;
+      }
+
+      const currentGameplay = getGameplaySettings();
+      const requestedLayoutIdRaw = parsedBody?.layoutId;
+      const hasLayoutPatch = typeof requestedLayoutIdRaw === "string" && requestedLayoutIdRaw.trim() !== "";
+      const requestedLayoutId = hasLayoutPatch ? String(requestedLayoutIdRaw).trim().toLowerCase() : null;
+      const hasGameplayPatch =
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "totalCharacters") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "maxPlayers") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "minPlayersToStart") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcDownedRespawnSeconds");
+      if (!hasLayoutPatch && !hasGameplayPatch) {
+        writeJson(res, 400, { error: "no_settings_provided" });
+        return true;
+      }
+
+      let changed = false;
+      const previousLayoutId = getActiveLayoutInfo().id;
+      const previousGameplay = getGameplaySettings();
+      try {
+        if (hasLayoutPatch && requestedLayoutId) {
+          changed = setActiveLayout(requestedLayoutId) || changed;
+        }
+        if (hasGameplayPatch) {
+          const nextTotalCharacters = Object.prototype.hasOwnProperty.call(parsedBody, "totalCharacters")
+            ? parsedBody.totalCharacters
+            : currentGameplay.totalCharacters;
+          const nextMaxPlayers = Object.prototype.hasOwnProperty.call(parsedBody, "maxPlayers")
+            ? parsedBody.maxPlayers
+            : currentGameplay.maxPlayers;
+          const nextMinPlayersToStart = Object.prototype.hasOwnProperty.call(parsedBody, "minPlayersToStart")
+            ? parsedBody.minPlayersToStart
+            : currentGameplay.minPlayersToStart;
+          const nextNpcDownedRespawnSeconds = Object.prototype.hasOwnProperty.call(parsedBody, "npcDownedRespawnSeconds")
+            ? parsedBody.npcDownedRespawnSeconds
+            : currentGameplay.npcDownedRespawnSeconds;
+          changed =
+            setGameplaySettings({
+              totalCharacters: nextTotalCharacters,
+              maxPlayers: nextMaxPlayers,
+              minPlayersToStart: nextMinPlayersToStart,
+              npcDownedRespawnSeconds: nextNpcDownedRespawnSeconds
+            }) || changed;
+        }
+        if (changed) {
+          try {
+            writePersistedServerSettings();
+          } catch (persistError) {
+            try {
+              setActiveLayout(previousLayoutId);
+              setGameplaySettings(previousGameplay);
+            } catch {
+              // If rollback fails, keep throwing the persistence error below.
+            }
+            writeJson(res, 500, {
+              error: "persist_failed",
+              message: persistError?.message || String(persistError)
+            });
+            return true;
+          }
+          restartRoomsForSettingsChange();
+        }
+      } catch (error) {
+        writeJson(res, 400, { error: "invalid_settings", message: error?.message || String(error) });
+        return true;
+      }
+
+      writeJson(res, 200, {
+        ok: true,
+        authRequired: true,
+        layout: getActiveLayoutInfo(),
+        availableLayouts: getAvailableLayouts(),
+        gameplaySettings: getGameplaySettings()
+      });
+      return true;
+    }
+
+    return false;
   }
 
   server.on("upgrade", (req, socket, head) => {
@@ -113,8 +294,7 @@ export function attachGameRuntime({ server, rootDir }) {
   });
 
   server.on("close", () => {
-    for (const room of rooms.values()) room.close();
-    rooms.clear();
+    closeAllRooms();
     debugStats.close().catch(() => {});
   });
 

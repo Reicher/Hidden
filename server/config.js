@@ -42,8 +42,100 @@ const DEFAULT_ALLOWED_ORIGINS = [
   `https://localhost:${DEFAULT_PORT}`
 ];
 
-export const MAX_PLAYERS = 10;
-export const TOTAL_CHARACTERS = 20;
+const DEFAULT_TOTAL_CHARACTERS = 20;
+const DEFAULT_MAX_PLAYERS = 10;
+const DEFAULT_MIN_PLAYERS_TO_START = 2;
+const DEFAULT_NPC_DOWNED_RESPAWN_SECONDS = 8;
+
+function parsePositiveInt(value, fieldName) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1 || !Number.isInteger(parsed)) {
+    throw new Error(`${fieldName} måste vara ett heltal >= 1.`);
+  }
+  return parsed;
+}
+
+function normalizeGameplaySettings({ totalCharacters, maxPlayers, minPlayersToStart, npcDownedRespawnSeconds }) {
+  const normalizedTotal = parsePositiveInt(totalCharacters, "totalCharacters");
+  const normalizedMax = parsePositiveInt(maxPlayers, "maxPlayers");
+  const normalizedMin = parsePositiveInt(minPlayersToStart, "minPlayersToStart");
+  const normalizedNpcRespawnSeconds = parsePositiveInt(npcDownedRespawnSeconds, "npcDownedRespawnSeconds");
+
+  if (normalizedMax >= normalizedTotal) {
+    throw new Error("maxPlayers måste vara mindre än totalCharacters.");
+  }
+  if (normalizedMin < 2) {
+    throw new Error("minPlayersToStart måste vara minst 2.");
+  }
+  if (normalizedMin > normalizedMax) {
+    throw new Error("minPlayersToStart kan inte vara större än maxPlayers.");
+  }
+
+  return Object.freeze({
+    totalCharacters: normalizedTotal,
+    maxPlayers: normalizedMax,
+    minPlayersToStart: normalizedMin,
+    npcDownedRespawnSeconds: normalizedNpcRespawnSeconds
+  });
+}
+
+let gameplaySettings = (() => {
+  try {
+    return normalizeGameplaySettings({
+      totalCharacters: envInt("TOTAL_CHARACTERS", DEFAULT_TOTAL_CHARACTERS),
+      maxPlayers: envInt("MAX_PLAYERS", DEFAULT_MAX_PLAYERS),
+      minPlayersToStart: envInt("MIN_PLAYERS_TO_START", DEFAULT_MIN_PLAYERS_TO_START),
+      npcDownedRespawnSeconds: envInt("NPC_DOWNED_RESPAWN_SECONDS", DEFAULT_NPC_DOWNED_RESPAWN_SECONDS)
+    });
+  } catch {
+    return normalizeGameplaySettings({
+      totalCharacters: DEFAULT_TOTAL_CHARACTERS,
+      maxPlayers: DEFAULT_MAX_PLAYERS,
+      minPlayersToStart: DEFAULT_MIN_PLAYERS_TO_START,
+      npcDownedRespawnSeconds: DEFAULT_NPC_DOWNED_RESPAWN_SECONDS
+    });
+  }
+})();
+
+export let TOTAL_CHARACTERS = gameplaySettings.totalCharacters;
+export let MAX_PLAYERS = gameplaySettings.maxPlayers;
+export let MIN_PLAYERS_TO_START = gameplaySettings.minPlayersToStart;
+export let NPC_DOWNED_RESPAWN_MS = gameplaySettings.npcDownedRespawnSeconds * 1000;
+
+function applyGameplaySettings(nextSettings) {
+  gameplaySettings = nextSettings;
+  TOTAL_CHARACTERS = nextSettings.totalCharacters;
+  MAX_PLAYERS = nextSettings.maxPlayers;
+  MIN_PLAYERS_TO_START = nextSettings.minPlayersToStart;
+  NPC_DOWNED_RESPAWN_MS = nextSettings.npcDownedRespawnSeconds * 1000;
+}
+
+export function setGameplaySettings({ totalCharacters, maxPlayers, minPlayersToStart, npcDownedRespawnSeconds }) {
+  const nextSettings = normalizeGameplaySettings({
+    totalCharacters,
+    maxPlayers,
+    minPlayersToStart,
+    npcDownedRespawnSeconds
+  });
+  const changed =
+    nextSettings.totalCharacters !== TOTAL_CHARACTERS ||
+    nextSettings.maxPlayers !== MAX_PLAYERS ||
+    nextSettings.minPlayersToStart !== MIN_PLAYERS_TO_START ||
+    nextSettings.npcDownedRespawnSeconds * 1000 !== NPC_DOWNED_RESPAWN_MS;
+  if (!changed) return false;
+  applyGameplaySettings(nextSettings);
+  return true;
+}
+
+export function getGameplaySettings() {
+  return Object.freeze({
+    totalCharacters: TOTAL_CHARACTERS,
+    maxPlayers: MAX_PLAYERS,
+    minPlayersToStart: MIN_PLAYERS_TO_START,
+    npcDownedRespawnSeconds: Math.round(NPC_DOWNED_RESPAWN_MS / 1000)
+  });
+}
+
 export const TICK_RATE = 20;
 export const TICK_MS = 1000 / TICK_RATE;
 export const MOVE_SPEED = 2.9;
@@ -63,67 +155,132 @@ function freezeFixture(fixture) {
 }
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const LAYOUT = loadLayoutFromPng({
-  filePath: resolve(HERE, "../public/assets/layout-50.png"),
-  shelfWidth: 1.0,
-  shelfDepth: 6.0,
-  shelfHeight: 2.0,
-  coolerWidth: 1.0,
-  coolerDepth: 1.0,
-  coolerHeight: 2.0,
-  freezerWidth: 1.0,
-  freezerDepth: 1.0,
-  freezerHeight: 1.0
-});
-
-export const ROOM_HALF_SIZE = LAYOUT.roomHalfSize;
 export const SHELF_WIDTH = 1.0;
 export const SHELF_DEPTH = 6.0;
 export const SHELF_HEIGHT = 2.0;
-export const SHELVES = Object.freeze(
-  LAYOUT.shelves.map((fixture) =>
-    freezeFixture({
-      x: fixture.x,
-      z: fixture.z,
-      width: SHELF_WIDTH,
-      depth: SHELF_DEPTH,
-      height: SHELF_HEIGHT,
-      yaw: fixture.yaw
-    })
-  )
-);
 
 export const COOLER_WIDTH = 1.0;
 export const COOLER_DEPTH = 1.0;
 export const COOLER_HEIGHT = 2.0;
-export const COOLERS = Object.freeze(
-  LAYOUT.coolers.map((fixture) =>
-    freezeFixture({
-      x: fixture.x,
-      z: fixture.z,
-      width: COOLER_WIDTH,
-      depth: COOLER_DEPTH,
-      height: COOLER_HEIGHT,
-      yaw: fixture.yaw
-    })
-  )
-);
 
 export const FREEZER_WIDTH = 1.0;
 export const FREEZER_DEPTH = 1.0;
 export const FREEZER_HEIGHT = 1.0;
-export const FREEZERS = Object.freeze(
-  LAYOUT.freezers.map((fixture) =>
-    freezeFixture({
-      x: fixture.x,
-      z: fixture.z,
-      width: FREEZER_WIDTH,
-      depth: FREEZER_DEPTH,
-      height: FREEZER_HEIGHT,
-      yaw: fixture.yaw
+
+const LAYOUT_PRESETS = Object.freeze([
+  {
+    id: "layout-30",
+    fileName: "layout-30.png",
+    label: "30x30 meter"
+  },
+  {
+    id: "layout-50",
+    fileName: "layout-50.png",
+    label: "50x50 meter"
+  }
+]);
+
+const LAYOUT_PRESET_BY_ID = new Map(LAYOUT_PRESETS.map((preset) => [preset.id, preset]));
+const loadedLayouts = new Map();
+const requestedLayoutId = envString("WORLD_LAYOUT_ID", "layout-50").toLowerCase();
+
+function cloneFixtureSet(fixtures, { width, depth, height }) {
+  return Object.freeze(
+    fixtures.map((fixture) =>
+      freezeFixture({
+        x: fixture.x,
+        z: fixture.z,
+        width,
+        depth,
+        height,
+        yaw: fixture.yaw
+      })
+    )
+  );
+}
+
+function readLayoutById(layoutId) {
+  if (loadedLayouts.has(layoutId)) return loadedLayouts.get(layoutId);
+  const preset = LAYOUT_PRESET_BY_ID.get(layoutId);
+  if (!preset) {
+    const known = LAYOUT_PRESETS.map((entry) => entry.id).join(", ");
+    throw new Error(`[layout] Unknown layout id "${layoutId}". Available: ${known}`);
+  }
+  const loaded = loadLayoutFromPng({
+    filePath: resolve(HERE, "../public/assets", preset.fileName),
+    shelfWidth: SHELF_WIDTH,
+    shelfDepth: SHELF_DEPTH,
+    shelfHeight: SHELF_HEIGHT,
+    coolerWidth: COOLER_WIDTH,
+    coolerDepth: COOLER_DEPTH,
+    coolerHeight: COOLER_HEIGHT,
+    freezerWidth: FREEZER_WIDTH,
+    freezerDepth: FREEZER_DEPTH,
+    freezerHeight: FREEZER_HEIGHT
+  });
+  const layout = Object.freeze({
+    id: preset.id,
+    fileName: preset.fileName,
+    label: preset.label,
+    worldSizeMeters: loaded.worldSizeMeters,
+    shelves: cloneFixtureSet(loaded.shelves, { width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
+    coolers: cloneFixtureSet(loaded.coolers, { width: COOLER_WIDTH, depth: COOLER_DEPTH, height: COOLER_HEIGHT }),
+    freezers: cloneFixtureSet(loaded.freezers, { width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT })
+  });
+  loadedLayouts.set(layoutId, layout);
+  return layout;
+}
+
+let activeLayout = (() => {
+  return readLayoutById(requestedLayoutId);
+})();
+
+export let ACTIVE_LAYOUT_ID = activeLayout.id;
+export let WORLD_SIZE_METERS = activeLayout.worldSizeMeters;
+export let SHELVES = activeLayout.shelves;
+export let COOLERS = activeLayout.coolers;
+export let FREEZERS = activeLayout.freezers;
+
+function applyActiveLayout(layout) {
+  activeLayout = layout;
+  ACTIVE_LAYOUT_ID = layout.id;
+  WORLD_SIZE_METERS = layout.worldSizeMeters;
+  SHELVES = layout.shelves;
+  COOLERS = layout.coolers;
+  FREEZERS = layout.freezers;
+}
+
+export function setActiveLayout(layoutId) {
+  const normalized = String(layoutId || "").trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === ACTIVE_LAYOUT_ID) return false;
+  const nextLayout = readLayoutById(normalized);
+  applyActiveLayout(nextLayout);
+  return true;
+}
+
+export function getActiveLayoutInfo() {
+  return Object.freeze({
+    id: activeLayout.id,
+    fileName: activeLayout.fileName,
+    label: activeLayout.label,
+    worldSizeMeters: activeLayout.worldSizeMeters
+  });
+}
+
+export function getAvailableLayouts() {
+  return Object.freeze(
+    LAYOUT_PRESETS.map((preset) => {
+      const loaded = readLayoutById(preset.id);
+      return Object.freeze({
+        id: preset.id,
+        fileName: preset.fileName,
+        label: preset.label,
+        worldSizeMeters: loaded.worldSizeMeters
+      });
     })
-  )
-);
+  );
+}
 
 export const HEARTBEAT_INTERVAL_MS = envInt("HEARTBEAT_INTERVAL_MS", 5000);
 export const IDLE_SESSION_TIMEOUT_MS = envInt("IDLE_SESSION_TIMEOUT_MS", 30 * 60 * 1000);

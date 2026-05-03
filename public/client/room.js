@@ -2,7 +2,7 @@ import * as THREE from "https://unpkg.com/three@0.164.1/build/three.module.js";
 import { seededRandom } from "./utils.js";
 
 const WALL_HEIGHT = 5.0;
-const DEFAULT_ROOM_HALF = 25.5;
+const DEFAULT_WORLD_SIZE_METERS = 50;
 const SHELF_WIDTH = 1.0;
 const SHELF_DEPTH = 6.0;
 const SHELF_HEIGHT = 2.0;
@@ -147,7 +147,7 @@ export function createRoomSystem({ scene, renderer }) {
   const shelfRng = seededRandom(20260430);
   const blinkRng = seededRandom(20260501);
 
-  let builtRoomHalf = null;
+  let builtWorldSizeMeters = null;
   let builtFixturesSignature = "";
 
   function createAtlasMap(texture, tileIndex) {
@@ -341,15 +341,15 @@ export function createRoomSystem({ scene, renderer }) {
     roomRoot.add(group);
   }
 
-  function createFluorescentGrid(roomHalf) {
+  function createFluorescentGrid(halfWorldSize) {
     fluorescentUnits.length = 0;
     const ceilingY = WALL_HEIGHT - 0.2;
-    const edgeMargin = Math.max(2.8, roomHalf * 0.15);
-    const minCoord = -roomHalf + edgeMargin;
-    const maxCoord = roomHalf - edgeMargin;
+    const edgeMargin = Math.max(2.8, halfWorldSize * 0.15);
+    const minCoord = -halfWorldSize + edgeMargin;
+    const maxCoord = halfWorldSize - edgeMargin;
     const xStep = FLUORESCENT_COLS > 1 ? (maxCoord - minCoord) / (FLUORESCENT_COLS - 1) : 0;
     const zStep = FLUORESCENT_ROWS > 1 ? (maxCoord - minCoord) / (FLUORESCENT_ROWS - 1) : 0;
-    const tubeLength = Math.max(3.6, Math.min(5.4, roomHalf * 0.24));
+    const tubeLength = Math.max(3.6, Math.min(5.4, halfWorldSize * 0.24));
 
     for (let row = 0; row < FLUORESCENT_ROWS; row += 1) {
       for (let col = 0; col < FLUORESCENT_COLS; col += 1) {
@@ -379,7 +379,7 @@ export function createRoomSystem({ scene, renderer }) {
         diffuser.position.y = -0.06;
         fixture.add(diffuser);
 
-        const glow = new THREE.PointLight(0xeef7ff, 1.4, roomHalf * 1.06, 2);
+        const glow = new THREE.PointLight(0xeef7ff, 1.4, halfWorldSize * 1.06, 2);
         glow.position.y = -0.24;
         fixture.add(glow);
 
@@ -426,10 +426,12 @@ export function createRoomSystem({ scene, renderer }) {
     }
   }
 
-  function buildRoomGeometry(roomHalf, shelves, coolers, freezers) {
+  function buildRoomGeometry(worldSizeMeters, shelves, coolers, freezers) {
+    const halfWorldSize = worldSizeMeters * 0.5;
     const wallThickness = 1;
     const wallSegmentsPerSide = 4;
-    const wallSpan = roomHalf * 2 + wallThickness;
+    const wallCenterOffset = halfWorldSize + wallThickness * 0.5;
+    const wallSpan = worldSizeMeters + wallThickness;
     const wallSegmentSpan = wallSpan / wallSegmentsPerSide;
     const planeSize = wallSpan + 5;
 
@@ -446,16 +448,16 @@ export function createRoomSystem({ scene, renderer }) {
 
     for (let i = 0; i < wallSegmentsPerSide; i += 1) {
       const offset = -wallSpan / 2 + wallSegmentSpan * (i + 0.5);
-      createWall(offset, -roomHalf, wallSegmentSpan, wallThickness, randomWallTileIndex());
-      createWall(offset, roomHalf, wallSegmentSpan, wallThickness, randomWallTileIndex());
-      createWall(-roomHalf, offset, wallThickness, wallSegmentSpan, randomWallTileIndex());
-      createWall(roomHalf, offset, wallThickness, wallSegmentSpan, randomWallTileIndex());
+      createWall(offset, -wallCenterOffset, wallSegmentSpan, wallThickness, randomWallTileIndex());
+      createWall(offset, wallCenterOffset, wallSegmentSpan, wallThickness, randomWallTileIndex());
+      createWall(-wallCenterOffset, offset, wallThickness, wallSegmentSpan, randomWallTileIndex());
+      createWall(wallCenterOffset, offset, wallThickness, wallSegmentSpan, randomWallTileIndex());
     }
 
     for (const shelf of shelves) createShelf(shelf);
     for (const cooler of coolers) createCooler(cooler);
     for (const freezer of freezers) createFreezer(freezer);
-    createFluorescentGrid(roomHalf);
+    createFluorescentGrid(halfWorldSize);
   }
 
   function normalizeFixtures(fixtures, fallback) {
@@ -477,9 +479,19 @@ export function createRoomSystem({ scene, renderer }) {
       .join("|");
   }
 
-  function syncFromWorld({ roomHalfSize, shelves, coolers, freezers }) {
-    const roomHalf =
-      typeof roomHalfSize === "number" && Number.isFinite(roomHalfSize) ? roomHalfSize : DEFAULT_ROOM_HALF;
+  function legacyHalfToWorldSize(legacyHalfExtent) {
+    if (typeof legacyHalfExtent !== "number" || !Number.isFinite(legacyHalfExtent)) return null;
+    const derived = legacyHalfExtent * 2 - 1;
+    if (!Number.isFinite(derived) || derived <= 1) return null;
+    return derived;
+  }
+
+  function syncFromWorld({ worldSizeMeters, roomHalfSize, shelves, coolers, freezers }) {
+    const fallbackFromLegacy = legacyHalfToWorldSize(roomHalfSize);
+    const normalizedWorldSize =
+      typeof worldSizeMeters === "number" && Number.isFinite(worldSizeMeters)
+        ? worldSizeMeters
+        : fallbackFromLegacy || DEFAULT_WORLD_SIZE_METERS;
     const normalizedShelves = normalizeFixtures(shelves, DEFAULT_SHELVES);
     const normalizedCoolers = normalizeFixtures(coolers, DEFAULT_COOLERS);
     const normalizedFreezers = normalizeFixtures(freezers, DEFAULT_FREEZERS);
@@ -488,16 +500,16 @@ export function createRoomSystem({ scene, renderer }) {
       fixtureSignature(normalizedCoolers),
       fixtureSignature(normalizedFreezers)
     ].join("||");
-    const shouldRebuild = builtRoomHalf !== roomHalf || builtFixturesSignature !== nextSignature;
+    const shouldRebuild = builtWorldSizeMeters !== normalizedWorldSize || builtFixturesSignature !== nextSignature;
     if (!shouldRebuild) return;
 
-    buildRoomGeometry(roomHalf, normalizedShelves, normalizedCoolers, normalizedFreezers);
-    builtRoomHalf = roomHalf;
+    buildRoomGeometry(normalizedWorldSize, normalizedShelves, normalizedCoolers, normalizedFreezers);
+    builtWorldSizeMeters = normalizedWorldSize;
     builtFixturesSignature = nextSignature;
   }
 
   syncFromWorld({
-    roomHalfSize: DEFAULT_ROOM_HALF,
+    worldSizeMeters: DEFAULT_WORLD_SIZE_METERS,
     shelves: DEFAULT_SHELVES,
     coolers: DEFAULT_COOLERS,
     freezers: DEFAULT_FREEZERS
