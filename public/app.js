@@ -17,9 +17,12 @@ const chatMessagesEl = document.getElementById("chatMessages");
 const chatInputEl = document.getElementById("chatInput");
 const chatSendBtnEl = document.getElementById("chatSendBtn");
 const playBtnEl = document.getElementById("playBtn");
-const controlsBtnEl = document.getElementById("controlsBtn");
-const settingsBtnEl = document.getElementById("settingsBtn");
-const creditsBtnEl = document.getElementById("creditsBtn");
+const lobbySettingsBtnEl = document.getElementById("lobbySettingsBtn");
+const lobbyMenuBackdropEl = document.getElementById("lobbyMenuBackdrop");
+const lobbyMenuControlsBtnEl = document.getElementById("lobbyMenuControlsBtn");
+const lobbyMenuSettingsBtnEl = document.getElementById("lobbyMenuSettingsBtn");
+const lobbyMenuCreditsBtnEl = document.getElementById("lobbyMenuCreditsBtn");
+const lobbyMenuCloseBtnEl = document.getElementById("lobbyMenuCloseBtn");
 const lobbyMatchStatusEl = document.getElementById("lobbyMatchStatus");
 const lobbyMatchStatusPlayersEl = document.getElementById("lobbyMatchStatusPlayers");
 const lobbyMatchStatusTimeEl = document.getElementById("lobbyMatchStatusTime");
@@ -49,9 +52,14 @@ const gameHudEl = document.getElementById("gameHud");
 const aliveOthersTextEl = document.getElementById("aliveOthersText");
 const gameMenuBtnEl = document.getElementById("gameMenuBtn");
 const gameMenuBackdropEl = document.getElementById("gameMenuBackdrop");
+const gameMenuControlsBtnEl = document.getElementById("gameMenuControlsBtn");
 const gameMenuResumeBtnEl = document.getElementById("gameMenuResumeBtn");
 const gameMenuLobbyBtnEl = document.getElementById("gameMenuLobbyBtn");
 const gameMenuLeaveBtnEl = document.getElementById("gameMenuLeaveBtn");
+const gameInfoBackdropEl = document.getElementById("gameInfoBackdrop");
+const gameInfoTitleEl = document.getElementById("gameInfoTitle");
+const gameInfoTextEl = document.getElementById("gameInfoText");
+const gameInfoCloseBtnEl = document.getElementById("gameInfoCloseBtn");
 const gameChatMessagesEl = document.getElementById("gameChatMessages");
 const gameChatInputRowEl = document.getElementById("gameChatInputRow");
 const gameChatInputEl = document.getElementById("gameChatInput");
@@ -83,6 +91,7 @@ let sessionReady = false;
 let activePlayersInGame = 0;
 let gameChatOpen = false;
 let gameMenuOpen = false;
+let lobbyMenuOpen = false;
 let debugOpen = false;
 let debugPollTimer = null;
 let debugLoading = false;
@@ -96,7 +105,8 @@ const input = {
   left: false,
   right: false,
   sprint: false,
-  yaw: 0
+  yaw: 0,
+  pitch: 0
 };
 
 const INPUT_SEND_INTERVAL_MS = 33;
@@ -131,6 +141,8 @@ let mobileMovePointerId = null;
 let joystickCurrentX = 0;
 let joystickCurrentY = 0;
 let mobileControlsPreference = normalizeMobileControlsPreference(localStorage.getItem(MOBILE_CONTROLS_PREF_KEY));
+const CONTROLS_TEXT =
+  "PC: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack. I lobbyn öppnar Settings-knappen inställningsmenyn och i match öppnar kugghjulet uppe till höger spelmenyn.\nMobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta. Under match visas bara systemhändelser i chatten.";
 
 function hashString(str) {
   let h = 2166136261;
@@ -303,6 +315,7 @@ function updateDocumentTitle() {
 
 function openLobbyDialog(title, text, { showSettings = false } = {}) {
   if (!lobbyDialogBackdropEl || !lobbyDialogTitleEl || !lobbyDialogTextEl || !lobbyDialogCloseBtnEl) return;
+  setLobbyMenuOpen(false);
   lobbyDialogTitleEl.textContent = title;
   lobbyDialogTextEl.textContent = text;
   lobbyDialogTextEl.classList.toggle("hidden", showSettings);
@@ -368,6 +381,29 @@ function setGameMenuOpen(open, { restorePointerLock = false } = {}) {
   }
   if (restorePointerLock && appMode === "playing" && sessionState === "alive") requestPointerLockSafe(canvas);
   updateMobileControlsVisibility();
+}
+
+function setLobbyMenuOpen(open) {
+  if (!lobbyMenuBackdropEl) return;
+  lobbyMenuOpen = Boolean(open);
+  lobbyMenuBackdropEl.classList.toggle("hidden", !lobbyMenuOpen);
+  if (lobbyMenuOpen) {
+    lobbyMenuControlsBtnEl?.focus();
+  } else if (appMode === "lobby") {
+    lobbySettingsBtnEl?.focus();
+  }
+}
+
+function openGameInfoDialog(title, text) {
+  if (!gameInfoBackdropEl || !gameInfoTitleEl || !gameInfoTextEl) return;
+  gameInfoTitleEl.textContent = title;
+  gameInfoTextEl.textContent = text;
+  gameInfoBackdropEl.classList.remove("hidden");
+  gameInfoCloseBtnEl?.focus();
+}
+
+function closeGameInfoDialog() {
+  gameInfoBackdropEl?.classList.add("hidden");
 }
 
 function formatDurationShort(ms) {
@@ -454,6 +490,8 @@ function setAppMode(mode) {
 
   if (mode !== "playing") setGameChatOpen(false);
   if (mode !== "playing") setGameMenuOpen(false);
+  if (mode !== "playing") closeGameInfoDialog();
+  if (mode !== "lobby") setLobbyMenuOpen(false);
   if (mode === "playing" && isMobileChatDisabledInGame() && gameChatOpen) setGameChatOpen(false);
   if (mode === "connect" || mode === "disconnected") setCountdownTextFromSession({ state: "lobby" });
   updateReadyButton();
@@ -559,6 +597,10 @@ function renderScoreboard(players) {
     nameCell.textContent = p.name || "-";
     nameCell.style.color = colorForName(p.name);
     tr.appendChild(nameCell);
+
+    const winsCell = document.createElement("td");
+    winsCell.textContent = String(p.wins ?? 0);
+    tr.appendChild(winsCell);
 
     const killsCell = document.createElement("td");
     killsCell.textContent = String(p.kills ?? 0);
@@ -834,6 +876,7 @@ function resetInputState() {
   input.right = false;
   input.sprint = false;
   input.yaw = yaw;
+  input.pitch = pitch;
   inputDirty = true;
   resetJoystickState();
 }
@@ -965,6 +1008,7 @@ function attachSocket(wsUrl, loginName) {
             yaw = controlledYaw;
             viewYaw = controlledYaw;
             input.yaw = yaw;
+            input.pitch = pitch;
             forceYawSyncOnNextWorld = false;
           }
         } else if (forceYawSyncOnNextWorld && myCharacterId == null) {
@@ -1233,6 +1277,7 @@ function bindMobileControls() {
     yaw -= dx * LOOK_TOUCH_SENSITIVITY_X;
     pitch = clampPitch(pitch - dy * LOOK_TOUCH_SENSITIVITY_Y);
     input.yaw = yaw;
+    input.pitch = pitch;
     inputDirty = true;
     const now = performance.now();
     if (now - lastInputSentAt >= INPUT_SEND_INTERVAL_MS) sendInput();
@@ -1277,20 +1322,30 @@ playBtnEl?.addEventListener("click", () => {
   sessionReady = nextReady;
   updateReadyButton();
 });
-controlsBtnEl?.addEventListener("click", () => {
-  openLobbyDialog(
-    "Kontroller",
-    "PC: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack, kugghjulet uppe till höger öppnar spelmenyn.\nMobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta, kugghjulet uppe till höger öppnar spelmenyn. Under match visas bara systemhändelser i chatten."
-  );
+lobbySettingsBtnEl?.addEventListener("click", () => {
+  if (appMode !== "lobby") return;
+  setLobbyMenuOpen(!lobbyMenuOpen);
 });
-settingsBtnEl?.addEventListener("click", () => {
+lobbyMenuControlsBtnEl?.addEventListener("click", () => {
+  setLobbyMenuOpen(false);
+  openLobbyDialog("Kontroller", CONTROLS_TEXT);
+});
+lobbyMenuSettingsBtnEl?.addEventListener("click", () => {
+  setLobbyMenuOpen(false);
   openLobbyDialog("Inställningar", "", { showSettings: true });
 });
-creditsBtnEl?.addEventListener("click", () => {
+lobbyMenuCreditsBtnEl?.addEventListener("click", () => {
+  setLobbyMenuOpen(false);
   openLobbyDialog(
     "Credits",
     "Skapat av Robin Reicher.\nInspirerat av Adam Spraggs spel \"Hidden in Plain Sight\"."
   );
+});
+lobbyMenuCloseBtnEl?.addEventListener("click", () => {
+  setLobbyMenuOpen(false);
+});
+lobbyMenuBackdropEl?.addEventListener("click", (event) => {
+  if (event.target === lobbyMenuBackdropEl) setLobbyMenuOpen(false);
 });
 debugBtnEl?.addEventListener("click", openDebugView);
 debugCloseBtnEl?.addEventListener("click", closeDebugView);
@@ -1326,10 +1381,24 @@ gameMenuBtnEl?.addEventListener("click", () => {
 gameMenuResumeBtnEl?.addEventListener("click", () => {
   setGameMenuOpen(false, { restorePointerLock: true });
 });
+gameMenuControlsBtnEl?.addEventListener("click", () => {
+  setGameMenuOpen(false);
+  openGameInfoDialog("Kontroller", CONTROLS_TEXT);
+});
 gameMenuLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
 gameMenuLeaveBtnEl?.addEventListener("click", leaveGameCompletely);
 gameMenuBackdropEl?.addEventListener("click", (event) => {
   if (event.target === gameMenuBackdropEl) setGameMenuOpen(false, { restorePointerLock: true });
+});
+gameInfoCloseBtnEl?.addEventListener("click", () => {
+  closeGameInfoDialog();
+  if (appMode === "playing" && sessionState === "alive") requestPointerLockSafe(canvas);
+});
+gameInfoBackdropEl?.addEventListener("click", (event) => {
+  if (event.target === gameInfoBackdropEl) {
+    closeGameInfoDialog();
+    if (appMode === "playing" && sessionState === "alive") requestPointerLockSafe(canvas);
+  }
 });
 lobbyDialogCloseBtnEl?.addEventListener("click", closeLobbyDialog);
 lobbyDialogBackdropEl?.addEventListener("click", (event) => {
@@ -1353,7 +1422,23 @@ window.addEventListener("keydown", (event) => {
     closeDebugView();
     return;
   }
+  if (appMode === "lobby" && event.key === "Escape") {
+    if (!lobbyMenuOpen && lobbyDialogBackdropEl?.classList.contains("hidden")) return;
+    event.preventDefault();
+    if (lobbyMenuOpen) {
+      setLobbyMenuOpen(false);
+      return;
+    }
+    closeLobbyDialog();
+    return;
+  }
   if (appMode === "playing" && event.key === "Escape") {
+    if (gameInfoBackdropEl && !gameInfoBackdropEl.classList.contains("hidden")) {
+      event.preventDefault();
+      closeGameInfoDialog();
+      requestPointerLockSafe(canvas);
+      return;
+    }
     event.preventDefault();
     setGameMenuOpen(!gameMenuOpen, { restorePointerLock: true });
     return;
@@ -1430,6 +1515,7 @@ document.addEventListener("mousemove", (event) => {
   pitch = clampPitch(pitch - event.movementY * 0.002);
 
   input.yaw = yaw;
+  input.pitch = pitch;
   inputDirty = true;
   const now = performance.now();
   if (now - lastInputSentAt >= INPUT_SEND_INTERVAL_MS) sendInput();

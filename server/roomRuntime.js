@@ -41,6 +41,7 @@ const CHAT_MAX_LEN = 220;
 const CHAT_HISTORY_LIMIT = 80;
 const ROUND_COUNTDOWN_SECONDS = 10;
 const PERMANENT_DOWNED_UNTIL = Number.MAX_SAFE_INTEGER;
+const MAX_LOOK_PITCH_RAD = 1.2;
 
 export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = null, onStatsEvent = null }) {
   const sessions = new Map();
@@ -114,6 +115,7 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
       x: p.x,
       z: p.z,
       yaw: p.yaw,
+      pitch: 0,
       controllerType: "AI",
       ownerSessionId: null,
       lastAttackAt: 0,
@@ -123,9 +125,15 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
       ai: {
         mode: "move",
         desiredYaw: p.yaw,
-        nextDecisionAt: Date.now() + rand(AI_DECISION_MS_MIN, AI_DECISION_MS_MAX)
+        nextDecisionAt: Date.now() + rand(AI_DECISION_MS_MIN, AI_DECISION_MS_MAX),
+        desiredPitch: rand(-0.28, 0.28),
+        nextPitchDecisionAt: Date.now() + rand(320, 980)
       }
     };
+  }
+
+  function clampPitch(value) {
+    return Math.max(-MAX_LOOK_PITCH_RAD, Math.min(MAX_LOOK_PITCH_RAD, value));
   }
 
   for (let i = 0; i < TOTAL_CHARACTERS; i += 1) characters.push(createCharacter(i));
@@ -426,6 +434,7 @@ function sanitizeSystemTextSegment(raw) {
     return authenticatedSessions()
       .map((s) => ({
         name: s.name,
+        wins: s.stats.wins,
         kills: s.stats.kills,
         deaths: s.stats.deaths,
         innocents: s.stats.innocents,
@@ -433,6 +442,7 @@ function sanitizeSystemTextSegment(raw) {
         ready: Boolean(s.ready || s.state === "countdown")
       }))
       .sort((a, b) => {
+        if (b.wins !== a.wins) return b.wins - a.wins;
         if (b.kills !== a.kills) return b.kills - a.kills;
         if (a.deaths !== b.deaths) return a.deaths - b.deaths;
         return a.name.localeCompare(b.name, "sv");
@@ -579,6 +589,7 @@ function sanitizeSystemTextSegment(raw) {
       c.x = spawn.x;
       c.z = spawn.z;
       c.yaw = spawn.yaw;
+      c.pitch = 0;
       c.controllerType = "AI";
       c.ownerSessionId = null;
       c.lastAttackAt = 0;
@@ -586,11 +597,14 @@ function sanitizeSystemTextSegment(raw) {
       c.ai.mode = "move";
       c.ai.desiredYaw = spawn.yaw;
       c.ai.nextDecisionAt = now + rand(AI_DECISION_MS_MIN, AI_DECISION_MS_MAX);
+      c.ai.desiredPitch = rand(-0.3, 0.3);
+      c.ai.nextPitchDecisionAt = now + rand(320, 980);
     }
   }
 
   function endCurrentMatch(now, winnerSession = null) {
     if (winnerSession?.authenticated && winnerSession.name) {
+      winnerSession.stats.wins += 1;
       appendSystemChat([
         { type: "player", name: winnerSession.name },
         { type: "text", text: " vann Battle Royale!" }
@@ -638,6 +652,7 @@ function sanitizeSystemTextSegment(raw) {
     session.characterId = available.id;
     session.readyAt = now;
     session.input.yaw = available.yaw;
+    session.input.pitch = available.pitch;
     session.input.attackRequested = false;
 
     logEvent("session_possess", {
@@ -945,6 +960,13 @@ function sanitizeSystemTextSegment(raw) {
       c.z += Math.cos(c.yaw) * speed * dt;
     }
 
+    if (now >= c.ai.nextPitchDecisionAt) {
+      c.ai.desiredPitch = rand(-0.3, 0.3);
+      c.ai.nextPitchDecisionAt = now + rand(320, 980);
+    }
+    const pitchSmooth = 1 - Math.exp(-dt * 4.2);
+    c.pitch = clampPitch(c.pitch + (c.ai.desiredPitch - c.pitch) * pitchSmooth);
+
     clampInsideRoom(c, { steerOnClamp: true });
     const shelfHitNormal = resolveShelfCollisions(c);
     if (shelfHitNormal) {
@@ -958,6 +980,7 @@ function sanitizeSystemTextSegment(raw) {
   function updatePlayer(c, session, dt) {
     const input = session.input;
     c.yaw = input.yaw;
+    c.pitch = input.pitch;
 
     let localX = 0;
     let localZ = 0;
@@ -1171,6 +1194,9 @@ function sanitizeSystemTextSegment(raw) {
       if (typeof input.yaw === "number" && Number.isFinite(input.yaw)) {
         session.input.yaw = normalizeAngle(input.yaw);
       }
+      if (typeof input.pitch === "number" && Number.isFinite(input.pitch)) {
+        session.input.pitch = clampPitch(input.pitch);
+      }
       return "ok";
     }
 
@@ -1284,6 +1310,7 @@ function sanitizeSystemTextSegment(raw) {
         x: Number(c.x.toFixed(3)),
         z: Number(c.z.toFixed(3)),
         yaw: Number(c.yaw.toFixed(3)),
+        pitch: Number((c.pitch || 0).toFixed(3)),
         controllerType: c.controllerType,
         cooldownMsRemaining: Math.max(0, ATTACK_COOLDOWN_MS - (now - c.lastAttackAt)),
         attackFlashMsRemaining: Math.max(0, ATTACK_FLASH_MS - (now - c.lastAttackAt)),
@@ -1411,6 +1438,7 @@ function sanitizeSystemTextSegment(raw) {
       readyAt: 0,
       characterId: null,
       stats: {
+        wins: 0,
         kills: 0,
         deaths: 0,
         innocents: 0
@@ -1422,6 +1450,7 @@ function sanitizeSystemTextSegment(raw) {
         right: false,
         sprint: false,
         yaw: 0,
+        pitch: 0,
         attackRequested: false
       },
       net: {

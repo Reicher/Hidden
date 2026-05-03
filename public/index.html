@@ -29,6 +29,7 @@
             <thead>
               <tr>
                 <th>Namn</th>
+                <th>BR-vinster</th>
                 <th>Kills</th>
                 <th>Deaths</th>
                 <th>Oskyldiga</th>
@@ -49,9 +50,7 @@
           </div>
           <div id="lobbyActionRow">
             <button id="playBtn" type="button">Ready</button>
-            <button id="controlsBtn" type="button">Kontroller</button>
-            <button id="settingsBtn" type="button">Inställningar</button>
-            <button id="creditsBtn" type="button">Credits</button>
+            <button id="lobbySettingsBtn" type="button">Settings</button>
           </div>
           <div id="lobbyMatchStatus" class="hidden" aria-live="polite">
             <span id="lobbyMatchStatusTitle">Match pågår</span>
@@ -74,7 +73,15 @@
               <button id="lobbyDialogCloseBtn" type="button">Stäng</button>
             </div>
           </div>
-
+        </div>
+        <div id="lobbyMenuBackdrop" class="hidden">
+          <div id="lobbyMenuCard" role="dialog" aria-modal="true" aria-labelledby="lobbyMenuTitle">
+            <h2 id="lobbyMenuTitle">Settings</h2>
+            <button id="lobbyMenuControlsBtn" type="button">Kontroller</button>
+            <button id="lobbyMenuSettingsBtn" type="button">Inställningar</button>
+            <button id="lobbyMenuCreditsBtn" type="button">Credits</button>
+            <button id="lobbyMenuCloseBtn" type="button">Stäng</button>
+          </div>
         </div>
       </section>
     </div>
@@ -95,9 +102,17 @@
       <div id="gameMenuBackdrop" class="hidden">
         <div id="gameMenuCard" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
           <h2 id="gameMenuTitle">Spelmeny</h2>
+          <button id="gameMenuControlsBtn" type="button">Kontroller</button>
           <button id="gameMenuResumeBtn" type="button">Fortsätt spela</button>
           <button id="gameMenuLobbyBtn" type="button">Återgå till lobby</button>
           <button id="gameMenuLeaveBtn" type="button">Lämna spelet</button>
+        </div>
+      </div>
+      <div id="gameInfoBackdrop" class="hidden">
+        <div id="gameInfoCard" role="dialog" aria-modal="true" aria-labelledby="gameInfoTitle">
+          <h2 id="gameInfoTitle"></h2>
+          <p id="gameInfoText"></p>
+          <button id="gameInfoCloseBtn" type="button">Stäng</button>
         </div>
       </div>
       <div id="mobileControls" class="hidden" aria-hidden="true">

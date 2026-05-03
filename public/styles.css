@@ -117,6 +117,7 @@ button:disabled {
 }
 
 #lobbyView {
+  position: relative;
   background: #13161d;
   display: flex;
   flex-direction: column;
@@ -249,7 +250,7 @@ button:disabled {
 
 #lobbyActionRow {
   display: flex;
-  gap: 8px;
+  gap: 14px;
   align-self: stretch;
 }
 
@@ -257,6 +258,13 @@ button:disabled {
   flex: 1 1 0;
   font-size: 14px;
   padding: 10px 8px;
+}
+
+#lobbySettingsBtn {
+  flex: 0 0 auto;
+  min-width: 96px;
+  font-size: 13px;
+  padding: 8px 10px;
 }
 
 #lobbyMatchStatus {
@@ -484,19 +492,53 @@ button:disabled {
 }
 
 #gameMenuBtn {
-  position: absolute;
-  top: 10px;
-  right: 12px;
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 7px;
   background: rgba(8, 10, 14, 0.56);
   color: rgba(236, 241, 250, 0.86);
-  font-size: 13px;
+  font-size: 20px;
   line-height: 1;
-  padding: 6px 8px;
-  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: grid;
+  place-items: center;
   pointer-events: auto;
   z-index: 7;
+}
+
+#gameMenuBtn {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+}
+
+#lobbyMenuBackdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.42);
+  z-index: 6;
+}
+
+#lobbyMenuCard {
+  width: min(320px, calc(100vw - 28px));
+  background: rgba(16, 21, 29, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+#lobbyMenuTitle {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+#lobbyMenuCard button {
+  width: 100%;
 }
 
 #gameMenuBackdrop {
@@ -524,6 +566,42 @@ button:disabled {
 }
 
 #gameMenuCard button {
+  width: 100%;
+}
+
+#gameInfoBackdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.42);
+  pointer-events: auto;
+}
+
+#gameInfoCard {
+  width: min(520px, calc(100vw - 28px));
+  background: rgba(16, 21, 29, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+#gameInfoTitle {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+#gameInfoText {
+  margin: 0 0 8px;
+  color: rgba(233, 236, 243, 0.86);
+  font-size: 13px;
+  line-height: 1.42;
+  white-space: pre-line;
+}
+
+#gameInfoCloseBtn {
   width: 100%;
 }
 
