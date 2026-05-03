@@ -43,6 +43,24 @@ Privata rum: öppna `http://127.0.0.1:3000/<rumskod>` för ett separat rum som t
 - Server: `Node.js` + `ws` (WebSocket, server-authoritative state)
 - Klient: `Three.js` (rendering + enkel FPS-kontroll)
 
+## Kartlayout Från PNG
+
+- Kartan använder `public/assets/layout-50.png` som layoutkälla.
+- Bilden måste vara exakt `50x50` pixlar (`1 pixel = 1 meter` i spelbar yta).
+- Färglegend:
+  - `transparent` (alpha `0`) = tom yta
+  - `vit` (`255,255,255`) fungerar också som tom yta
+  - `svart` (`0,0,0`) = hylla (rita **exakt 6 sammanhängande pixlar** i rak linje per hylla)
+  - `blå` (`0,102,255`, även `0,0,255` och `0,128,255`) = kyl (1x1 meter footprint)
+  - `grön` (`0,200,120`, även `0,255,0` och `0,180,0`) = frys (1x1 meter footprint, toppluckor)
+- Hyllregler:
+  - Hyllor delas alltid upp i fasta segment `1x6x2` meter.
+  - En 12-pixels rak rad blir alltså två separata hyllsegment.
+  - Tätt packade former (t.ex. `2x6`) tillåts och blir flera hyllsegment.
+  - Om hyllpixlar inte kan delas upp exakt i 6-längdssegment (t.ex. `1x3`) stoppar servern vid uppstart med tydligt fel.
+- Om bilden innehåller okända färger stoppar servern vid uppstart med fel som visar exempel-pixlar.
+- Generera en startlayout igen med: `npm run generate:layout`.
+
 ## Debug-vy
 
 - I lobbyn finns en knapp `Debug` som öppnar live-serverstatistik i klienten.

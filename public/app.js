@@ -1007,7 +1007,9 @@ function attachSocket(wsUrl, loginName) {
       try {
         roomSystem.syncFromWorld({
           roomHalfSize: msg.roomHalfSize,
-          shelves: msg.shelves
+          shelves: msg.shelves,
+          coolers: msg.coolers,
+          freezers: msg.freezers
         });
 
         renderScoreboard(msg.scoreboard || []);

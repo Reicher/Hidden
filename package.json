@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "generate:layout": "node scripts/generate-layout-png.js",
     "test:smoke": "node tests/smoke.js",
     "test:browser": "node tests/browser-smoke.js",
     "test:combat": "node tests/combat.unit.js",
@@ -15,6 +16,7 @@
     "test:all": "npm run test:combat && npm run test:debug-stats && npm run test:smoke && npm run test:private-rooms && npm run test:browser && npm run test:heartbeat && npm run test:rate-limit"
   },
   "dependencies": {
+    "pngjs": "^7.0.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

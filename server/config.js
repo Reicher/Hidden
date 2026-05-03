@@ -1,3 +1,7 @@
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+import { loadLayoutFromPng } from "./layoutFromPng.js";
+
 function envInt(name, fallback) {
   const value = process.env[name];
   if (value == null) return fallback;
@@ -58,26 +62,68 @@ function freezeFixture(fixture) {
   return Object.freeze(fixture);
 }
 
-export const ROOM_HALF_SIZE = 24;
-export const SHELF_WIDTH = 1.1;
+const HERE = dirname(fileURLToPath(import.meta.url));
+const LAYOUT = loadLayoutFromPng({
+  filePath: resolve(HERE, "../public/assets/layout-50.png"),
+  shelfWidth: 1.0,
+  shelfDepth: 6.0,
+  shelfHeight: 2.0,
+  coolerWidth: 1.0,
+  coolerDepth: 1.0,
+  coolerHeight: 2.0,
+  freezerWidth: 1.0,
+  freezerDepth: 1.0,
+  freezerHeight: 1.0
+});
+
+export const ROOM_HALF_SIZE = LAYOUT.roomHalfSize;
+export const SHELF_WIDTH = 1.0;
 export const SHELF_DEPTH = 6.0;
-export const SHELF_HEIGHT = 2.9;
-export const SHELVES = Object.freeze([
-  freezeFixture({ x: -8, z: -7, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
-  freezeFixture({ x: 8, z: -7, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
-  freezeFixture({ x: -8, z: 7, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
-  freezeFixture({ x: 8, z: 7, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT })
-]);
+export const SHELF_HEIGHT = 2.0;
+export const SHELVES = Object.freeze(
+  LAYOUT.shelves.map((fixture) =>
+    freezeFixture({
+      x: fixture.x,
+      z: fixture.z,
+      width: SHELF_WIDTH,
+      depth: SHELF_DEPTH,
+      height: SHELF_HEIGHT,
+      yaw: fixture.yaw
+    })
+  )
+);
 
-export const COOLER_WIDTH = 1.2;
-export const COOLER_DEPTH = 0.91;
-export const COOLER_HEIGHT = 3.0;
-export const COOLERS = Object.freeze([]);
+export const COOLER_WIDTH = 1.0;
+export const COOLER_DEPTH = 1.0;
+export const COOLER_HEIGHT = 2.0;
+export const COOLERS = Object.freeze(
+  LAYOUT.coolers.map((fixture) =>
+    freezeFixture({
+      x: fixture.x,
+      z: fixture.z,
+      width: COOLER_WIDTH,
+      depth: COOLER_DEPTH,
+      height: COOLER_HEIGHT,
+      yaw: fixture.yaw
+    })
+  )
+);
 
-export const FREEZER_WIDTH = 1.2;
-export const FREEZER_DEPTH = 0.91;
-export const FREEZER_HEIGHT = 1.02;
-export const FREEZERS = Object.freeze([]);
+export const FREEZER_WIDTH = 1.0;
+export const FREEZER_DEPTH = 1.0;
+export const FREEZER_HEIGHT = 1.0;
+export const FREEZERS = Object.freeze(
+  LAYOUT.freezers.map((fixture) =>
+    freezeFixture({
+      x: fixture.x,
+      z: fixture.z,
+      width: FREEZER_WIDTH,
+      depth: FREEZER_DEPTH,
+      height: FREEZER_HEIGHT,
+      yaw: fixture.yaw
+    })
+  )
+);
 
 export const HEARTBEAT_INTERVAL_MS = envInt("HEARTBEAT_INTERVAL_MS", 5000);
 export const IDLE_SESSION_TIMEOUT_MS = envInt("IDLE_SESSION_TIMEOUT_MS", 30 * 60 * 1000);

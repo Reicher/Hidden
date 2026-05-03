@@ -1,25 +1,20 @@
 import * as THREE from "https://unpkg.com/three@0.164.1/build/three.module.js";
 import { seededRandom } from "./utils.js";
 
-const WALL_HEIGHT = 5.2;
-const DEFAULT_ROOM_HALF = 24;
-const SHELF_WIDTH = 1.1;
+const WALL_HEIGHT = 5.0;
+const DEFAULT_ROOM_HALF = 25.5;
+const SHELF_WIDTH = 1.0;
 const SHELF_DEPTH = 6.0;
-const SHELF_HEIGHT = 2.9;
+const SHELF_HEIGHT = 2.0;
 
-const COOLER_WIDTH = 1.2;
-const COOLER_DEPTH = 0.91;
-const COOLER_HEIGHT = 3.0;
+const COOLER_WIDTH = 1.0;
+const COOLER_DEPTH = 1.0;
+const COOLER_HEIGHT = 2.0;
 
-const FREEZER_WIDTH = 1.2;
-const FREEZER_DEPTH = 0.91;
-const FREEZER_HEIGHT = 1.02;
-const DEFAULT_SHELVES = Object.freeze([
-  Object.freeze({ x: -8, z: -7, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
-  Object.freeze({ x: 8, z: -7, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
-  Object.freeze({ x: -8, z: 7, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
-  Object.freeze({ x: 8, z: 7, width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT })
-]);
+const FREEZER_WIDTH = 1.0;
+const FREEZER_DEPTH = 1.0;
+const FREEZER_HEIGHT = 1.0;
+const DEFAULT_SHELVES = Object.freeze([]);
 const DEFAULT_COOLERS = Object.freeze([]);
 const DEFAULT_FREEZERS = Object.freeze([]);
 const FLUORESCENT_ROWS = 4;
@@ -245,28 +240,35 @@ export function createRoomSystem({ scene, renderer }) {
   }
 
   function createShelf(shelf) {
-    const width = typeof shelf.width === "number" ? shelf.width : 0.8;
-    const depth = typeof shelf.depth === "number" ? shelf.depth : 5.2;
-    const height = typeof shelf.height === "number" ? shelf.height : 2.9;
+    const width = typeof shelf.width === "number" ? shelf.width : 1.0;
+    const depth = typeof shelf.depth === "number" ? shelf.depth : 6.0;
+    const height = typeof shelf.height === "number" ? shelf.height : 2.0;
+    const yaw = typeof shelf.yaw === "number" ? shelf.yaw : 0;
     const plain = new THREE.MeshStandardMaterial({ color: 0x8a7660, roughness: 0.9, metalness: 0.02 });
 
     const sideA = createShelfSideMaterial(randomShelfTileIndex());
     const sideB = createShelfSideMaterial(randomShelfTileIndex());
+    const group = new THREE.Group();
+    group.position.set(shelf.x, 0, shelf.z);
+    group.rotation.y = yaw;
+    group.userData.type = "shelf";
+    roomRoot.add(group);
+
     const core = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), plain);
-    core.position.set(shelf.x, height * 0.5, shelf.z);
-    roomRoot.add(core);
+    core.position.set(0, height * 0.5, 0);
+    group.add(core);
 
     // Put textured panels explicitly on the long sides to avoid BoxGeometry material-index ambiguity.
     const sideOffsetX = width * 0.5 + 0.004;
     const longSideA = new THREE.Mesh(new THREE.PlaneGeometry(depth, height), sideA);
-    longSideA.position.set(shelf.x + sideOffsetX, height * 0.5, shelf.z);
+    longSideA.position.set(sideOffsetX, height * 0.5, 0);
     longSideA.rotation.y = Math.PI / 2;
-    roomRoot.add(longSideA);
+    group.add(longSideA);
 
     const longSideB = new THREE.Mesh(new THREE.PlaneGeometry(depth, height), sideB);
-    longSideB.position.set(shelf.x - sideOffsetX, height * 0.5, shelf.z);
+    longSideB.position.set(-sideOffsetX, height * 0.5, 0);
     longSideB.rotation.y = -Math.PI / 2;
-    roomRoot.add(longSideB);
+    group.add(longSideB);
   }
 
   function createCooler(cooler) {
@@ -282,9 +284,9 @@ export function createRoomSystem({ scene, renderer }) {
     group.userData.frontLocalAxis = "+Z";
     group.userData.frontFacingYaw = yaw;
 
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xdce1e7, roughness: 0.28, metalness: 0.08 });
-    const frontMaterial = new THREE.MeshStandardMaterial({ color: 0xf6f9ff, roughness: 0.18, metalness: 0.04 });
-    const trimMaterial = new THREE.MeshStandardMaterial({ color: 0x9ea7b4, roughness: 0.34, metalness: 0.22 });
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xecf0f4, roughness: 0.28, metalness: 0.08 });
+    const frontMaterial = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.18, metalness: 0.04 });
+    const trimMaterial = new THREE.MeshStandardMaterial({ color: 0xd4dbe4, roughness: 0.34, metalness: 0.22 });
 
     const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), bodyMaterial);
     body.position.y = height * 0.5;
@@ -305,9 +307,9 @@ export function createRoomSystem({ scene, renderer }) {
   }
 
   function createFreezer(freezer) {
-    const width = typeof freezer.width === "number" ? freezer.width : 1.9;
-    const depth = typeof freezer.depth === "number" ? freezer.depth : 1.2;
-    const height = typeof freezer.height === "number" ? freezer.height : 1.02;
+    const width = typeof freezer.width === "number" ? freezer.width : 1.0;
+    const depth = typeof freezer.depth === "number" ? freezer.depth : 1.0;
+    const height = typeof freezer.height === "number" ? freezer.height : 1.0;
     const yaw = typeof freezer.yaw === "number" ? freezer.yaw : 0;
 
     const group = new THREE.Group();
@@ -316,31 +318,25 @@ export function createRoomSystem({ scene, renderer }) {
     group.userData.type = "freezer";
     group.userData.opening = "top";
 
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xcbd3dd, roughness: 0.42, metalness: 0.06 });
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xe9edf2, roughness: 0.42, metalness: 0.06 });
     const lidMaterial = new THREE.MeshStandardMaterial({
-      color: 0xe5ebf2,
-      roughness: 0.12,
-      metalness: 0.02,
-      transparent: true,
-      opacity: 0.82
+      color: 0xf7f9fc,
+      roughness: 0.14,
+      metalness: 0.02
     });
-    const railMaterial = new THREE.MeshStandardMaterial({ color: 0x8f99a6, roughness: 0.36, metalness: 0.2 });
 
     const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), bodyMaterial);
     body.position.y = height * 0.5;
     group.add(body);
 
-    const splitGap = 0.05;
-    const lidA = new THREE.Mesh(new THREE.BoxGeometry(width * 0.46, 0.05, depth * 0.94), lidMaterial);
-    lidA.position.set(-width * 0.24 - splitGap, height - 0.026, 0);
-    group.add(lidA);
-    const lidB = new THREE.Mesh(new THREE.BoxGeometry(width * 0.46, 0.05, depth * 0.94), lidMaterial);
-    lidB.position.set(width * 0.24 + splitGap, height - 0.026, 0);
-    group.add(lidB);
-
-    const topRail = new THREE.Mesh(new THREE.BoxGeometry(width * 0.98, 0.04, 0.06), railMaterial);
-    topRail.position.set(0, height - 0.022, 0);
-    group.add(topRail);
+    const lidThickness = 0.05;
+    const lidInset = 0.02;
+    const lid = new THREE.Mesh(
+      new THREE.BoxGeometry(width - lidInset * 2, lidThickness, depth - lidInset * 2),
+      lidMaterial
+    );
+    lid.position.set(0, height + lidThickness * 0.5 + 0.002, 0);
+    group.add(lid);
 
     roomRoot.add(group);
   }

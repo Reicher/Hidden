@@ -14,7 +14,6 @@ const KNOCKDOWN_MAX_TILT_RAD = Math.PI * 0.5;
 const KNOCKDOWN_STAR_COUNT = 3;
 const KNOCKDOWN_STAR_ORBIT_RADIUS = 0.24;
 const KNOCKDOWN_STAR_HEAD_OFFSET_Y = 0.3;
-const AVATAR_VISUAL_SCALE = 1.2;
 const HEAD_TEX_SIZE = 256;
 const FACE_U = 0.25;
 const FACE_V = 0.5;
@@ -35,6 +34,18 @@ const HAT_COLOR_HEX_BY_TYPE = {
   Trollkarlshatt: [0x1f2b44, 0x2d3561, 0x4a2f44, 0x2c2f36],
   Sombrero: [0xd9c39a, 0xc5a77f, 0xb89365, 0x9f7b54]
 };
+
+function noHatBodyHeight({ heightScale, legScale, torsoScale, headScale }) {
+  const shoeHeight = 0.11 * heightScale;
+  const legTotal = 0.84 * heightScale * legScale;
+  const hipY = shoeHeight + legTotal + 0.03 * heightScale;
+  const torsoTotal = 0.9 * heightScale * torsoScale;
+  const headRadius = 0.24 * heightScale * headScale;
+  const headY = hipY + torsoTotal + headRadius * 0.84;
+  const topHead = headY + headRadius * 1.06;
+  const bottomShoe = hipY - legTotal - shoeHeight * 0.85;
+  return topHead - bottomShoe;
+}
 
 function hexToCss(hex) {
   const safe = Math.max(0, Math.min(0xffffff, Number(hex) || 0));
@@ -203,6 +214,7 @@ export function createAvatarSystem({ scene, camera }) {
 
   function buildCharacterProfile(id) {
     const rng = seededRandom(id * 4093 + 17);
+    const heightRng = seededRandom(id * 92821 + 73);
 
     const heightScale = 0.82 + rng() * 0.34;
     const legScale = 0.8 + rng() * 0.34;
@@ -227,6 +239,10 @@ export function createAvatarSystem({ scene, camera }) {
       hat = new THREE.Color(palette[Math.floor(rng() * palette.length)]);
     }
 
+    const baseHeightNoHat = noHatBodyHeight({ heightScale, legScale, torsoScale, headScale });
+    const targetHeightNoHat = 1.5 + heightRng() * 0.5;
+    const visualScale = baseHeightNoHat > 0.0001 ? targetHeightNoHat / baseHeightNoHat : 1;
+
     return {
       rng,
       heightScale,
@@ -242,7 +258,8 @@ export function createAvatarSystem({ scene, camera }) {
       pants,
       shoe,
       hat: hat || new THREE.Color(0x2a2a2a),
-      hatType
+      hatType,
+      visualScale
     };
   }
 
@@ -509,7 +526,7 @@ export function createAvatarSystem({ scene, camera }) {
     rightShoe.position.set(0, -legTotal - shoeHeight * 0.35, shoeLength * 0.08);
     rightLegPivot.add(rightShoe);
     poseRoot.add(rightLegPivot);
-    group.scale.setScalar(AVATAR_VISUAL_SCALE);
+    group.scale.setScalar(profile.visualScale);
 
     return {
       id,
@@ -561,7 +578,7 @@ export function createAvatarSystem({ scene, camera }) {
       lastDrawnEyeY: 999,
       lastDrawnEyesClosed: null,
       headFace,
-      eyeHeight: eyeHeight * AVATAR_VISUAL_SCALE,
+      eyeHeight: eyeHeight * profile.visualScale,
       skinColor: profile.skin
     };
   }
