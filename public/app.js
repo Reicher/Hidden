@@ -24,8 +24,7 @@ const lobbyMenuSettingsBtnEl = document.getElementById("lobbyMenuSettingsBtn");
 const lobbyMenuCreditsBtnEl = document.getElementById("lobbyMenuCreditsBtn");
 const lobbyMenuCloseBtnEl = document.getElementById("lobbyMenuCloseBtn");
 const lobbyMatchStatusEl = document.getElementById("lobbyMatchStatus");
-const lobbyMatchStatusPlayersEl = document.getElementById("lobbyMatchStatusPlayers");
-const lobbyMatchStatusTimeEl = document.getElementById("lobbyMatchStatusTime");
+const lobbyMatchStatusTitleEl = document.getElementById("lobbyMatchStatusTitle");
 const debugBtnEl = document.getElementById("debugBtn");
 const countdownOverlayEl = document.getElementById("countdownOverlay");
 const countdownTextEl = document.getElementById("countdownText");
@@ -101,6 +100,9 @@ let debugLoading = false;
 let leavingGameManually = false;
 let forceYawSyncOnNextWorld = false;
 let currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
+let lobbyScoreboard = [];
+let lobbyCountdownMsRemaining = 0;
+let lobbyMinPlayersToStart = 2;
 
 const input = {
   forward: false,
@@ -144,8 +146,10 @@ let mobileMovePointerId = null;
 let joystickCurrentX = 0;
 let joystickCurrentY = 0;
 let mobileControlsPreference = normalizeMobileControlsPreference(localStorage.getItem(MOBILE_CONTROLS_PREF_KEY));
-const CONTROLS_TEXT =
-  "PC: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack. I lobbyn öppnar Settings-knappen inställningsmenyn och i match öppnar kugghjulet uppe till höger spelmenyn.\nMobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta. Under match visas bara systemhändelser i chatten.";
+const GAMEPLAY_SUMMARY_TEXT = "Håll dig gömt, hitta spelare och slå ut dem.";
+const DESKTOP_CONTROLS_TEXT = "Desktop: C: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack.";
+const MOBILE_CONTROLS_TEXT =
+  "Mobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta.";
 let lastCountdownPreviewCharacterId = null;
 
 function hashString(str) {
@@ -256,6 +260,12 @@ function mobileControlsEnabledByPreference() {
   if (mobileControlsPreference === "on") return true;
   if (mobileControlsPreference === "off") return false;
   return IS_TOUCH_DEVICE;
+}
+
+function controlsTextForCurrentMode() {
+  return `${GAMEPLAY_SUMMARY_TEXT}\n${
+    mobileControlsEnabledByPreference() ? MOBILE_CONTROLS_TEXT : DESKTOP_CONTROLS_TEXT
+  }`;
 }
 
 function mobileControlsLabel(pref) {
@@ -410,20 +420,40 @@ function closeGameInfoDialog() {
   gameInfoBackdropEl?.classList.add("hidden");
 }
 
-function formatDurationShort(ms) {
-  const totalSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
 function updateLobbyMatchStatus() {
-  if (!lobbyMatchStatusEl || !lobbyMatchStatusPlayersEl || !lobbyMatchStatusTimeEl) return;
-  const show = appMode === "lobby" && currentMatch.inProgress;
+  if (!lobbyMatchStatusEl || !lobbyMatchStatusTitleEl) return;
+  const show = appMode === "lobby";
   lobbyMatchStatusEl.classList.toggle("hidden", !show);
   if (!show) return;
-  lobbyMatchStatusPlayersEl.textContent = `Spelare kvar: ${Math.max(0, Number(currentMatch.alivePlayers || 0))}`;
-  lobbyMatchStatusTimeEl.textContent = `Tid: ${formatDurationShort(currentMatch.elapsedMs || 0)}`;
+
+  if (currentMatch.inProgress) {
+    const elapsedMinutes = Math.floor(Math.max(0, Number(currentMatch.elapsedMs || 0)) / 60000);
+    lobbyMatchStatusTitleEl.textContent = `Spel Startat (${elapsedMinutes} minuter)`;
+    return;
+  }
+
+  const minPlayers = Math.max(1, Number(lobbyMinPlayersToStart || 2));
+  const players = Array.isArray(lobbyScoreboard) ? lobbyScoreboard : [];
+  const playerCount = players.length;
+  const readyCount = players.reduce((acc, player) => acc + (player?.ready ? 1 : 0), 0);
+  const countdownRunning =
+    lobbyCountdownMsRemaining > 0 ||
+    players.some((player) => String(player?.status || "").toLowerCase() === "nedräkning") ||
+    sessionState === "countdown";
+
+  if (countdownRunning) {
+    lobbyMatchStatusTitleEl.textContent = "Startar Spel";
+    return;
+  }
+  if (playerCount < minPlayers) {
+    lobbyMatchStatusTitleEl.textContent = "Väntar på fler spelare";
+    return;
+  }
+  if (readyCount < playerCount) {
+    lobbyMatchStatusTitleEl.textContent = "Väntar på att spelare ska bli redo";
+    return;
+  }
+  lobbyMatchStatusTitleEl.textContent = "Startar Spel";
 }
 
 function updateReadyButton() {
@@ -578,7 +608,8 @@ function closeDebugView() {
 function setCountdownTextFromSession(state) {
   if (!countdownTextEl || !countdownOverlayEl) return;
   const ms = Number(state?.countdownMsRemaining || 0);
-  if (countdownControlsTextEl) countdownControlsTextEl.textContent = CONTROLS_TEXT;
+  lobbyCountdownMsRemaining = ms;
+  if (countdownControlsTextEl) countdownControlsTextEl.textContent = controlsTextForCurrentMode();
   if (ms > 0) {
     const sec = Math.max(1, Math.ceil(ms / 1000));
     countdownTextEl.textContent = String(sec);
@@ -594,19 +625,25 @@ function setCountdownTextFromSession(state) {
       if (countdownCharacterMetaEl) countdownCharacterMetaEl.textContent = "Väljer karaktär...";
     }
     countdownOverlayEl.classList.remove("hidden");
+    updateLobbyMatchStatus();
     updateReadyButton();
     return;
   }
   lastCountdownPreviewCharacterId = null;
   countdownTextEl.textContent = "";
   countdownOverlayEl.classList.add("hidden");
+  updateLobbyMatchStatus();
   updateReadyButton();
 }
 
 function renderScoreboard(players) {
   if (!scoreBodyEl) return;
+  lobbyScoreboard = Array.isArray(players) ? players.slice() : [];
   scoreBodyEl.textContent = "";
-  if (!Array.isArray(players)) return;
+  if (!Array.isArray(players)) {
+    updateLobbyMatchStatus();
+    return;
+  }
   for (const p of players) {
     const tr = document.createElement("tr");
 
@@ -645,6 +682,7 @@ function renderScoreboard(players) {
 
     scoreBodyEl.appendChild(tr);
   }
+  updateLobbyMatchStatus();
 }
 
 function renderDebugSummary(data) {
@@ -926,6 +964,9 @@ function attachSocket(wsUrl, loginName) {
         myName = msg.name || loginName;
         sessionReady = false;
         currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
+        lobbyScoreboard = [];
+        lobbyCountdownMsRemaining = 0;
+        lobbyMinPlayersToStart = 2;
         replaceChat(msg.chatHistory || []);
         setConnectError("");
         setPrivateRoomButtonVisible(false);
@@ -938,6 +979,9 @@ function attachSocket(wsUrl, loginName) {
         myName = "";
         sessionReady = false;
         currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
+        lobbyScoreboard = [];
+        lobbyCountdownMsRemaining = 0;
+        lobbyMinPlayersToStart = 2;
         setAppMode("connect");
         setConnectError(msg.message || "Inloggning misslyckades.");
         setPrivateRoomButtonVisible(msg.reason === "room_full");
@@ -987,6 +1031,7 @@ function attachSocket(wsUrl, loginName) {
         authenticated = Boolean(state.authenticated);
         myName = state.name || myName;
         sessionReady = Boolean(state.ready);
+        lobbyMinPlayersToStart = Math.max(1, Number(state.minPlayersToStart || lobbyMinPlayersToStart || 2));
         myCharacterId = state.characterId ?? null;
         activePlayersInGame = Number(state.activePlayers || 0);
         updateInGameHud();
@@ -1047,6 +1092,9 @@ function attachSocket(wsUrl, loginName) {
       myCharacterId = null;
       activePlayersInGame = 0;
       currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
+      lobbyScoreboard = [];
+      lobbyCountdownMsRemaining = 0;
+      lobbyMinPlayersToStart = 2;
       updateConnectButton();
       if (leavingGameManually) {
         leavingGameManually = false;
@@ -1062,6 +1110,9 @@ function attachSocket(wsUrl, loginName) {
     onError: () => {
       if (generation !== socketGeneration) return;
       connecting = false;
+      lobbyScoreboard = [];
+      lobbyCountdownMsRemaining = 0;
+      lobbyMinPlayersToStart = 2;
       updateConnectButton();
       setConnectError("Kunde inte ansluta till servern.");
       setAppMode("connect");
@@ -1348,7 +1399,7 @@ lobbySettingsBtnEl?.addEventListener("click", () => {
 });
 lobbyMenuControlsBtnEl?.addEventListener("click", () => {
   setLobbyMenuOpen(false);
-  openLobbyDialog("Kontroller", CONTROLS_TEXT);
+  openLobbyDialog("Kontroller", controlsTextForCurrentMode());
 });
 lobbyMenuSettingsBtnEl?.addEventListener("click", () => {
   setLobbyMenuOpen(false);
@@ -1403,7 +1454,7 @@ gameMenuResumeBtnEl?.addEventListener("click", () => {
 });
 gameMenuControlsBtnEl?.addEventListener("click", () => {
   setGameMenuOpen(false);
-  openGameInfoDialog("Kontroller", CONTROLS_TEXT);
+  openGameInfoDialog("Kontroller", controlsTextForCurrentMode());
 });
 gameMenuLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
 gameMenuLeaveBtnEl?.addEventListener("click", leaveGameCompletely);
@@ -1429,6 +1480,7 @@ mobileControlsModeBtnEl?.addEventListener("click", () => {
   const next = MOBILE_CONTROLS_PREFS[(idx + 1) % MOBILE_CONTROLS_PREFS.length];
   persistMobileControlsPreference(next);
   refreshMobileControlsSettingsUi();
+  if (countdownControlsTextEl) countdownControlsTextEl.textContent = controlsTextForCurrentMode();
   updateMobileControlsVisibility();
 });
 

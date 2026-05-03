@@ -117,17 +117,24 @@ button:disabled {
 }
 
 #lobbyView {
-  position: relative;
+  position: absolute;
+  inset: 0;
   background: #13161d;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 8px;
+  box-sizing: border-box;
 }
 
 #scoreboardBar {
-  flex: 0 0 auto;
-  border-bottom: 1px solid var(--line);
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background: var(--panel-2);
-  overflow-x: auto;
+  overflow: auto;
+  flex: 0 1 auto;
+  max-height: 50%;
 }
 
 #scoreTable {
@@ -148,6 +155,10 @@ button:disabled {
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
+  position: sticky;
+  top: 0;
+  background: var(--panel-2);
+  z-index: 1;
 }
 
 .status-cell {
@@ -176,11 +187,9 @@ button:disabled {
 }
 
 #lobbyMain {
-  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 8px;
   gap: 8px;
 }
 
@@ -273,7 +282,7 @@ button:disabled {
 }
 
 #chatPanel {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -319,6 +328,7 @@ button:disabled {
   display: flex;
   gap: 14px;
   align-self: stretch;
+  margin-top: 0;
 }
 
 #lobbyActionRow button {
@@ -335,21 +345,18 @@ button:disabled {
 }
 
 #lobbyMatchStatus {
-  align-self: flex-end;
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 5px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  background: rgba(15, 18, 24, 0.78);
-  color: #d8deea;
-  font-size: 11px;
+  flex: 0 0 auto;
+  min-height: 1.2em;
+  padding: 2px 2px 0;
+  color: #e9effa;
+  font-size: clamp(16px, 2.2vw, 24px);
+  line-height: 1.15;
+  letter-spacing: 0.01em;
 }
 
 #lobbyMatchStatusTitle {
-  color: #f0f4fd;
-  font-weight: 600;
+  color: inherit;
+  font-weight: 700;
 }
 
 #lobbyDialogBackdrop {
@@ -849,7 +856,6 @@ body.touch-device #gameChatNotice {
   }
 
   #lobbyMain {
-    padding: 6px;
     gap: 6px;
   }
 
@@ -917,6 +923,10 @@ body.touch-device #gameChatNotice {
     padding: 7px 6px;
   }
 
+  #lobbyMatchStatus {
+    font-size: clamp(14px, 1.9vw, 18px);
+  }
+
   #gameChatMessages {
     max-height: 84px;
   }
@@ -948,6 +958,10 @@ body.touch-device #gameChatNotice {
   #lobbyActionRow {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #lobbyMatchStatus {
+    font-size: clamp(15px, 5vw, 20px);
   }
 
   #debugSummary {

@@ -24,23 +24,26 @@
       </section>
 
       <section id="lobbyView" class="view hidden">
-        <div id="scoreboardBar">
-          <table id="scoreTable">
-            <thead>
-              <tr>
-                <th>Namn</th>
-                <th>BR-vinster</th>
-                <th>Kills</th>
-                <th>Deaths</th>
-                <th>Oskyldiga</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="scoreBody"></tbody>
-          </table>
+        <div id="lobbyMatchStatus" aria-live="polite">
+          <span id="lobbyMatchStatusTitle">Väntar på fler spelare</span>
         </div>
 
         <div id="lobbyMain">
+          <div id="scoreboardBar">
+            <table id="scoreTable">
+              <thead>
+                <tr>
+                  <th>Namn</th>
+                  <th>Vinster</th>
+                  <th>Kills</th>
+                  <th>Deaths</th>
+                  <th>Oskyldiga</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="scoreBody"></tbody>
+            </table>
+          </div>
           <div id="chatPanel">
             <div id="chatMessages"></div>
             <div id="chatInputRow">
@@ -48,30 +51,25 @@
               <button id="chatSendBtn" type="button">Skicka</button>
             </div>
           </div>
-          <div id="lobbyActionRow">
-            <button id="playBtn" type="button">Ready</button>
-            <button id="lobbySettingsBtn" type="button">Settings</button>
-          </div>
-          <div id="lobbyMatchStatus" class="hidden" aria-live="polite">
-            <span id="lobbyMatchStatusTitle">Match pågår</span>
-            <span id="lobbyMatchStatusPlayers">Spelare kvar: 0</span>
-            <span id="lobbyMatchStatusTime">Tid: 00:00</span>
-          </div>
+        </div>
+        <div id="lobbyActionRow">
+          <button id="playBtn" type="button">Ready</button>
+          <button id="lobbySettingsBtn" type="button">Settings</button>
+        </div>
 
-          <div id="lobbyDialogBackdrop" class="hidden">
-            <div id="lobbyDialogCard" role="dialog" aria-modal="true" aria-labelledby="lobbyDialogTitle">
-              <h2 id="lobbyDialogTitle"></h2>
-              <p id="lobbyDialogText"></p>
-              <div id="settingsPanel" class="hidden">
-                <p id="settingsIntro">Styr om mobilkontroller ska visas i match.</p>
-                <div id="settingsMobileControlsRow">
-                  <span>Mobilkontroller</span>
-                  <button id="mobileControlsModeBtn" type="button">Auto</button>
-                </div>
-                <p id="mobileControlsModeHelp">Auto: visas bara när enheten identifieras som touch.</p>
+        <div id="lobbyDialogBackdrop" class="hidden">
+          <div id="lobbyDialogCard" role="dialog" aria-modal="true" aria-labelledby="lobbyDialogTitle">
+            <h2 id="lobbyDialogTitle"></h2>
+            <p id="lobbyDialogText"></p>
+            <div id="settingsPanel" class="hidden">
+              <p id="settingsIntro">Styr om mobilkontroller ska visas i match.</p>
+              <div id="settingsMobileControlsRow">
+                <span>Mobilkontroller</span>
+                <button id="mobileControlsModeBtn" type="button">Auto</button>
               </div>
-              <button id="lobbyDialogCloseBtn" type="button">Stäng</button>
+              <p id="mobileControlsModeHelp">Auto: visas bara när enheten identifieras som touch.</p>
             </div>
+            <button id="lobbyDialogCloseBtn" type="button">Stäng</button>
           </div>
         </div>
         <div id="lobbyMenuBackdrop" class="hidden">

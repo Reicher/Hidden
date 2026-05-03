@@ -1367,6 +1367,7 @@ function sanitizeSystemTextSegment(raw) {
               ready: Boolean(session.ready || session.state === "countdown"),
               countdownMsRemaining: countdownMsRemaining(now),
               activePlayers: alivePlayers,
+              minPlayersToStart: MIN_PLAYERS_TO_START,
               maxPlayers: MAX_PLAYERS,
               attackCooldownMsRemaining: playerCharacter
                 ? Math.max(0, ATTACK_COOLDOWN_MS - (now - playerCharacter.lastAttackAt))
