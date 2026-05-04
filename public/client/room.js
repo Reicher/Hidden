@@ -1,4 +1,4 @@
-import * as THREE from "https://unpkg.com/three@0.164.1/build/three.module.js";
+import * as THREE from "/vendor/three.module.js";
 import { seededRandom } from "./utils.js";
 
 const WALL_HEIGHT = 5.0;
