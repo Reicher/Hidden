@@ -90,7 +90,9 @@ export function attachGameRuntime({ server, rootDir }) {
         totalCharacters: gameplay.totalCharacters ?? currentGameplay.totalCharacters,
         maxPlayers: gameplay.maxPlayers ?? currentGameplay.maxPlayers,
         minPlayersToStart: gameplay.minPlayersToStart ?? currentGameplay.minPlayersToStart,
-        npcDownedRespawnSeconds: gameplay.npcDownedRespawnSeconds ?? currentGameplay.npcDownedRespawnSeconds
+        npcDownedRespawnSeconds: gameplay.npcDownedRespawnSeconds ?? currentGameplay.npcDownedRespawnSeconds,
+        playerAttackCooldownSeconds:
+          gameplay.playerAttackCooldownSeconds ?? currentGameplay.playerAttackCooldownSeconds
       });
     }
   }
@@ -226,7 +228,8 @@ export function attachGameRuntime({ server, rootDir }) {
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "totalCharacters") ||
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "maxPlayers") ||
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "minPlayersToStart") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcDownedRespawnSeconds");
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcDownedRespawnSeconds") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "playerAttackCooldownSeconds");
       if (!hasLayoutPatch && !hasGameplayPatch) {
         writeJson(res, 400, { error: "no_settings_provided" });
         return true;
@@ -252,12 +255,19 @@ export function attachGameRuntime({ server, rootDir }) {
           const nextNpcDownedRespawnSeconds = Object.prototype.hasOwnProperty.call(parsedBody, "npcDownedRespawnSeconds")
             ? parsedBody.npcDownedRespawnSeconds
             : currentGameplay.npcDownedRespawnSeconds;
+          const nextPlayerAttackCooldownSeconds = Object.prototype.hasOwnProperty.call(
+            parsedBody,
+            "playerAttackCooldownSeconds"
+          )
+            ? parsedBody.playerAttackCooldownSeconds
+            : currentGameplay.playerAttackCooldownSeconds;
           changed =
             setGameplaySettings({
               totalCharacters: nextTotalCharacters,
               maxPlayers: nextMaxPlayers,
               minPlayersToStart: nextMinPlayersToStart,
-              npcDownedRespawnSeconds: nextNpcDownedRespawnSeconds
+              npcDownedRespawnSeconds: nextNpcDownedRespawnSeconds,
+              playerAttackCooldownSeconds: nextPlayerAttackCooldownSeconds
             }) || changed;
         }
         if (changed) {

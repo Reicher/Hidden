@@ -52,6 +52,7 @@ const DEFAULT_TOTAL_CHARACTERS = 20;
 const DEFAULT_MAX_PLAYERS = 10;
 const DEFAULT_MIN_PLAYERS_TO_START = 2;
 const DEFAULT_NPC_DOWNED_RESPAWN_SECONDS = 8;
+const DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS = 2;
 
 function parsePositiveInt(value, fieldName) {
   const parsed = Number(value);
@@ -61,11 +62,21 @@ function parsePositiveInt(value, fieldName) {
   return parsed;
 }
 
-function normalizeGameplaySettings({ totalCharacters, maxPlayers, minPlayersToStart, npcDownedRespawnSeconds }) {
+function normalizeGameplaySettings({
+  totalCharacters,
+  maxPlayers,
+  minPlayersToStart,
+  npcDownedRespawnSeconds,
+  playerAttackCooldownSeconds
+}) {
   const normalizedTotal = parsePositiveInt(totalCharacters, "totalCharacters");
   const normalizedMax = parsePositiveInt(maxPlayers, "maxPlayers");
   const normalizedMin = parsePositiveInt(minPlayersToStart, "minPlayersToStart");
   const normalizedNpcRespawnSeconds = parsePositiveInt(npcDownedRespawnSeconds, "npcDownedRespawnSeconds");
+  const normalizedPlayerAttackCooldownSeconds = parsePositiveInt(
+    playerAttackCooldownSeconds,
+    "playerAttackCooldownSeconds"
+  );
 
   if (normalizedMax >= normalizedTotal) {
     throw new Error("maxPlayers måste vara mindre än totalCharacters.");
@@ -81,7 +92,8 @@ function normalizeGameplaySettings({ totalCharacters, maxPlayers, minPlayersToSt
     totalCharacters: normalizedTotal,
     maxPlayers: normalizedMax,
     minPlayersToStart: normalizedMin,
-    npcDownedRespawnSeconds: normalizedNpcRespawnSeconds
+    npcDownedRespawnSeconds: normalizedNpcRespawnSeconds,
+    playerAttackCooldownSeconds: normalizedPlayerAttackCooldownSeconds
   });
 }
 
@@ -91,14 +103,19 @@ let gameplaySettings = (() => {
       totalCharacters: envInt("TOTAL_CHARACTERS", DEFAULT_TOTAL_CHARACTERS),
       maxPlayers: envInt("MAX_PLAYERS", DEFAULT_MAX_PLAYERS),
       minPlayersToStart: envInt("MIN_PLAYERS_TO_START", DEFAULT_MIN_PLAYERS_TO_START),
-      npcDownedRespawnSeconds: envInt("NPC_DOWNED_RESPAWN_SECONDS", DEFAULT_NPC_DOWNED_RESPAWN_SECONDS)
+      npcDownedRespawnSeconds: envInt("NPC_DOWNED_RESPAWN_SECONDS", DEFAULT_NPC_DOWNED_RESPAWN_SECONDS),
+      playerAttackCooldownSeconds: envInt(
+        "PLAYER_ATTACK_COOLDOWN_SECONDS",
+        DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS
+      )
     });
   } catch {
     return normalizeGameplaySettings({
       totalCharacters: DEFAULT_TOTAL_CHARACTERS,
       maxPlayers: DEFAULT_MAX_PLAYERS,
       minPlayersToStart: DEFAULT_MIN_PLAYERS_TO_START,
-      npcDownedRespawnSeconds: DEFAULT_NPC_DOWNED_RESPAWN_SECONDS
+      npcDownedRespawnSeconds: DEFAULT_NPC_DOWNED_RESPAWN_SECONDS,
+      playerAttackCooldownSeconds: DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS
     });
   }
 })();
@@ -107,6 +124,7 @@ export let TOTAL_CHARACTERS = gameplaySettings.totalCharacters;
 export let MAX_PLAYERS = gameplaySettings.maxPlayers;
 export let MIN_PLAYERS_TO_START = gameplaySettings.minPlayersToStart;
 export let NPC_DOWNED_RESPAWN_MS = gameplaySettings.npcDownedRespawnSeconds * 1000;
+export let ATTACK_COOLDOWN_MS = gameplaySettings.playerAttackCooldownSeconds * 1000;
 
 function applyGameplaySettings(nextSettings) {
   gameplaySettings = nextSettings;
@@ -114,20 +132,29 @@ function applyGameplaySettings(nextSettings) {
   MAX_PLAYERS = nextSettings.maxPlayers;
   MIN_PLAYERS_TO_START = nextSettings.minPlayersToStart;
   NPC_DOWNED_RESPAWN_MS = nextSettings.npcDownedRespawnSeconds * 1000;
+  ATTACK_COOLDOWN_MS = nextSettings.playerAttackCooldownSeconds * 1000;
 }
 
-export function setGameplaySettings({ totalCharacters, maxPlayers, minPlayersToStart, npcDownedRespawnSeconds }) {
+export function setGameplaySettings({
+  totalCharacters,
+  maxPlayers,
+  minPlayersToStart,
+  npcDownedRespawnSeconds,
+  playerAttackCooldownSeconds
+}) {
   const nextSettings = normalizeGameplaySettings({
     totalCharacters,
     maxPlayers,
     minPlayersToStart,
-    npcDownedRespawnSeconds
+    npcDownedRespawnSeconds,
+    playerAttackCooldownSeconds
   });
   const changed =
     nextSettings.totalCharacters !== TOTAL_CHARACTERS ||
     nextSettings.maxPlayers !== MAX_PLAYERS ||
     nextSettings.minPlayersToStart !== MIN_PLAYERS_TO_START ||
-    nextSettings.npcDownedRespawnSeconds * 1000 !== NPC_DOWNED_RESPAWN_MS;
+    nextSettings.npcDownedRespawnSeconds * 1000 !== NPC_DOWNED_RESPAWN_MS ||
+    nextSettings.playerAttackCooldownSeconds * 1000 !== ATTACK_COOLDOWN_MS;
   if (!changed) return false;
   applyGameplaySettings(nextSettings);
   return true;
@@ -138,7 +165,8 @@ export function getGameplaySettings() {
     totalCharacters: TOTAL_CHARACTERS,
     maxPlayers: MAX_PLAYERS,
     minPlayersToStart: MIN_PLAYERS_TO_START,
-    npcDownedRespawnSeconds: Math.round(NPC_DOWNED_RESPAWN_MS / 1000)
+    npcDownedRespawnSeconds: Math.round(NPC_DOWNED_RESPAWN_MS / 1000),
+    playerAttackCooldownSeconds: Math.round(ATTACK_COOLDOWN_MS / 1000)
   });
 }
 
@@ -149,7 +177,6 @@ export const PLAYER_SPRINT_MULTIPLIER = 1.45;
 export const TURN_SPEED = 2.3;
 export const AI_DECISION_MS_MIN = 600;
 export const AI_DECISION_MS_MAX = 1800;
-export const ATTACK_COOLDOWN_MS = 1000;
 export const ATTACK_RANGE = 2.8;
 export const ATTACK_HALF_ANGLE = Math.PI / 4;
 export const ATTACK_FLASH_MS = 140;

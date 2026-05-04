@@ -20,6 +20,7 @@ const totalCharactersInputEl = document.getElementById("totalCharactersInput");
 const maxPlayersInputEl = document.getElementById("maxPlayersInput");
 const minPlayersToStartInputEl = document.getElementById("minPlayersToStartInput");
 const npcDownedRespawnSecondsInputEl = document.getElementById("npcDownedRespawnSecondsInput");
+const playerAttackCooldownSecondsInputEl = document.getElementById("playerAttackCooldownSecondsInput");
 const saveSettingsBtnEl = document.getElementById("saveSettingsBtn");
 const settingsInfoEl = document.getElementById("settingsInfo");
 const settingsStatusEl = document.getElementById("settingsStatus");
@@ -338,6 +339,9 @@ function renderSettings(settings) {
   if (npcDownedRespawnSecondsInputEl && Number.isFinite(Number(gameplay.npcDownedRespawnSeconds))) {
     npcDownedRespawnSecondsInputEl.value = String(gameplay.npcDownedRespawnSeconds);
   }
+  if (playerAttackCooldownSecondsInputEl && Number.isFinite(Number(gameplay.playerAttackCooldownSeconds))) {
+    playerAttackCooldownSecondsInputEl.value = String(gameplay.playerAttackCooldownSeconds);
+  }
 
   if (settingsInfoEl) {
     const activeLabel = settings?.layout?.label || activeLayoutId || "-";
@@ -348,7 +352,10 @@ function renderSettings(settings) {
     const infoNpcRespawn = Number.isFinite(Number(gameplay.npcDownedRespawnSeconds))
       ? gameplay.npcDownedRespawnSeconds
       : "-";
-    settingsInfoEl.textContent = `Aktiv karta: ${activeLabel}${activeSize ? ` (${activeSize}x${activeSize} meter)` : ""}. Karaktärer: ${infoChars}, max spelare: ${infoMax}, min start: ${infoMinStart}, NPC återresning: ${infoNpcRespawn}s. Ändringar startar om aktiva rum.`;
+    const infoAttackCooldown = Number.isFinite(Number(gameplay.playerAttackCooldownSeconds))
+      ? gameplay.playerAttackCooldownSeconds
+      : "-";
+    settingsInfoEl.textContent = `Aktiv karta: ${activeLabel}${activeSize ? ` (${activeSize}x${activeSize} meter)` : ""}. Karaktärer: ${infoChars}, max spelare: ${infoMax}, min start: ${infoMinStart}, NPC återresning: ${infoNpcRespawn}s, slag-cooldown: ${infoAttackCooldown}s. Ändringar startar om aktiva rum.`;
   }
 }
 
@@ -470,6 +477,10 @@ async function saveSettings() {
       npcDownedRespawnSecondsInputEl,
       "NPC återresning (sek)"
     );
+    const playerAttackCooldownSeconds = parseIntField(
+      playerAttackCooldownSecondsInputEl,
+      "Spelarslag cooldown (sek)"
+    );
     if (maxPlayers >= totalCharacters) {
       setSettingsStatus("Max antal spelare måste vara mindre än antal karaktärer.", true);
       return;
@@ -486,6 +497,10 @@ async function saveSettings() {
       setSettingsStatus("NPC återresning måste vara minst 1 sekund.", true);
       return;
     }
+    if (playerAttackCooldownSeconds < 1) {
+      setSettingsStatus("Spelarslag cooldown måste vara minst 1 sekund.", true);
+      return;
+    }
     const url = buildDebugUrl("/api/debug/settings", token);
     const res = await fetch(url, {
       method: "POST",
@@ -498,7 +513,8 @@ async function saveSettings() {
         totalCharacters,
         maxPlayers,
         minPlayersToStart,
-        npcDownedRespawnSeconds
+        npcDownedRespawnSeconds,
+        playerAttackCooldownSeconds
       })
     });
     if (res.status === 401) {
