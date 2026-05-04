@@ -1,52 +1,15 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import net from "node:net";
-import { spawn } from "node:child_process";
 import process from "node:process";
 import { WebSocket } from "ws";
+import { startServer, stopServer } from "./helpers.js";
 
 const HOST = "127.0.0.1";
-const PORT = 3200 + Math.floor(Math.random() * 120);
+const PORT = 45000 + Math.floor(Math.random() * 10000);
 const BASE_HTTP = `http://${HOST}:${PORT}`;
 const BASE_WS = `ws://${HOST}:${PORT}`;
 const DEBUG_TOKEN = "hardening-token";
-
-function startServer() {
-  const child = spawn("node", ["server.js"], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      HOST,
-      PORT: String(PORT),
-      DEBUG_VIEW_TOKEN: DEBUG_TOKEN
-    },
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-
-  let stderr = "";
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk.toString();
-  });
-
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`Server start timeout. stderr:\n${stderr}`));
-    }, 7000);
-
-    child.stdout.on("data", (chunk) => {
-      const text = chunk.toString();
-      if (text.includes("Server running on")) {
-        clearTimeout(timer);
-        resolve(child);
-      }
-    });
-
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`Server exited early (${code}). stderr:\n${stderr}`));
-    });
-  });
-}
 
 function sendRawUpgrade(pathname) {
   return new Promise((resolve, reject) => {
@@ -133,7 +96,12 @@ function postLargeDebugSettingsPayload() {
 }
 
 async function run() {
-  const server = await startServer();
+  const server = await startServer({
+    cwd: process.cwd(),
+    host: HOST,
+    port: PORT,
+    env: { DEBUG_VIEW_TOKEN: DEBUG_TOKEN }
+  });
   try {
     const malformedResponse = await sendRawUpgrade("/%E0%A4%A");
     assert.ok(
@@ -149,7 +117,7 @@ async function run() {
 
     console.log("Hardening test passed.");
   } finally {
-    server.kill("SIGTERM");
+    await stopServer(server);
   }
 }
 

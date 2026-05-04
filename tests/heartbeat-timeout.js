@@ -1,50 +1,19 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import net from "node:net";
-import { spawn } from "node:child_process";
 import process from "node:process";
+import { startServer, stopServer } from "./helpers.js";
 
 const HOST = "127.0.0.1";
-const PORT = 3200 + Math.floor(Math.random() * 120);
-
-function startServer() {
-  const child = spawn("node", ["server.js"], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      HOST,
-      PORT: String(PORT),
-      HEARTBEAT_INTERVAL_MS: "100"
-    },
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-
-  let stderr = "";
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk.toString();
-  });
-
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`Server start timeout. stderr:\n${stderr}`));
-    }, 7000);
-
-    child.stdout.on("data", (chunk) => {
-      if (chunk.toString().includes("Server running on")) {
-        clearTimeout(timer);
-        resolve(child);
-      }
-    });
-
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`Server exited early (${code}). stderr:\n${stderr}`));
-    });
-  });
-}
+const PORT = 45000 + Math.floor(Math.random() * 10000);
 
 async function main() {
-  const server = await startServer();
+  const server = await startServer({
+    cwd: process.cwd(),
+    host: HOST,
+    port: PORT,
+    env: { HEARTBEAT_INTERVAL_MS: "100" }
+  });
   try {
     const socket = new net.Socket();
     await new Promise((resolve, reject) => {
@@ -98,7 +67,7 @@ async function main() {
     assert.ok(closed >= 150, `heartbeat close happened too early: ${closed}ms`);
     console.log("Heartbeat timeout test passed.");
   } finally {
-    server.kill("SIGTERM");
+    await stopServer(server);
   }
 }
 

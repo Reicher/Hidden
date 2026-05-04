@@ -2,6 +2,17 @@ import { createSceneSystem } from "./client/scene.js";
 import { createRoomSystem } from "./client/room.js";
 import { createAvatarSystem, drawCountdownCharacterPreview } from "./client/avatars.js";
 import { createGameSocket } from "./client/network.js";
+import { createChatUi } from "./client/chatUi.js";
+import {
+  updateCrosshairHud as updateCrosshairHudUi,
+  updateDownedOverlay as updateDownedOverlayUi,
+  updateInGameHud as updateInGameHudUi,
+  updateKnockdownToast as updateKnockdownToastUi,
+  updateWinOverlay as updateWinOverlayUi
+} from "./client/hudUi.js";
+import { GAME_CREDITS_TEXT } from "./client/about.js";
+import { createInputController } from "./client/inputControls.js";
+import { handleSocketMessage } from "./client/socketMessages.js";
 
 const canvas = document.getElementById("game");
 const screenRootEl = document.getElementById("screenRoot");
@@ -24,7 +35,6 @@ const lobbyMenuCreditsBtnEl = document.getElementById("lobbyMenuCreditsBtn");
 const lobbyMenuCloseBtnEl = document.getElementById("lobbyMenuCloseBtn");
 const lobbyMatchStatusEl = document.getElementById("lobbyMatchStatus");
 const lobbyMatchStatusTitleEl = document.getElementById("lobbyMatchStatusTitle");
-const debugBtnEl = document.getElementById("debugBtn");
 const countdownOverlayEl = document.getElementById("countdownOverlay");
 const countdownTextEl = document.getElementById("countdownText");
 const countdownCharacterCanvasEl = document.getElementById("countdownCharacterCanvas");
@@ -41,18 +51,6 @@ const musicMuteBtnEl = document.getElementById("musicMuteBtn");
 const sfxVolumeInputEl = document.getElementById("sfxVolumeInput");
 const sfxMuteBtnEl = document.getElementById("sfxMuteBtn");
 const lobbyDialogCloseBtnEl = document.getElementById("lobbyDialogCloseBtn");
-const debugBackdropEl = document.getElementById("debugBackdrop");
-const debugCloseBtnEl = document.getElementById("debugCloseBtn");
-const debugTokenInputEl = document.getElementById("debugTokenInput");
-const debugLoginBtnEl = document.getElementById("debugLoginBtn");
-const debugClearTokenBtnEl = document.getElementById("debugClearTokenBtn");
-const debugAuthErrorEl = document.getElementById("debugAuthError");
-const debugSummaryEl = document.getElementById("debugSummary");
-const debugChartEl = document.getElementById("debugChart");
-const debugRoomsTextEl = document.getElementById("debugRoomsText");
-const debugPlayersTextEl = document.getElementById("debugPlayersText");
-const debugEventsTextEl = document.getElementById("debugEventsText");
-const debugMetaEl = document.getElementById("debugMeta");
 const gameHudEl = document.getElementById("gameHud");
 const crosshairHudEl = document.getElementById("crosshairHud");
 const crosshairCooldownArcEl = document.getElementById("crosshairCooldownArc");
@@ -84,7 +82,6 @@ const downedCountdownTextEl = document.getElementById("downedCountdownText");
 const downedLobbyBtnEl = document.getElementById("downedLobbyBtn");
 
 const PLAYER_NAME_KEY = "hidden_player_name";
-const DEBUG_TOKEN_KEY = "hidden_debug_token";
 const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
 const AUDIO_SETTINGS_KEY = "hidden_audio_settings";
 
@@ -108,12 +105,9 @@ let attackCooldownVisualMaxMs = 1000;
 let gameChatOpen = false;
 let gameMenuOpen = false;
 let lobbyMenuOpen = false;
-let debugOpen = false;
-let debugPollTimer = null;
-let debugLoading = false;
-let leavingGameManually = false;
 let forceYawSyncOnNextWorld = false;
-let currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
+const DEFAULT_MATCH_STATE = Object.freeze({ inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 });
+let currentMatch = { ...DEFAULT_MATCH_STATE };
 let lobbyScoreboard = [];
 let lobbyCountdownMsRemaining = 0;
 let lobbyMinPlayersToStart = 2;
@@ -122,16 +116,7 @@ let winReturnToLobbyMsRemaining = 0;
 let downedByName = "";
 let knockdownToastText = "";
 let knockdownToastMsRemaining = 0;
-
-const input = {
-  forward: false,
-  backward: false,
-  left: false,
-  right: false,
-  sprint: false,
-  yaw: 0,
-  pitch: 0
-};
+let pendingLoginName = "";
 
 const INPUT_SEND_INTERVAL_MS = 33;
 const INPUT_HEARTBEAT_MS = 120;
@@ -140,7 +125,6 @@ const CROSSHAIR_DEFAULT_COOLDOWN_MS = 1000;
 const CROSSHAIR_RING_CIRCUMFERENCE = Math.PI * 26;
 const CROSSHAIR_HIT_DISTANCE_METERS = 2.8;
 const GAME_CHAT_MAX_LINES = 5;
-const DEBUG_LIST_LIMIT = 20;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
 const JOYSTICK_DEADZONE = 0.16;
@@ -158,27 +142,16 @@ const IS_TOUCH_DEVICE = (() => {
   return coarsePointer || hoverNone || touchApi || touchPoints || mobileUa || FORCE_MOBILE_UI;
 })();
 
-let pitch = 0;
-let yaw = 0;
 let viewPitch = 0;
 let viewYaw = 0;
-let inputDirty = true;
-let lastInputSentAt = 0;
-let lastSentSnapshot = "";
 let lastFrameAt = performance.now();
-let mobileLookPointerId = null;
-let mobileLookLastX = 0;
-let mobileLookLastY = 0;
-let mobileMovePointerId = null;
-let joystickCurrentX = 0;
-let joystickCurrentY = 0;
 let mobileControlsPreference = normalizeMobileControlsPreference(localStorage.getItem(MOBILE_CONTROLS_PREF_KEY));
 let audioSettings = loadAudioSettings();
 const musicLoopEl = new Audio("/assets/music.wav");
 musicLoopEl.loop = true;
 musicLoopEl.preload = "auto";
 const GAMEPLAY_SUMMARY_TEXT = "Håll dig gömd, hitta spelare och slå ner dem.";
-const DESKTOP_CONTROLS_TEXT = "Desktop: C: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack.";
+const DESKTOP_CONTROLS_TEXT = "Desktop: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack.";
 const MOBILE_CONTROLS_TEXT =
   "Mobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta.";
 let lastCountdownPreviewCharacterId = null;
@@ -200,6 +173,14 @@ function colorForName(name) {
   return `hsl(${hue} ${sat}% ${light}%)`;
 }
 
+const chatUi = createChatUi({
+  lobbyMessagesEl: chatMessagesEl,
+  gameMessagesEl: gameChatMessagesEl,
+  colorForName,
+  shouldMirrorToGameChat: (entry) => Boolean(entry?.system) || sessionState === "won",
+  maxGameLines: GAME_CHAT_MAX_LINES
+});
+
 function normalizeAngle(angle) {
   let out = angle;
   while (out > Math.PI) out -= Math.PI * 2;
@@ -210,6 +191,29 @@ function normalizeAngle(angle) {
 function clampPitch(value) {
   return Math.max(-1.2, Math.min(1.2, value));
 }
+
+const inputController = createInputController({
+  canvas,
+  mobileJoystickBaseEl,
+  mobileJoystickKnobEl,
+  mobileLookPadEl,
+  mobileSprintBtnEl,
+  mobileAttackBtnEl,
+  isTouchDevice: IS_TOUCH_DEVICE,
+  inputSendIntervalMs: INPUT_SEND_INTERVAL_MS,
+  inputHeartbeatMs: INPUT_HEARTBEAT_MS,
+  lookTouchSensitivityX: LOOK_TOUCH_SENSITIVITY_X,
+  lookTouchSensitivityY: LOOK_TOUCH_SENSITIVITY_Y,
+  joystickDeadzone: JOYSTICK_DEADZONE,
+  clampPitch,
+  getSocket: () => socket,
+  getAppMode: () => appMode,
+  getSessionState: () => sessionState,
+  getGameMenuOpen: () => gameMenuOpen,
+  getGameChatOpen: () => gameChatOpen,
+  isGameChatFocused,
+  requestPointerLock: requestPointerLockSafe
+});
 
 function wsScheme() {
   return location.protocol === "https:" ? "wss" : "ws";
@@ -257,23 +261,6 @@ function setPrivateRoomButtonVisible(visible) {
 function setConnectError(text) {
   if (!connectErrorEl) return;
   connectErrorEl.textContent = text || "";
-}
-
-function getDebugToken() {
-  return localStorage.getItem(DEBUG_TOKEN_KEY) || "";
-}
-
-function setDebugToken(token) {
-  if (!token) {
-    localStorage.removeItem(DEBUG_TOKEN_KEY);
-    return;
-  }
-  localStorage.setItem(DEBUG_TOKEN_KEY, token);
-}
-
-function setDebugError(text) {
-  if (!debugAuthErrorEl) return;
-  debugAuthErrorEl.textContent = text || "";
 }
 
 function normalizeMobileControlsPreference(value) {
@@ -368,16 +355,6 @@ function syncMusicLoop() {
   }
   musicLoopEl.pause();
   musicLoopEl.currentTime = 0;
-}
-
-function formatDateTime(at) {
-  if (!at || !Number.isFinite(at)) return "-";
-  const date = new Date(at);
-  return `${date.toLocaleDateString("sv-SE")} ${date.toLocaleTimeString("sv-SE")}`;
-}
-
-function fmtN(value) {
-  return Number(value || 0).toLocaleString("sv-SE");
 }
 
 function requestPointerLockSafe(targetEl = canvas) {
@@ -479,7 +456,7 @@ function setGameMenuOpen(open, { restorePointerLock = false } = {}) {
   gameMenuBackdropEl.classList.toggle("hidden", !gameMenuOpen);
   if (gameMenuOpen) {
     resetInputState();
-    sendInput();
+    inputController.sendInput();
     if (document.pointerLockElement) document.exitPointerLock?.();
     gameMenuSettingsBtnEl?.focus();
     updateMobileControlsVisibility();
@@ -590,74 +567,89 @@ function resetKnockdownToast() {
   knockdownToastMsRemaining = 0;
 }
 
-function updateInGameHud() {
-  if (!aliveOthersTextEl) return;
-  const others = Math.max(0, activePlayersInGame - (sessionState === "alive" ? 1 : 0));
-  const noun = others === 1 ? "annan" : "andra";
-  aliveOthersTextEl.textContent = `${others} ${noun} spelar just nu`;
-  if (gameChatNoticeEl) {
-    gameChatNoticeEl.textContent = sessionState === "won" ? "Chatt" : "Systemhändelser";
+function resetSessionRuntimeState({ maxPlayers = 0, clearIdentity = false } = {}) {
+  if (clearIdentity) {
+    authenticated = false;
+    myName = "";
+    sessionState = "auth";
+    myCharacterId = null;
   }
+  sessionReady = false;
+  activePlayersInGame = 0;
+  attackCooldownMsRemaining = 0;
+  attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
+  currentMatch = { ...DEFAULT_MATCH_STATE };
+  lobbyScoreboard = [];
+  lobbyCountdownMsRemaining = 0;
+  lobbyMinPlayersToStart = 2;
+  lobbyMaxPlayers = Math.max(0, Number(maxPlayers || 0));
+  resetDownedState();
+  resetWinState();
+  resetKnockdownToast();
+}
+
+function updateInGameHud() {
+  updateInGameHudUi({
+    aliveOthersTextEl,
+    gameChatNoticeEl,
+    activePlayersInGame,
+    sessionState
+  });
 }
 
 function updateDownedOverlay() {
-  if (!downedOverlayEl || !downedByTextEl || !downedCountdownTextEl) return;
-  const downed = appMode === "playing" && sessionState === "downed";
-  downedOverlayEl.classList.toggle("hidden", !downed);
-  gameMenuBtnEl?.classList.toggle("hidden", downed);
-  if (!downed) return;
-
-  const killer = downedByName ? String(downedByName) : "okänd spelare";
-  downedByTextEl.textContent = `Du blev nedslagen av ${killer}`;
-  downedCountdownTextEl.textContent = "Tryck på knappen för att återgå till lobbyn.";
+  updateDownedOverlayUi({
+    downedOverlayEl,
+    downedByTextEl,
+    downedCountdownTextEl,
+    gameMenuBtnEl,
+    appMode,
+    sessionState,
+    downedByName
+  });
 }
 
 function updateWinOverlay() {
-  if (!winOverlayEl || !winTitleEl || !winCountdownTextEl) return;
-  const won = appMode === "playing" && sessionState === "won";
-  winOverlayEl.classList.toggle("hidden", !won);
-  gameMenuBtnEl?.classList.toggle("hidden", won);
-  if (!won) return;
-  winTitleEl.textContent = "Du vann!";
-  const sec = Math.max(0, Math.ceil(winReturnToLobbyMsRemaining / 1000));
-  winCountdownTextEl.textContent = `Återgå till lobbyn om ${sec}`;
+  updateWinOverlayUi({
+    winOverlayEl,
+    winTitleEl,
+    winCountdownTextEl,
+    gameMenuBtnEl,
+    appMode,
+    sessionState,
+    winReturnToLobbyMsRemaining
+  });
 }
 
 function updateKnockdownToast() {
-  if (!knockdownToastEl) return;
-  const visible =
-    appMode === "playing" && sessionState !== "won" && knockdownToastMsRemaining > 0 && Boolean(knockdownToastText);
-  knockdownToastEl.classList.toggle("hidden", !visible);
-  if (visible) knockdownToastEl.textContent = knockdownToastText;
+  updateKnockdownToastUi({
+    knockdownToastEl,
+    appMode,
+    sessionState,
+    knockdownToastMsRemaining,
+    knockdownToastText
+  });
 }
 
 function updateCrosshairHud(deltaSec) {
-  if (!crosshairHudEl || !crosshairCooldownArcEl) return;
-
-  const inActiveGameplay = appMode === "playing" && sessionState === "alive" && myCharacterId != null;
-  crosshairHudEl.classList.toggle("hidden", !inActiveGameplay);
-  if (!inActiveGameplay) return;
-
-  attackCooldownMsRemaining = Math.max(0, attackCooldownMsRemaining - Math.max(0, deltaSec) * 1000);
-  const onCooldown = attackCooldownMsRemaining > CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS;
-  crosshairHudEl.classList.toggle("cooldown", onCooldown);
-
-  if (onCooldown) {
-    const visualMax = Math.max(120, attackCooldownVisualMaxMs || CROSSHAIR_DEFAULT_COOLDOWN_MS);
-    const cooldownRatio = Math.max(0, Math.min(1, attackCooldownMsRemaining / visualMax));
-    const dashOffset = CROSSHAIR_RING_CIRCUMFERENCE * (1 - cooldownRatio);
-    crosshairCooldownArcEl.style.strokeDashoffset = dashOffset.toFixed(3);
-    crosshairHudEl.classList.remove("targeting");
-    return;
-  }
-
-  crosshairCooldownArcEl.style.strokeDashoffset = CROSSHAIR_RING_CIRCUMFERENCE.toFixed(3);
-  camera.updateMatrixWorld(true);
-  const aimingAtCharacter = avatarSystem.isAimingAtCharacter({
+  const next = updateCrosshairHudUi({
+    crosshairHudEl,
+    crosshairCooldownArcEl,
+    appMode,
+    sessionState,
     myCharacterId,
-    maxDistance: CROSSHAIR_HIT_DISTANCE_METERS
+    attackCooldownMsRemaining,
+    attackCooldownVisualMaxMs,
+    deltaSec,
+    crosshairCooldownMinVisibleMs: CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS,
+    crosshairDefaultCooldownMs: CROSSHAIR_DEFAULT_COOLDOWN_MS,
+    crosshairRingCircumference: CROSSHAIR_RING_CIRCUMFERENCE,
+    crosshairHitDistanceMeters: CROSSHAIR_HIT_DISTANCE_METERS,
+    camera,
+    avatarSystem
   });
-  crosshairHudEl.classList.toggle("targeting", aimingAtCharacter);
+  attackCooldownMsRemaining = next.attackCooldownMsRemaining;
+  attackCooldownVisualMaxMs = next.attackCooldownVisualMaxMs;
 }
 
 function setAppMode(mode) {
@@ -686,10 +678,6 @@ function setAppMode(mode) {
     resetInputState();
   }
 
-  if (mode !== "lobby" && debugOpen) {
-    closeDebugView();
-  }
-
   if (mode !== "playing") setGameChatOpen(false);
   if (mode !== "playing") setGameMenuOpen(false);
   if (mode !== "lobby") setLobbyMenuOpen(false);
@@ -712,76 +700,6 @@ function updateScreenRootPointerEvents() {
   const dialogOpenInGame =
     appMode === "playing" && lobbyDialogBackdropEl && !lobbyDialogBackdropEl.classList.contains("hidden");
   screenRootEl.style.pointerEvents = overlayActive || dialogOpenInGame ? "auto" : "none";
-}
-
-async function fetchAndRenderDebugData() {
-  if (!debugOpen || debugLoading) return;
-  debugLoading = true;
-  try {
-    const inputToken = debugTokenInputEl?.value?.trim() || "";
-    const storedToken = getDebugToken().trim();
-    const token = inputToken || storedToken;
-    if (token) setDebugToken(token);
-
-    const debugUrl = new URL("/api/debug/stats", location.origin);
-    if (token) debugUrl.searchParams.set("token", token);
-
-    const response = await fetch(debugUrl, {
-      method: "GET",
-      cache: "no-store",
-      headers: { Accept: "application/json" }
-    });
-
-    if (response.status === 401) {
-      setDebugError("Fel token för debug-vyn.");
-      return;
-    }
-    if (!response.ok) {
-      setDebugError(`Kunde inte läsa debugdata (${response.status}).`);
-      return;
-    }
-
-    const payload = await response.json();
-    setDebugError("");
-    renderDebugData(payload);
-  } catch {
-    setDebugError("Nätverksfel när debugdata skulle hämtas.");
-  } finally {
-    debugLoading = false;
-  }
-}
-
-function startDebugPolling() {
-  if (debugPollTimer) {
-    clearInterval(debugPollTimer);
-    debugPollTimer = null;
-  }
-  fetchAndRenderDebugData();
-  debugPollTimer = setInterval(fetchAndRenderDebugData, 5000);
-}
-
-function stopDebugPolling() {
-  if (!debugPollTimer) return;
-  clearInterval(debugPollTimer);
-  debugPollTimer = null;
-}
-
-function openDebugView() {
-  if (!debugBackdropEl) return;
-  debugOpen = true;
-  debugBackdropEl.classList.remove("hidden");
-  closeLobbyDialog();
-  if (debugTokenInputEl && !debugTokenInputEl.value) {
-    debugTokenInputEl.value = getDebugToken();
-  }
-  setDebugError("");
-  startDebugPolling();
-}
-
-function closeDebugView() {
-  debugOpen = false;
-  stopDebugPolling();
-  debugBackdropEl?.classList.add("hidden");
 }
 
 function setCountdownTextFromSession(state) {
@@ -868,320 +786,159 @@ function renderScoreboard(players) {
   updateLobbyMatchStatus();
 }
 
-function renderDebugSummary(data) {
-  if (!debugSummaryEl) return;
-  const cards = [
-    ["Anslutna nu", fmtN(data?.current?.connected)],
-    ["Inloggade nu", fmtN(data?.current?.authenticated)],
-    ["Spelar nu", fmtN(data?.current?.active)],
-    ["Peak anslutna", fmtN(data?.peaks?.connected)],
-    ["Totala besök", fmtN(data?.totals?.totalConnections)],
-    ["Totala logins", fmtN(data?.totals?.totalLogins)],
-    ["Unika namn", fmtN(data?.totals?.uniqueNames)],
-    ["Aktiva rum nu", fmtN(data?.current?.roomCountWithSessions)],
-    ["Server start", formatDateTime(data?.startedAt)]
-  ];
-  debugSummaryEl.textContent = "";
-  for (const [k, v] of cards) {
-    const card = document.createElement("div");
-    card.className = "debugStatCard";
-    const keyEl = document.createElement("span");
-    keyEl.className = "k";
-    keyEl.textContent = k;
-    const valueEl = document.createElement("span");
-    valueEl.className = "v";
-    valueEl.textContent = v;
-    card.appendChild(keyEl);
-    card.appendChild(valueEl);
-    debugSummaryEl.appendChild(card);
-  }
-}
-
-function drawDebugChart(samples) {
-  const canvasEl = debugChartEl;
-  if (!canvasEl) return;
-  const ctx = canvasEl.getContext("2d");
-  if (!ctx) return;
-
-  const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
-  const cssWidth = Math.max(300, Math.floor(canvasEl.clientWidth || 960));
-  const cssHeight = Math.max(180, Math.floor(canvasEl.clientHeight || 240));
-  canvasEl.width = cssWidth * dpr;
-  canvasEl.height = cssHeight * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  ctx.clearRect(0, 0, cssWidth, cssHeight);
-  ctx.fillStyle = "#0d1117";
-  ctx.fillRect(0, 0, cssWidth, cssHeight);
-
-  const points = Array.isArray(samples) ? samples.slice(-200) : [];
-  if (points.length < 2) {
-    ctx.fillStyle = "#a9b2c3";
-    ctx.font = "12px JetBrains Mono";
-    ctx.fillText("Ingen historik än - data fylls på över tid.", 12, 22);
-    return;
-  }
-
-  const values = [];
-  for (const sample of points) {
-    values.push(Number(sample.connected || 0));
-    values.push(Number(sample.authenticated || 0));
-    values.push(Number(sample.active || 0));
-  }
-  const maxY = Math.max(1, ...values);
-  const padX = 38;
-  const padY = 16;
-  const innerW = cssWidth - padX - 10;
-  const innerH = cssHeight - padY * 2 - 18;
-
-  ctx.strokeStyle = "rgba(255,255,255,0.12)";
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i += 1) {
-    const y = padY + (innerH * i) / 4;
-    ctx.beginPath();
-    ctx.moveTo(padX, y);
-    ctx.lineTo(padX + innerW, y);
-    ctx.stroke();
-    const value = Math.round(maxY * (1 - i / 4));
-    ctx.fillStyle = "#9ca6b8";
-    ctx.font = "11px JetBrains Mono";
-    ctx.fillText(String(value), 4, y + 4);
-  }
-
-  function drawLine(field, color) {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let i = 0; i < points.length; i += 1) {
-      const sample = points[i];
-      const x = padX + (innerW * i) / (points.length - 1);
-      const value = Number(sample[field] || 0);
-      const y = padY + innerH - (value / maxY) * innerH;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-  }
-
-  drawLine("connected", "#7ad8ff");
-  drawLine("authenticated", "#8de16f");
-  drawLine("active", "#ffcf6a");
-
-  const firstAt = Number(points[0].at || 0);
-  const lastAt = Number(points[points.length - 1].at || 0);
-  const spanMin = Math.max(1, Math.round((lastAt - firstAt) / 60000));
-  ctx.fillStyle = "#a9b2c3";
-  ctx.font = "11px JetBrains Mono";
-  ctx.fillText(`Tidsfönster: ~${spanMin} min`, padX, cssHeight - 5);
-  ctx.fillText("anslutna", cssWidth - 274, cssHeight - 5);
-  ctx.fillStyle = "#7ad8ff";
-  ctx.fillRect(cssWidth - 286, cssHeight - 13, 8, 8);
-  ctx.fillStyle = "#a9b2c3";
-  ctx.fillText("inloggade", cssWidth - 198, cssHeight - 5);
-  ctx.fillStyle = "#8de16f";
-  ctx.fillRect(cssWidth - 210, cssHeight - 13, 8, 8);
-  ctx.fillStyle = "#a9b2c3";
-  ctx.fillText("spelar", cssWidth - 104, cssHeight - 5);
-  ctx.fillStyle = "#ffcf6a";
-  ctx.fillRect(cssWidth - 116, cssHeight - 13, 8, 8);
-}
-
-function formatRoomLabel(room) {
-  if (!room) return "-";
-  return room.isPrivate ? `privat:${room.roomCode || room.roomId}` : "publik";
-}
-
-function buildDebugRoomRows(data) {
-  const activeRooms = Array.isArray(data?.liveRooms) ? data.liveRooms : [];
-  const historicalRooms = Array.isArray(data?.rooms) ? data.rooms : [];
-  const byId = new Map();
-
-  for (const room of historicalRooms) {
-    const roomId = String(room?.roomId || "").trim();
-    if (!roomId) continue;
-    byId.set(roomId, {
-      roomId,
-      roomCode: room.roomCode || null,
-      isPrivate: Boolean(room.isPrivate),
-      lastEventAt: Number(room.lastEventAt || 0),
-      uniqueNames: Array.isArray(room.uniqueNames) ? room.uniqueNames : [],
-      hasLive: false,
-      authenticatedNames: []
-    });
-  }
-
-  for (const room of activeRooms) {
-    const roomId = String(room?.roomId || "").trim();
-    if (!roomId) continue;
-    const existing = byId.get(roomId) || {
-      roomId,
-      roomCode: room.roomCode || null,
-      isPrivate: Boolean(room.isPrivate),
-      lastEventAt: 0,
-      uniqueNames: [],
-      hasLive: false,
-      authenticatedNames: []
-    };
-    existing.roomCode = room.roomCode || existing.roomCode;
-    existing.isPrivate = Boolean(room.isPrivate);
-    existing.hasLive = true;
-    existing.authenticatedNames = Array.isArray(room.authenticatedNames) ? room.authenticatedNames : [];
-    byId.set(roomId, existing);
-  }
-
-  return [...byId.values()].sort((a, b) => {
-    if (a.hasLive !== b.hasLive) return a.hasLive ? -1 : 1;
-    if (b.lastEventAt !== a.lastEventAt) return b.lastEventAt - a.lastEventAt;
-    return a.roomId.localeCompare(b.roomId, "sv");
-  });
-}
-
-function renderDebugData(data) {
-  renderDebugSummary(data);
-  drawDebugChart(data?.samples || []);
-  const roomRows = buildDebugRoomRows(data);
-  const roomLabelById = new Map(roomRows.map((room) => [room.roomId, formatRoomLabel(room)]));
-
-  if (debugRoomsTextEl) {
-    if (roomRows.length === 0) {
-      debugRoomsTextEl.textContent = "Inga rum.";
-    } else {
-      const visible = roomRows.slice(0, DEBUG_LIST_LIMIT);
-      const activeRows = visible.filter((room) => room.hasLive);
-      const historicalRows = visible.filter((room) => !room.hasLive);
-      const lines = [];
-
-      if (activeRows.length > 0) {
-        lines.push(`Aktiva (${activeRows.length}):`);
-        for (const room of activeRows) {
-          const names = room.authenticatedNames.length > 0 ? room.authenticatedNames.join(", ") : "-";
-          lines.push(`${formatRoomLabel(room)} | namn: ${names}`);
-        }
-      }
-      if (historicalRows.length > 0) {
-        if (lines.length > 0) lines.push("");
-        lines.push(`Tidigare (${historicalRows.length}):`);
-        for (const room of historicalRows) {
-          const names = room.uniqueNames.length > 0 ? room.uniqueNames.join(", ") : "-";
-          lines.push(`${formatRoomLabel(room)} | senast: ${formatDateTime(room.lastEventAt)} | namn: ${names}`);
-        }
-      }
-
-      debugRoomsTextEl.textContent = lines.join("\n");
-    }
-  }
-
-  if (debugPlayersTextEl) {
-    const players = Array.isArray(data?.players) ? data.players.slice(0, DEBUG_LIST_LIMIT) : [];
-    debugPlayersTextEl.textContent =
-      players.length > 0
-        ? players
-            .map(
-              (player) =>
-                `${player.name} | senast: ${formatDateTime(player.lastSeenAt)} | rum: ${
-                  (player.rooms || []).map((roomId) => roomLabelById.get(roomId) || roomId).join(", ") || "-"
-                }`
-            )
-            .join("\n")
-        : "Inga namn loggade ännu.";
-  }
-
-  if (debugEventsTextEl) {
-    const events = Array.isArray(data?.recentEvents)
-      ? data.recentEvents.slice(-DEBUG_LIST_LIMIT).reverse()
-      : [];
-    debugEventsTextEl.textContent =
-      events.length > 0
-        ? events
-            .map((event) => {
-              const label = formatRoomLabel(event);
-              const name = event.name || "-";
-              return `${formatDateTime(event.at)} | ${event.type} | ${label} | ${name}`;
-            })
-            .join("\n")
-        : "Inga events ännu.";
-  }
-
-  if (debugMetaEl) {
-    debugMetaEl.textContent = `Senast uppdaterad: ${formatDateTime(data?.generatedAt)} | Loggar: logs/debug-events.log + logs/debug-samples.jsonl`;
-  }
-}
-
-function appendChatLine(container, entry) {
-  if (!container) return;
-  if (!entry || typeof entry.text !== "string") return;
-  const line = document.createElement("p");
-  line.className = "chat-line";
-
-  if (entry.system) {
-    line.classList.add("chat-system");
-    if (Array.isArray(entry.segments) && entry.segments.length > 0) {
-      for (const seg of entry.segments) {
-        if (seg?.type === "player") {
-          const playerSpan = document.createElement("span");
-          playerSpan.className = "chat-name";
-          playerSpan.style.color = colorForName(seg.name);
-          playerSpan.textContent = seg.name || "";
-          line.appendChild(playerSpan);
-          continue;
-        }
-        const textSpan = document.createElement("span");
-        textSpan.textContent = seg?.text || "";
-        line.appendChild(textSpan);
-      }
-    } else {
-      line.textContent = entry.text;
-    }
-    container.appendChild(line);
-    container.scrollTop = container.scrollHeight;
-    return;
-  }
-
-  const nameSpan = document.createElement("span");
-  nameSpan.className = "chat-name";
-  nameSpan.textContent = `${entry.name || "okänd"}: `;
-  nameSpan.style.color = colorForName(entry.name);
-
-  const textSpan = document.createElement("span");
-  textSpan.textContent = entry.text;
-
-  line.appendChild(nameSpan);
-  line.appendChild(textSpan);
-  container.appendChild(line);
-  container.scrollTop = container.scrollHeight;
-}
-
 function appendChat(entry) {
-  appendChatLine(chatMessagesEl, entry);
-  const mirrorToGameChat = Boolean(entry?.system) || sessionState === "won";
-  if (mirrorToGameChat) {
-    appendChatLine(gameChatMessagesEl, entry);
-    if (gameChatMessagesEl) {
-      while (gameChatMessagesEl.children.length > GAME_CHAT_MAX_LINES) {
-        gameChatMessagesEl.removeChild(gameChatMessagesEl.firstElementChild);
-      }
-    }
-  }
+  chatUi.appendChat(entry);
 }
 
 function replaceChat(history) {
-  if (chatMessagesEl) chatMessagesEl.textContent = "";
-  if (gameChatMessagesEl) gameChatMessagesEl.textContent = "";
-  if (!Array.isArray(history)) return;
-  for (const entry of history) appendChat(entry);
+  chatUi.replaceChat(history);
 }
 
 function resetInputState() {
-  input.forward = false;
-  input.backward = false;
-  input.left = false;
-  input.right = false;
-  input.sprint = false;
-  input.yaw = yaw;
-  input.pitch = pitch;
-  inputDirty = true;
-  resetJoystickState();
+  inputController.resetInputState();
 }
+
+const socketState = {
+  get authenticated() {
+    return authenticated;
+  },
+  set authenticated(value) {
+    authenticated = value;
+  },
+  get myName() {
+    return myName;
+  },
+  set myName(value) {
+    myName = value;
+  },
+  get sessionState() {
+    return sessionState;
+  },
+  set sessionState(value) {
+    sessionState = value;
+  },
+  get sessionReady() {
+    return sessionReady;
+  },
+  set sessionReady(value) {
+    sessionReady = value;
+  },
+  get myCharacterId() {
+    return myCharacterId;
+  },
+  set myCharacterId(value) {
+    myCharacterId = value;
+  },
+  get activePlayersInGame() {
+    return activePlayersInGame;
+  },
+  set activePlayersInGame(value) {
+    activePlayersInGame = value;
+  },
+  get attackCooldownMsRemaining() {
+    return attackCooldownMsRemaining;
+  },
+  set attackCooldownMsRemaining(value) {
+    attackCooldownMsRemaining = value;
+  },
+  get attackCooldownVisualMaxMs() {
+    return attackCooldownVisualMaxMs;
+  },
+  set attackCooldownVisualMaxMs(value) {
+    attackCooldownVisualMaxMs = value;
+  },
+  get forceYawSyncOnNextWorld() {
+    return forceYawSyncOnNextWorld;
+  },
+  set forceYawSyncOnNextWorld(value) {
+    forceYawSyncOnNextWorld = value;
+  },
+  get currentMatch() {
+    return currentMatch;
+  },
+  set currentMatch(value) {
+    currentMatch = value;
+  },
+  get lobbyMinPlayersToStart() {
+    return lobbyMinPlayersToStart;
+  },
+  set lobbyMinPlayersToStart(value) {
+    lobbyMinPlayersToStart = value;
+  },
+  get lobbyMaxPlayers() {
+    return lobbyMaxPlayers;
+  },
+  set lobbyMaxPlayers(value) {
+    lobbyMaxPlayers = value;
+  },
+  get winReturnToLobbyMsRemaining() {
+    return winReturnToLobbyMsRemaining;
+  },
+  set winReturnToLobbyMsRemaining(value) {
+    winReturnToLobbyMsRemaining = value;
+  },
+  get downedByName() {
+    return downedByName;
+  },
+  set downedByName(value) {
+    downedByName = value;
+  },
+  get knockdownToastText() {
+    return knockdownToastText;
+  },
+  set knockdownToastText(value) {
+    knockdownToastText = value;
+  },
+  get knockdownToastMsRemaining() {
+    return knockdownToastMsRemaining;
+  },
+  set knockdownToastMsRemaining(value) {
+    knockdownToastMsRemaining = value;
+  },
+  get pendingLoginName() {
+    return pendingLoginName;
+  },
+  set pendingLoginName(value) {
+    pendingLoginName = value;
+  }
+};
+
+const socketMessageContext = {
+  state: socketState,
+  constants: {
+    DEFAULT_MATCH_STATE,
+    CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS,
+    CROSSHAIR_DEFAULT_COOLDOWN_MS,
+    KNOCKDOWN_TOAST_MS
+  },
+  roomSystem,
+  avatarSystem,
+  inputController,
+  getNowMs: () => performance.now(),
+  actions: {
+    resetSessionRuntimeState,
+    replaceChat,
+    appendChat,
+    setConnectError,
+    setPrivateRoomButtonVisible,
+    setAppMode,
+    setCountdownTextFromSession,
+    updateLobbyMatchStatus,
+    updateInGameHud,
+    updateDocumentTitle,
+    updateKnockdownToast,
+    resetDownedState,
+    resetWinState,
+    resetInputState,
+    setGameMenuOpen,
+    setGameChatOpen,
+    requestPointerLockSafe,
+    renderScoreboard,
+    setViewYaw: (value) => {
+      viewYaw = value;
+    }
+  }
+};
 
 function attachSocket(wsUrl, loginName) {
   const generation = ++socketGeneration;
@@ -1205,221 +962,23 @@ function attachSocket(wsUrl, loginName) {
     },
     onMessage: (msg) => {
       if (generation !== socketGeneration) return;
-
-      if (msg.type === "login_ok") {
-        authenticated = true;
-        myName = msg.name || loginName;
-        sessionReady = false;
-        attackCooldownMsRemaining = 0;
-        attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
-        currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
-        lobbyScoreboard = [];
-        lobbyCountdownMsRemaining = 0;
-        lobbyMinPlayersToStart = 2;
-        lobbyMaxPlayers = Math.max(0, Number(msg.maxPlayers || 0));
-        resetDownedState();
-        resetWinState();
-        resetKnockdownToast();
-        replaceChat(msg.chatHistory || []);
-        setConnectError("");
-        setPrivateRoomButtonVisible(false);
-        setAppMode("lobby");
-        return;
-      }
-
-      if (msg.type === "login_error") {
-        authenticated = false;
-        myName = "";
-        sessionReady = false;
-        attackCooldownMsRemaining = 0;
-        attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
-        currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
-        lobbyScoreboard = [];
-        lobbyCountdownMsRemaining = 0;
-        lobbyMinPlayersToStart = 2;
-        lobbyMaxPlayers = 0;
-        resetDownedState();
-        resetWinState();
-        resetKnockdownToast();
-        setAppMode("connect");
-        setConnectError(msg.message || "Inloggning misslyckades.");
-        setPrivateRoomButtonVisible(msg.reason === "room_full");
-        return;
-      }
-
-      if (msg.type === "action_error") {
-        setCountdownTextFromSession({ state: "lobby" });
-        setConnectError(msg.message || "Kunde inte utföra åtgärden.");
-        return;
-      }
-
-      if (msg.type === "chat") {
-        appendChat(msg.entry);
-        return;
-      }
-
-      if (msg.type === "knockdown_confirm") {
-        const victimName = String(msg.victimName || "").trim();
-        if (victimName) {
-          knockdownToastText = `Du slog ner ${victimName}`;
-          knockdownToastMsRemaining = KNOCKDOWN_TOAST_MS;
-          updateKnockdownToast();
-        }
-        return;
-      }
-
-      if (msg.type === "countdown") {
-        // world-session hanterar själva visningen; detta är bara om world dröjer.
-        setCountdownTextFromSession({ countdownMsRemaining: Number(msg.seconds || 1) * 1000 });
-        return;
-      }
-
-      if (msg.type === "possess") {
-        myCharacterId = msg.characterId ?? null;
-        forceYawSyncOnNextWorld = myCharacterId != null;
-        return;
-      }
-
-      if (msg.type !== "world") return;
-
-      const previousCharacterId = myCharacterId;
-      const previousSessionState = sessionState;
-      let enteredAlive = false;
-      const state = msg.session;
-      if (msg.match && typeof msg.match === "object") {
-        currentMatch = {
-          inProgress: Boolean(msg.match.inProgress),
-          alivePlayers: Number(msg.match.alivePlayers || 0),
-          startedAt: msg.match.startedAt || null,
-          elapsedMs: Number(msg.match.elapsedMs || 0)
-        };
-      } else {
-        currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
-      }
-      if (state) {
-        sessionState = state.state;
-        authenticated = Boolean(state.authenticated);
-        myName = state.name || myName;
-        sessionReady = Boolean(state.ready);
-        lobbyMinPlayersToStart = Math.max(1, Number(state.minPlayersToStart || lobbyMinPlayersToStart || 2));
-        lobbyMaxPlayers = Math.max(0, Number(state.maxPlayers || lobbyMaxPlayers || 0));
-        myCharacterId = state.characterId ?? null;
-        activePlayersInGame = Number(state.activePlayers || 0);
-        winReturnToLobbyMsRemaining = Math.max(0, Number(state.returnToLobbyMsRemaining || 0));
-        downedByName = state.eliminatedByName ? String(state.eliminatedByName) : "";
-        attackCooldownMsRemaining = Math.max(0, Number(state.attackCooldownMsRemaining || 0));
-        if (attackCooldownMsRemaining > CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS) {
-          attackCooldownVisualMaxMs = Math.max(
-            attackCooldownVisualMaxMs * 0.9,
-            attackCooldownMsRemaining,
-            CROSSHAIR_DEFAULT_COOLDOWN_MS
-          );
-        }
-        updateInGameHud();
-        updateDocumentTitle();
-        enteredAlive = previousSessionState !== "alive" && sessionState === "alive";
-      } else {
-        resetDownedState();
-        resetWinState();
-      }
-
-      if (previousSessionState === "alive" && (sessionState === "downed" || sessionState === "won")) {
-        if (document.pointerLockElement) document.exitPointerLock?.();
-        resetInputState();
-        setGameMenuOpen(false);
-        setGameChatOpen(false);
-      }
-
-      if (!authenticated) {
-        setAppMode("connect");
-      } else if (sessionState === "alive" || sessionState === "downed" || sessionState === "won") {
-        setConnectError("");
-        setAppMode("playing");
-        if (enteredAlive) requestPointerLockSafe(canvas);
-      } else {
-        setAppMode("lobby");
-      }
-      setCountdownTextFromSession(state);
-      updateLobbyMatchStatus();
-
-      try {
-        roomSystem.syncFromWorld({
-          worldSizeMeters: msg.worldSizeMeters,
-          roomHalfSize: msg.roomHalfSize,
-          shelves: msg.shelves,
-          coolers: msg.coolers,
-          freezers: msg.freezers
-        });
-
-        renderScoreboard(msg.scoreboard || []);
-
-        const controlledYaw = avatarSystem.applyWorldCharacters({
-          characters: msg.characters || [],
-          myCharacterId,
-          nowMs: performance.now(),
-          hideMyCharacter: sessionState === "alive" || sessionState === "won"
-        });
-
-        if (controlledYaw != null) {
-          const gainedNewCharacter = myCharacterId != null && myCharacterId !== previousCharacterId;
-          const enteredAliveWithCharacter =
-            previousSessionState !== "alive" && sessionState === "alive" && myCharacterId != null;
-          if (gainedNewCharacter || enteredAliveWithCharacter || forceYawSyncOnNextWorld) {
-            yaw = controlledYaw;
-            viewYaw = controlledYaw;
-            input.yaw = yaw;
-            input.pitch = pitch;
-            forceYawSyncOnNextWorld = false;
-          }
-        } else if (forceYawSyncOnNextWorld && myCharacterId == null) {
-          forceYawSyncOnNextWorld = false;
-        }
-      } catch (err) {
-        console.error("[client:world-render]", err);
-      }
+      socketState.pendingLoginName = loginName;
+      handleSocketMessage(msg, socketMessageContext);
     },
     onClose: () => {
       if (generation !== socketGeneration) return;
       connecting = false;
-      authenticated = false;
-      sessionState = "auth";
-      sessionReady = false;
-      myCharacterId = null;
-      attackCooldownMsRemaining = 0;
-      attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
-      activePlayersInGame = 0;
-      currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
-      lobbyScoreboard = [];
-      lobbyCountdownMsRemaining = 0;
-      lobbyMinPlayersToStart = 2;
-      lobbyMaxPlayers = 0;
-      resetDownedState();
-      resetWinState();
-      resetKnockdownToast();
+      resetSessionRuntimeState({ clearIdentity: true });
       updateConnectButton();
-      if (leavingGameManually) {
-        leavingGameManually = false;
-        setAppMode("connect");
-        setConnectError("");
-      } else {
-        setAppMode("disconnected");
-        setConnectError("Anslutningen bröts.");
-      }
+      setAppMode("disconnected");
+      setConnectError("Anslutningen bröts.");
       setPrivateRoomButtonVisible(false);
       updateDocumentTitle();
     },
     onError: () => {
       if (generation !== socketGeneration) return;
       connecting = false;
-      attackCooldownMsRemaining = 0;
-      attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
-      lobbyScoreboard = [];
-      lobbyCountdownMsRemaining = 0;
-      lobbyMinPlayersToStart = 2;
-      lobbyMaxPlayers = 0;
-      resetDownedState();
-      resetWinState();
-      resetKnockdownToast();
+      resetSessionRuntimeState({ maxPlayers: 0 });
       updateConnectButton();
       setConnectError("Kunde inte ansluta till servern.");
       setAppMode("connect");
@@ -1442,20 +1001,10 @@ function connectAndLogin() {
   const wsUrl = `${wsScheme()}://${location.host}${activeRoomPath()}`;
 
   localStorage.setItem(PLAYER_NAME_KEY, rawName);
+  pendingLoginName = rawName;
 
   connecting = true;
-  authenticated = false;
-  sessionState = "auth";
-  sessionReady = false;
-  myCharacterId = null;
-  attackCooldownMsRemaining = 0;
-  attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
-  myName = "";
-  activePlayersInGame = 0;
-  lobbyMaxPlayers = 0;
-  resetDownedState();
-  resetWinState();
-  resetKnockdownToast();
+  resetSessionRuntimeState({ clearIdentity: true });
   updateConnectButton();
   setConnectError("");
   setPrivateRoomButtonVisible(false);
@@ -1478,223 +1027,11 @@ function requestReturnToLobby() {
   setGameMenuOpen(false);
 }
 
-function leaveGameCompletely() {
-  if (!socket) return;
-  setGameMenuOpen(false);
-  leavingGameManually = true;
-  try {
-    socket.close(1000, "left_game");
-  } catch {
-    // no-op
-  }
-}
-
-function sendInput() {
-  if (appMode !== "playing" || (sessionState !== "alive" && sessionState !== "won")) return;
-  const now = performance.now();
-  const payload = { type: "input", input };
-  const snapshot = JSON.stringify(payload);
-  const heartbeatDue = now - lastInputSentAt >= INPUT_HEARTBEAT_MS;
-  if (!inputDirty && !heartbeatDue && snapshot === lastSentSnapshot) return;
-  if (!socket || !socket.sendJson(payload)) return;
-  inputDirty = false;
-  lastInputSentAt = now;
-  lastSentSnapshot = snapshot;
-}
-
-function setMoveInputState(field, active) {
-  if (!(field in input)) return;
-  if (input[field] === active) return;
-  input[field] = active;
-  inputDirty = true;
-}
-
-function resetMoveDirectionalInput() {
-  setMoveInputState("forward", false);
-  setMoveInputState("backward", false);
-  setMoveInputState("left", false);
-  setMoveInputState("right", false);
-}
-
-function updateJoystickVisual() {
-  if (!mobileJoystickKnobEl || !mobileJoystickBaseEl) return;
-  const radius = mobileJoystickBaseEl.clientWidth * 0.5;
-  const travel = Math.max(0, radius - mobileJoystickKnobEl.clientWidth * 0.5 - 4);
-  mobileJoystickKnobEl.style.transform = `translate(calc(-50% + ${joystickCurrentX * travel}px), calc(-50% + ${joystickCurrentY * travel}px))`;
-}
-
-function applyMovementFromJoystick(x, y) {
-  const mag = Math.hypot(x, y);
-  if (mag < JOYSTICK_DEADZONE) {
-    resetMoveDirectionalInput();
-    return;
-  }
-
-  setMoveInputState("forward", y < -JOYSTICK_DEADZONE * 0.75);
-  setMoveInputState("backward", y > JOYSTICK_DEADZONE * 0.75);
-  setMoveInputState("left", x < -JOYSTICK_DEADZONE * 0.75);
-  setMoveInputState("right", x > JOYSTICK_DEADZONE * 0.75);
-}
-
-function resetJoystickState() {
-  joystickCurrentX = 0;
-  joystickCurrentY = 0;
-  updateJoystickVisual();
-  resetMoveDirectionalInput();
-}
-
-function bindHoldButton(el, onStart, onStop) {
-  if (!el) return;
-
-  const stop = (event) => {
-    if (event && event.pointerId != null && el.hasPointerCapture?.(event.pointerId)) {
-      el.releasePointerCapture(event.pointerId);
-    }
-    onStop();
-  };
-
-  el.addEventListener("pointerdown", (event) => {
-    if (!IS_TOUCH_DEVICE) return;
-    event.preventDefault();
-    el.setPointerCapture?.(event.pointerId);
-    onStart();
-  });
-  el.addEventListener("pointerup", stop);
-  el.addEventListener("pointercancel", stop);
-  el.addEventListener("lostpointercapture", onStop);
-}
-
-function bindMobileControls() {
-  if (!IS_TOUCH_DEVICE) return;
-  updateJoystickVisual();
-
-  bindHoldButton(
-    mobileSprintBtnEl,
-    () => setMoveInputState("sprint", true),
-    () => setMoveInputState("sprint", false)
-  );
-
-  if (mobileAttackBtnEl) {
-    mobileAttackBtnEl.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      if (appMode !== "playing" || (sessionState !== "alive" && sessionState !== "won")) return;
-      if (gameMenuOpen) return;
-      if (gameChatOpen || isGameChatFocused()) return;
-      socket?.sendJson({ type: "attack" });
-    });
-  }
-
-  if (mobileJoystickBaseEl) {
-    const updateFromPointer = (event) => {
-      const rect = mobileJoystickBaseEl.getBoundingClientRect();
-      const centerX = rect.left + rect.width * 0.5;
-      const centerY = rect.top + rect.height * 0.5;
-      const maxRadius = Math.max(1, rect.width * 0.5);
-      const dx = (event.clientX - centerX) / maxRadius;
-      const dy = (event.clientY - centerY) / maxRadius;
-      const mag = Math.hypot(dx, dy);
-      const scale = mag > 1 ? 1 / mag : 1;
-      joystickCurrentX = dx * scale;
-      joystickCurrentY = dy * scale;
-      updateJoystickVisual();
-      applyMovementFromJoystick(joystickCurrentX, joystickCurrentY);
-    };
-
-    mobileJoystickBaseEl.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      if (gameMenuOpen) return;
-      if (mobileMovePointerId != null) return;
-      mobileMovePointerId = event.pointerId;
-      mobileJoystickBaseEl.setPointerCapture?.(event.pointerId);
-      updateFromPointer(event);
-    });
-
-    mobileJoystickBaseEl.addEventListener("pointermove", (event) => {
-      if (event.pointerId !== mobileMovePointerId) return;
-      if (appMode !== "playing" || (sessionState !== "alive" && sessionState !== "won")) return;
-      if (gameMenuOpen) return;
-      event.preventDefault();
-      updateFromPointer(event);
-      const now = performance.now();
-      if (now - lastInputSentAt >= INPUT_SEND_INTERVAL_MS) sendInput();
-    });
-
-    const stopMovePointer = (event) => {
-      if (event.pointerId !== mobileMovePointerId) return;
-      if (mobileJoystickBaseEl.hasPointerCapture?.(event.pointerId)) {
-        mobileJoystickBaseEl.releasePointerCapture(event.pointerId);
-      }
-      mobileMovePointerId = null;
-      resetJoystickState();
-    };
-
-    mobileJoystickBaseEl.addEventListener("pointerup", stopMovePointer);
-    mobileJoystickBaseEl.addEventListener("pointercancel", stopMovePointer);
-    mobileJoystickBaseEl.addEventListener("lostpointercapture", () => {
-      mobileMovePointerId = null;
-      resetJoystickState();
-    });
-  }
-
-  if (!mobileLookPadEl) return;
-  mobileLookPadEl.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    if (gameMenuOpen) return;
-    if (mobileLookPointerId != null) return;
-    mobileLookPointerId = event.pointerId;
-    mobileLookLastX = event.clientX;
-    mobileLookLastY = event.clientY;
-    mobileLookPadEl.setPointerCapture?.(event.pointerId);
-  });
-
-  mobileLookPadEl.addEventListener("pointermove", (event) => {
-    if (event.pointerId !== mobileLookPointerId) return;
-    if (gameMenuOpen) return;
-    if (
-      appMode !== "playing" ||
-      (sessionState !== "alive" && sessionState !== "won") ||
-      gameChatOpen ||
-      isGameChatFocused()
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-    const dx = event.clientX - mobileLookLastX;
-    const dy = event.clientY - mobileLookLastY;
-    mobileLookLastX = event.clientX;
-    mobileLookLastY = event.clientY;
-
-    yaw -= dx * LOOK_TOUCH_SENSITIVITY_X;
-    pitch = clampPitch(pitch - dy * LOOK_TOUCH_SENSITIVITY_Y);
-    input.yaw = yaw;
-    input.pitch = pitch;
-    inputDirty = true;
-    const now = performance.now();
-    if (now - lastInputSentAt >= INPUT_SEND_INTERVAL_MS) sendInput();
-  });
-
-  const clearLookPointer = (event) => {
-    if (event.pointerId !== mobileLookPointerId) return;
-    if (mobileLookPadEl.hasPointerCapture?.(event.pointerId)) {
-      mobileLookPadEl.releasePointerCapture(event.pointerId);
-    }
-    mobileLookPointerId = null;
-  };
-
-  mobileLookPadEl.addEventListener("pointerup", clearLookPointer);
-  mobileLookPadEl.addEventListener("pointercancel", clearLookPointer);
-  mobileLookPadEl.addEventListener("lostpointercapture", () => {
-    mobileLookPointerId = null;
-  });
-}
-
 const savedName = localStorage.getItem(PLAYER_NAME_KEY);
 if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
-if (debugTokenInputEl) debugTokenInputEl.value = getDebugToken();
 if (IS_TOUCH_DEVICE) document.body.classList.add("touch-device");
 refreshAudioSettingsUi();
-bindMobileControls();
+inputController.bind();
 
 connectBtnEl?.addEventListener("click", connectAndLogin);
 createPrivateRoomBtnEl?.addEventListener("click", () => {
@@ -1723,36 +1060,13 @@ lobbyMenuSettingsBtnEl?.addEventListener("click", () => {
 });
 lobbyMenuCreditsBtnEl?.addEventListener("click", () => {
   setLobbyMenuOpen(false);
-  openLobbyDialog(
-    "Om spelet",
-    "Skapat av Robin Reicher.\nMusik av Adam von Friesendorff.\nInspirerat av Adam Spraggs spel \"Hidden in Plain Sight\"."
-  );
+  openLobbyDialog("Om spelet", GAME_CREDITS_TEXT);
 });
 lobbyMenuCloseBtnEl?.addEventListener("click", () => {
   setLobbyMenuOpen(false);
 });
 lobbyMenuBackdropEl?.addEventListener("click", (event) => {
   if (event.target === lobbyMenuBackdropEl) setLobbyMenuOpen(false);
-});
-debugBtnEl?.addEventListener("click", openDebugView);
-debugCloseBtnEl?.addEventListener("click", closeDebugView);
-debugLoginBtnEl?.addEventListener("click", () => {
-  setDebugToken(debugTokenInputEl?.value?.trim() || "");
-  fetchAndRenderDebugData();
-});
-debugClearTokenBtnEl?.addEventListener("click", () => {
-  setDebugToken("");
-  if (debugTokenInputEl) debugTokenInputEl.value = "";
-  setDebugError("");
-});
-debugTokenInputEl?.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter") return;
-  event.preventDefault();
-  setDebugToken(debugTokenInputEl.value.trim());
-  fetchAndRenderDebugData();
-});
-debugBackdropEl?.addEventListener("click", (event) => {
-  if (event.target === debugBackdropEl) closeDebugView();
 });
 
 chatSendBtnEl?.addEventListener("click", sendChat);
@@ -1775,10 +1089,7 @@ gameMenuSettingsBtnEl?.addEventListener("click", () => {
 });
 gameMenuCreditsBtnEl?.addEventListener("click", () => {
   setGameMenuOpen(false);
-  openLobbyDialog(
-    "Om spelet",
-    "Skapat av Robin Reicher.\nMusik av Adam von Friesendorff.\nInspirerat av Adam Spraggs spel \"Hidden in Plain Sight\"."
-  );
+  openLobbyDialog("Om spelet", GAME_CREDITS_TEXT);
 });
 gameMenuLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
 downedLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
@@ -1824,11 +1135,6 @@ window.addEventListener("resize", () => {
 });
 
 window.addEventListener("keydown", (event) => {
-  if (debugOpen && event.key === "Escape") {
-    event.preventDefault();
-    closeDebugView();
-    return;
-  }
   if (appMode === "lobby" && event.key === "Escape") {
     if (!lobbyMenuOpen && lobbyDialogBackdropEl?.classList.contains("hidden")) return;
     event.preventDefault();
@@ -1849,106 +1155,16 @@ window.addEventListener("keydown", (event) => {
     }
     event.preventDefault();
     setGameMenuOpen(!gameMenuOpen, { restorePointerLock: true });
-    return;
-  }
-  if (appMode !== "playing") return;
-  if (sessionState !== "alive" && sessionState !== "won") return;
-  if (gameMenuOpen) return;
-  if (gameChatOpen || isGameChatFocused()) return;
-  let changed = false;
-  if (event.code === "KeyW" && !input.forward) {
-    input.forward = true;
-    changed = true;
-  }
-  if (event.code === "KeyS" && !input.backward) {
-    input.backward = true;
-    changed = true;
-  }
-  if (event.code === "KeyA" && !input.left) {
-    input.left = true;
-    changed = true;
-  }
-  if (event.code === "KeyD" && !input.right) {
-    input.right = true;
-    changed = true;
-  }
-  if ((event.code === "ShiftLeft" || event.code === "ShiftRight") && !input.sprint) {
-    input.sprint = true;
-    changed = true;
-  }
-  if (changed) inputDirty = true;
-});
-
-window.addEventListener("keyup", (event) => {
-  if (appMode !== "playing") return;
-  if (sessionState !== "alive" && sessionState !== "won") return;
-  if (gameMenuOpen) return;
-  if (gameChatOpen || isGameChatFocused()) return;
-  let changed = false;
-  if (event.code === "KeyW" && input.forward) {
-    input.forward = false;
-    changed = true;
-  }
-  if (event.code === "KeyS" && input.backward) {
-    input.backward = false;
-    changed = true;
-  }
-  if (event.code === "KeyA" && input.left) {
-    input.left = false;
-    changed = true;
-  }
-  if (event.code === "KeyD" && input.right) {
-    input.right = false;
-    changed = true;
-  }
-  if ((event.code === "ShiftLeft" || event.code === "ShiftRight") && input.sprint) {
-    input.sprint = false;
-    changed = true;
-  }
-  if (changed) inputDirty = true;
-});
-
-canvas.addEventListener("click", () => {
-  if (appMode !== "playing") return;
-  if (sessionState !== "alive" && sessionState !== "won") return;
-  if (gameMenuOpen) return;
-  if (gameChatOpen) return;
-  if (!document.pointerLockElement) {
-    requestPointerLockSafe(canvas);
   }
 });
-
-document.addEventListener("mousemove", (event) => {
-  if (appMode !== "playing") return;
-  if (sessionState !== "alive" && sessionState !== "won") return;
-  if (gameMenuOpen) return;
-  if (!document.pointerLockElement) return;
-  yaw -= event.movementX * 0.0022;
-  pitch = clampPitch(pitch - event.movementY * 0.002);
-
-  input.yaw = yaw;
-  input.pitch = pitch;
-  inputDirty = true;
-  const now = performance.now();
-  if (now - lastInputSentAt >= INPUT_SEND_INTERVAL_MS) sendInput();
-});
-
-window.addEventListener("mousedown", (event) => {
-  if (event.button !== 0) return;
-  if (appMode !== "playing" || sessionState !== "alive") return;
-  if (gameMenuOpen) return;
-  if (gameChatOpen || isGameChatFocused()) return;
-  if (document.pointerLockElement !== canvas) return;
-  socket?.sendJson({ type: "attack" });
-});
-
-setInterval(sendInput, INPUT_SEND_INTERVAL_MS);
 
 function animate() {
   requestAnimationFrame(animate);
   const now = performance.now();
   const deltaSec = Math.min(0.05, (now - lastFrameAt) / 1000);
   lastFrameAt = now;
+  const yaw = inputController.getYaw();
+  const pitch = inputController.getPitch();
 
   const viewSmooth = 1 - Math.exp(-deltaSec * 30);
   const yawDelta = normalizeAngle(yaw - viewYaw);

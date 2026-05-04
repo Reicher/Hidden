@@ -468,123 +468,6 @@ button:disabled {
   min-width: 110px;
 }
 
-#debugBackdrop {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.52);
-  z-index: 7;
-}
-
-#debugCard {
-  width: min(1680px, calc(100vw - 30px));
-  max-height: calc(100vh - 28px);
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #10141a;
-  padding: 14px;
-  box-sizing: border-box;
-}
-
-#debugHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-#debugHeader h2 {
-  margin: 0;
-  font-size: 20px;
-}
-
-#debugAuthRow {
-  display: grid;
-  grid-template-columns: auto minmax(160px, 320px) auto auto;
-  gap: 8px;
-  align-items: center;
-}
-
-#debugSummary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
-  margin: 8px 0;
-}
-
-.debugStatCard {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #171d27;
-  padding: 8px;
-}
-
-.debugStatCard .k {
-  display: block;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.debugStatCard .v {
-  display: block;
-  font-size: 18px;
-  line-height: 1.2;
-}
-
-#debugChart {
-  width: 100%;
-  height: 240px;
-  display: block;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #0d1117;
-}
-
-#debugGrid {
-  margin-top: 8px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 8px;
-}
-
-.debugPane {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #141a23;
-  min-height: 240px;
-  height: clamp(240px, 38vh, 440px);
-  display: flex;
-  flex-direction: column;
-}
-
-.debugPane h3 {
-  margin: 0;
-  padding: 8px;
-  border-bottom: 1px solid var(--line);
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.debugPane pre {
-  margin: 0;
-  padding: 8px;
-  font-size: 12px;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  overflow-y: auto;
-  overflow-x: hidden;
-  flex: 1 1 auto;
-}
-
-#debugMeta {
-  margin: 8px 0 2px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
 #gameHud {
   position: fixed;
   inset: 0;
@@ -847,42 +730,6 @@ button:disabled {
   width: 100%;
 }
 
-#gameInfoBackdrop {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.42);
-  pointer-events: auto;
-}
-
-#gameInfoCard {
-  width: min(520px, calc(100vw - 28px));
-  background: rgba(16, 21, 29, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
-  padding: 14px;
-  display: grid;
-  gap: 8px;
-}
-
-#gameInfoTitle {
-  margin: 0 0 4px;
-  font-size: 17px;
-}
-
-#gameInfoText {
-  margin: 0 0 8px;
-  color: rgba(233, 236, 243, 0.86);
-  font-size: 13px;
-  line-height: 1.42;
-  white-space: pre-line;
-}
-
-#gameInfoCloseBtn {
-  width: 100%;
-}
-
 #gameChatBox {
   position: absolute;
   right: 12px;
@@ -993,9 +840,9 @@ button:disabled {
   left: 50%;
   bottom: 4px;
   transform: translateX(-50%);
-  width: min(24vw, 132px);
+  width: min(42vw, 220px);
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -1093,19 +940,6 @@ body.touch-device #gameChatNotice {
     padding: 8px 6px;
   }
 
-  #debugAuthRow {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-  }
-
-  #debugSummary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  #debugGrid {
-    grid-template-columns: 1fr;
-  }
-
   #gameChatNotice {
     display: none;
   }
@@ -1168,7 +1002,4 @@ body.touch-device #gameChatNotice {
     font-size: clamp(15px, 5vw, 20px);
   }
 
-  #debugSummary {
-    grid-template-columns: 1fr;
-  }
 }

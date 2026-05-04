@@ -1,54 +1,25 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import process from "node:process";
 import { WebSocket } from "ws";
+import { startServer, stopServer } from "./helpers.js";
 
 const HOST = "127.0.0.1";
-const PORT = 3200 + Math.floor(Math.random() * 120);
+const PORT = 45000 + Math.floor(Math.random() * 10000);
 const URL = `ws://${HOST}:${PORT}`;
 const ORIGIN = `http://${HOST}:${PORT}`;
 
-function startServer() {
-  const child = spawn("node", ["server.js"], {
+async function main() {
+  const server = await startServer({
     cwd: process.cwd(),
+    host: HOST,
+    port: PORT,
     env: {
-      ...process.env,
-      HOST,
-      PORT: String(PORT),
       MAX_MESSAGES_PER_WINDOW: "20",
       MESSAGE_WINDOW_MS: "1000",
       INPUT_UPDATE_MIN_MS: "0",
       SPAM_MAX_DROPS_PER_WINDOW: "8"
-    },
-    stdio: ["ignore", "pipe", "pipe"]
+    }
   });
-
-  let stderr = "";
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk.toString();
-  });
-
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`Server start timeout. stderr:\n${stderr}`));
-    }, 7000);
-
-    child.stdout.on("data", (chunk) => {
-      if (chunk.toString().includes("Server running on")) {
-        clearTimeout(timer);
-        resolve(child);
-      }
-    });
-
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`Server exited early (${code}). stderr:\n${stderr}`));
-    });
-  });
-}
-
-async function main() {
-  const server = await startServer();
   try {
     const ws = new WebSocket(URL, [], { headers: { Origin: ORIGIN } });
     await new Promise((resolve, reject) => {
@@ -87,7 +58,7 @@ async function main() {
     assert.equal(code, 1008, `expected policy disconnect code 1008, got ${code}`);
     console.log("Rate limit test passed.");
   } finally {
-    server.kill("SIGTERM");
+    await stopServer(server);
   }
 }
 

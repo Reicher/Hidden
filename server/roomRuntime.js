@@ -69,21 +69,9 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
 
   const SPAWN_OBSTACLES = [...SHELVES, ...COOLERS, ...FREEZERS];
 
-  function spawnObstacleHalfExtents(obstacle) {
-    const width = typeof obstacle.width === "number" ? obstacle.width : 1;
-    const depth = typeof obstacle.depth === "number" ? obstacle.depth : 1;
-    const yaw = typeof obstacle.yaw === "number" ? obstacle.yaw : 0;
-    const quarterTurns = Math.round(yaw / (Math.PI / 2));
-    const isSwapped = Math.abs(quarterTurns) % 2 === 1;
-    return {
-      halfW: (isSwapped ? depth : width) * 0.5,
-      halfD: (isSwapped ? width : depth) * 0.5
-    };
-  }
-
   function isSpawnBlocked(x, z, margin = CHARACTER_RADIUS + 0.14) {
     for (const obstacle of SPAWN_OBSTACLES) {
-      const { halfW, halfD } = spawnObstacleHalfExtents(obstacle);
+      const { halfW, halfD } = obstacleHalfExtents(obstacle);
       const minX = obstacle.x - halfW - margin;
       const maxX = obstacle.x + halfW + margin;
       const minZ = obstacle.z - halfD - margin;

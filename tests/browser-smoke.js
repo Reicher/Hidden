@@ -1,62 +1,13 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { chromium } from "playwright";
+import { startServer, stopServer } from "./helpers.js";
 
 const HOST = "127.0.0.1";
-const PORT = 3600 + Math.floor(Math.random() * 400);
+const PORT = 45000 + Math.floor(Math.random() * 10000);
 const HTTP_URL = `http://${HOST}:${PORT}`;
 const SERVER_START_TIMEOUT_MS = 8000;
-
-function waitFor(predicate, timeoutMs, label) {
-  const start = Date.now();
-  return new Promise((resolve, reject) => {
-    const interval = setInterval(() => {
-      if (predicate()) {
-        clearInterval(interval);
-        resolve();
-        return;
-      }
-      if (Date.now() - start > timeoutMs) {
-        clearInterval(interval);
-        reject(new Error(`Timeout waiting for: ${label}`));
-      }
-    }, 50);
-  });
-}
-
-function startServer() {
-  const child = spawn("node", ["server.js"], {
-    cwd: process.cwd(),
-    env: { ...process.env, HOST, PORT: String(PORT) },
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-
-  let stderr = "";
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk.toString();
-  });
-
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`Server start timeout. stderr:\n${stderr}`));
-    }, SERVER_START_TIMEOUT_MS);
-
-    child.stdout.on("data", (chunk) => {
-      const text = chunk.toString();
-      if (text.includes("Server running on")) {
-        clearTimeout(timer);
-        resolve(child);
-      }
-    });
-
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`Server exited early with code ${code}. stderr:\n${stderr}`));
-    });
-  });
-}
 
 async function launchBrowser() {
   try {
@@ -73,7 +24,7 @@ async function launchBrowser() {
 }
 
 async function run() {
-  const server = await startServer();
+  const server = await startServer({ cwd: process.cwd(), host: HOST, port: PORT, timeoutMs: SERVER_START_TIMEOUT_MS });
   let browser = null;
 
   try {
@@ -134,8 +85,7 @@ async function run() {
     } catch {
       // no-op
     }
-    server.kill("SIGTERM");
-    await sleep(100);
+    await stopServer(server);
   }
 }
 

@@ -1,104 +1,19 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
 import process from "node:process";
-import { WebSocket } from "ws";
+import { startServer, stopServer, TestClient, waitFor } from "./helpers.js";
 
 const HOST = "127.0.0.1";
-const PORT = 3400 + Math.floor(Math.random() * 400);
-const BASE_URL = `ws://${HOST}:${PORT}`;
+const PORT = 45000 + Math.floor(Math.random() * 10000);
 const ORIGIN = `http://${HOST}:${PORT}`;
 const SERVER_START_TIMEOUT_MS = 7000;
 
-function waitFor(predicate, timeoutMs, label) {
-  const start = Date.now();
-  return new Promise((resolve, reject) => {
-    const interval = setInterval(() => {
-      if (predicate()) {
-        clearInterval(interval);
-        resolve();
-        return;
-      }
-      if (Date.now() - start > timeoutMs) {
-        clearInterval(interval);
-        reject(new Error(`Timeout waiting for: ${label}`));
-      }
-    }, 50);
-  });
-}
-
-function startServer() {
-  const child = spawn("node", ["server.js"], {
-    cwd: process.cwd(),
-    env: { ...process.env, HOST, PORT: String(PORT) },
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-
-  let stderr = "";
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk.toString();
-  });
-
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`Server start timeout. stderr:\n${stderr}`));
-    }, SERVER_START_TIMEOUT_MS);
-
-    child.stdout.on("data", (chunk) => {
-      const text = chunk.toString();
-      if (text.includes("Server running on")) {
-        clearTimeout(timer);
-        resolve(child);
-      }
-    });
-
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`Server exited early with code ${code}. stderr:\n${stderr}`));
-    });
-  });
-}
-
-class Client {
-  constructor(name) {
-    this.name = name;
-    this.ws = new WebSocket(BASE_URL, [], { headers: { Origin: ORIGIN } });
-    this.loggedIn = false;
-    this.state = "auth";
-    this.systemChat = [];
-
-    this.opened = new Promise((resolve, reject) => {
-      this.ws.once("open", resolve);
-      this.ws.once("error", reject);
-    });
-
-    this.ws.on("message", (raw) => {
-      const msg = JSON.parse(raw.toString());
-      if (msg.type === "login_ok") {
-        this.loggedIn = true;
-        this.state = "lobby";
-      }
-      if (msg.type === "countdown") this.state = "countdown";
-      if (msg.type === "world" && msg.session) this.state = msg.session.state;
-      if (msg.type === "chat" && msg.entry?.system) {
-        this.systemChat.push(String(msg.entry.text || ""));
-      }
-    });
-  }
-
-  send(payload) {
-    if (this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify(payload));
-  }
-
-  close() {
-    if (this.ws.readyState === WebSocket.CLOSING || this.ws.readyState === WebSocket.CLOSED) return;
-    this.ws.close();
-  }
-}
-
 async function run() {
-  const server = await startServer();
-  const clients = [new Client("r1"), new Client("r2"), new Client("r3")];
+  const server = await startServer({ cwd: process.cwd(), host: HOST, port: PORT, timeoutMs: SERVER_START_TIMEOUT_MS });
+  const clients = [
+    new TestClient({ host: HOST, port: PORT, origin: ORIGIN, name: "r1", collectSystemChat: true }),
+    new TestClient({ host: HOST, port: PORT, origin: ORIGIN, name: "r2", collectSystemChat: true }),
+    new TestClient({ host: HOST, port: PORT, origin: ORIGIN, name: "r3", collectSystemChat: true })
+  ];
 
   try {
     await Promise.all(clients.map((client) => client.opened));
@@ -139,7 +54,7 @@ async function run() {
     console.log("Supermajority ready test passed: 2/3 timeout and all-ready fast transition behave correctly.");
   } finally {
     for (const client of clients) client.close();
-    server.kill("SIGTERM");
+    await stopServer(server);
   }
 }
 

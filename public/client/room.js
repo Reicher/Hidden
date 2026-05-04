@@ -736,19 +736,11 @@ export function createRoomSystem({ scene, renderer }) {
       .join("|");
   }
 
-  function legacyHalfToWorldSize(legacyHalfExtent) {
-    if (typeof legacyHalfExtent !== "number" || !Number.isFinite(legacyHalfExtent)) return null;
-    const derived = legacyHalfExtent * 2 - 1;
-    if (!Number.isFinite(derived) || derived <= 1) return null;
-    return derived;
-  }
-
-  function syncFromWorld({ worldSizeMeters, roomHalfSize, shelves, coolers, freezers }) {
-    const fallbackFromLegacy = legacyHalfToWorldSize(roomHalfSize);
+  function syncFromWorld({ worldSizeMeters, shelves, coolers, freezers }) {
     const normalizedWorldSize =
       typeof worldSizeMeters === "number" && Number.isFinite(worldSizeMeters)
         ? worldSizeMeters
-        : fallbackFromLegacy || DEFAULT_WORLD_SIZE_METERS;
+        : DEFAULT_WORLD_SIZE_METERS;
     const normalizedShelves = normalizeFixtures(shelves, DEFAULT_SHELVES);
     const normalizedCoolers = normalizeFixtures(coolers, DEFAULT_COOLERS);
     const normalizedFreezers = normalizeFixtures(freezers, DEFAULT_FREEZERS);
