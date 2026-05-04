@@ -879,7 +879,7 @@ export function createAvatarSystem({ scene, camera }) {
     firstPersonArmPivot.position.z = -0.38 - punch * 0.12;
   }
 
-  function applyWorldCharacters({ characters, myCharacterId, nowMs }) {
+  function applyWorldCharacters({ characters, myCharacterId, nowMs, hideMyCharacter = true }) {
     let myYaw = null;
     for (const avatar of avatars.values()) avatar.seenAtTick = false;
 
@@ -892,7 +892,7 @@ export function createAvatarSystem({ scene, camera }) {
       }
 
       updateFromServer(avatar, character, nowMs);
-      avatar.group.visible = character.id !== myCharacterId;
+      avatar.group.visible = !(hideMyCharacter && character.id === myCharacterId);
 
       if (character.id === myCharacterId) {
         myYaw = character.yaw;
@@ -971,9 +971,21 @@ export function createAvatarSystem({ scene, camera }) {
     return false;
   }
 
+  function getCharacterPosition(characterId) {
+    if (characterId == null) return null;
+    const avatar = avatars.get(characterId);
+    if (!avatar?.initialized) return null;
+    return {
+      x: avatar.group.position.x,
+      y: avatar.group.position.y,
+      z: avatar.group.position.z
+    };
+  }
+
   return {
     applyWorldCharacters,
     animate,
-    isAimingAtCharacter
+    isAimingAtCharacter,
+    getCharacterPosition
   };
 }

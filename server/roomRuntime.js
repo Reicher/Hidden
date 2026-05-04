@@ -45,6 +45,7 @@ const SUPERMAJORITY_READY_TIMEOUT_SECONDS = 30;
 const SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS = 10;
 const PERMANENT_DOWNED_UNTIL = Number.MAX_SAFE_INTEGER;
 const MAX_LOOK_PITCH_RAD = 1.2;
+const WINNER_RETURN_TO_LOBBY_MS = 10000;
 
 export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = null, onStatsEvent = null }) {
   const sessions = new Map();
@@ -56,6 +57,7 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   let nextScoreboardRefreshAt = 0;
   let lobbyCountdown = null;
   let supermajorityReadyTimeout = null;
+  let pendingRoundReset = false;
   const countdownReadyNames = new Set();
   let activeMatchStartedAt = 0;
   const roomTag = isPrivate ? `privat:${roomCode}` : "publik";
@@ -438,6 +440,8 @@ function sanitizeSystemTextSegment(raw) {
   function statusLabel(session) {
     if (!session?.authenticated) return "disconnected";
     if (session.state === "alive") return "spelar";
+    if (session.state === "won") return "vann";
+    if (session.state === "dead") return "utslagen";
     if (session.state === "countdown") return "nedräkning";
     if (session.state === "lobby") return session.ready ? "redo" : "väntar";
     return "disconnected";
@@ -610,6 +614,7 @@ function sanitizeSystemTextSegment(raw) {
   function maybeStartLobbyCountdown(now) {
     if (lobbyCountdown) return;
     if (activeMatchStartedAt > 0) return;
+    if (pendingRoundReset) return;
     const lobbyPlayers = authenticatedSessions().filter((session) => session.state === "lobby");
     if (lobbyPlayers.length < MIN_PLAYERS_TO_START) {
       cancelSupermajorityReadyTimeout();
@@ -684,6 +689,7 @@ function sanitizeSystemTextSegment(raw) {
   }
 
   function endCurrentMatch(now, winnerSession = null) {
+    const winnerSessionId = winnerSession?.id || null;
     if (winnerSession?.authenticated && winnerSession.name) {
       winnerSession.stats.wins += 1;
       appendSystemChat([
@@ -694,7 +700,16 @@ function sanitizeSystemTextSegment(raw) {
 
     for (const session of sessions.values()) {
       if (!session.authenticated) continue;
-      if (session.state === "alive") returnToLobby(session, "round_ended");
+      if (winnerSessionId && session.id === winnerSessionId && session.state === "alive" && session.characterId != null) {
+        session.state = "won";
+        session.ready = false;
+        session.readyAt = 0;
+        session.input.attackRequested = false;
+        session.returnToLobbyAt = now + WINNER_RETURN_TO_LOBBY_MS;
+        session.eliminatedByName = null;
+        continue;
+      }
+      if (session.state === "alive" || session.state === "dead") returnToLobby(session, "round_ended");
       if (session.state === "countdown") {
         session.state = "lobby";
         session.readyAt = 0;
@@ -706,7 +721,8 @@ function sanitizeSystemTextSegment(raw) {
     cancelSupermajorityReadyTimeout();
     countdownReadyNames.clear();
     activeMatchStartedAt = 0;
-    resetArenaForNextRound(now);
+    pendingRoundReset = Boolean(winnerSessionId);
+    if (!pendingRoundReset) resetArenaForNextRound(now);
   }
 
   function assignCharacterForCountdown(session, now) {
@@ -765,6 +781,9 @@ function sanitizeSystemTextSegment(raw) {
     session.characterId = null;
     session.readyAt = 0;
     session.input.attackRequested = false;
+    session.eliminatedAt = 0;
+    session.returnToLobbyAt = 0;
+    session.eliminatedByName = null;
     if (previousState !== "lobby") {
       emitStatsEvent("session_lobby", {
         sessionId: shortSessionId(session.id),
@@ -777,6 +796,8 @@ function sanitizeSystemTextSegment(raw) {
   function handleCharacterEliminated(charId, attackerId, now) {
     const c = characters[charId];
     const attacker = attackerId != null ? characters[attackerId] : null;
+    const attackerSession =
+      attacker?.ownerSessionId != null ? sessions.get(attacker.ownerSessionId) : null;
     const fallAway = computeFallAwayVector(attacker, c);
     const owner = c.ownerSessionId;
 
@@ -789,7 +810,14 @@ function sanitizeSystemTextSegment(raw) {
           name: ownerSession.name,
           characterId: charId
         });
-        returnToLobby(ownerSession, "eliminated");
+        ownerSession.state = "dead";
+        ownerSession.ready = false;
+        ownerSession.readyAt = 0;
+        ownerSession.characterId = charId;
+        ownerSession.input.attackRequested = false;
+        ownerSession.eliminatedAt = now;
+        ownerSession.returnToLobbyAt = 0;
+        ownerSession.eliminatedByName = attackerSession?.name || null;
       }
     }
     c.controllerType = "AI";
@@ -821,6 +849,7 @@ function sanitizeSystemTextSegment(raw) {
         if (victimOwner && victimOwner !== attackerSessionId) {
           attackerSession.stats.kills += 1;
           if (victimSession?.authenticated && victimSession.name) {
+            sendToSession(attackerSessionId, "kill_confirm", { victimName: victimSession.name });
             appendSystemChat([
               { type: "player", name: attackerSession.name },
               { type: "text", text: " dödade " },
@@ -1233,6 +1262,18 @@ function sanitizeSystemTextSegment(raw) {
 
     if (msg.type === "ready" || msg.type === "play") {
       if (session.state === "alive") return "ok";
+      if (session.state === "won") {
+        sendToSession(sessionId, "action_error", { message: "Du vann nyss. Återgå till lobbyn för ny runda." });
+        return "ok";
+      }
+      if (session.state === "dead") {
+        sendToSession(sessionId, "action_error", { message: "Du är utslagen. Vänta på återgång till lobbyn." });
+        return "ok";
+      }
+      if (pendingRoundReset) {
+        sendToSession(sessionId, "action_error", { message: "Vänta tills vinnaren återgår till lobbyn." });
+        return "ok";
+      }
       if (activeMatchStartedAt > 0) {
         sendToSession(sessionId, "action_error", { message: "Match pågår. Vänta tills rundan är slut." });
         return "ok";
@@ -1256,7 +1297,7 @@ function sanitizeSystemTextSegment(raw) {
     }
 
     if (msg.type === "leave_match") {
-      if (session.state === "alive") {
+      if (session.state === "alive" || session.state === "dead" || session.state === "won") {
         releaseOwnedCharacter(sessionId);
         returnToLobby(session, "left_match");
         appendSystemChat([
@@ -1327,6 +1368,20 @@ function sanitizeSystemTextSegment(raw) {
     checkInvariants(now);
     disconnectIdleSessions(now);
 
+    for (const session of sessions.values()) {
+      if (!session.authenticated || session.state !== "won") continue;
+      if (now < (session.returnToLobbyAt || 0)) continue;
+      releaseOwnedCharacter(session.id);
+      returnToLobby(session, "winner_timeout");
+    }
+    if (pendingRoundReset) {
+      const hasWinnerWatching = authenticatedSessions().some((session) => session.state === "won");
+      if (!hasWinnerWatching) {
+        resetArenaForNextRound(now);
+        pendingRoundReset = false;
+      }
+    }
+
     if (lobbyCountdown) {
       if (countdownPlayerCount() < MIN_PLAYERS_TO_START) {
         cancelLobbyCountdown();
@@ -1348,13 +1403,13 @@ function sanitizeSystemTextSegment(raw) {
       }
 
       const ownerSession = c.ownerSessionId ? sessions.get(c.ownerSessionId) : null;
-      if (!ownerSession || (ownerSession.state !== "alive" && ownerSession.state !== "countdown")) {
+      if (!ownerSession || (ownerSession.state !== "alive" && ownerSession.state !== "countdown" && ownerSession.state !== "won")) {
         c.controllerType = "AI";
         c.ownerSessionId = null;
         continue;
       }
 
-      if (ownerSession.state === "alive") updatePlayer(c, ownerSession, dt);
+      if (ownerSession.state === "alive" || ownerSession.state === "won") updatePlayer(c, ownerSession, dt);
 
       if (ownerSession.state === "alive" && ownerSession.input.attackRequested) {
         handleAttack(c.id, now);
@@ -1428,6 +1483,9 @@ function sanitizeSystemTextSegment(raw) {
               activePlayers: alivePlayers,
               minPlayersToStart: MIN_PLAYERS_TO_START,
               maxPlayers: MAX_PLAYERS,
+              returnToLobbyMsRemaining:
+                session.state === "won" ? Math.max(0, (session.returnToLobbyAt || 0) - now) : 0,
+              eliminatedByName: session.state === "dead" ? session.eliminatedByName || null : null,
               attackCooldownMsRemaining: playerCharacter
                 ? Math.max(0, ATTACK_COOLDOWN_MS - (now - playerCharacter.lastAttackAt))
                 : 0
@@ -1527,6 +1585,9 @@ function sanitizeSystemTextSegment(raw) {
       ready: false,
       readyAt: 0,
       characterId: null,
+      eliminatedAt: 0,
+      returnToLobbyAt: 0,
+      eliminatedByName: null,
       stats: {
         wins: 0,
         kills: 0,

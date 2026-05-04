@@ -54,6 +54,11 @@ const gameHudEl = document.getElementById("gameHud");
 const crosshairHudEl = document.getElementById("crosshairHud");
 const crosshairCooldownArcEl = document.getElementById("crosshairCooldownArc");
 const aliveOthersTextEl = document.getElementById("aliveOthersText");
+const killToastEl = document.getElementById("killToast");
+const winOverlayEl = document.getElementById("winOverlay");
+const winTitleEl = document.getElementById("winTitle");
+const winCountdownTextEl = document.getElementById("winCountdownText");
+const winLobbyBtnEl = document.getElementById("winLobbyBtn");
 const gameMenuBtnEl = document.getElementById("gameMenuBtn");
 const gameMenuBackdropEl = document.getElementById("gameMenuBackdrop");
 const gameMenuControlsBtnEl = document.getElementById("gameMenuControlsBtn");
@@ -64,6 +69,7 @@ const gameInfoBackdropEl = document.getElementById("gameInfoBackdrop");
 const gameInfoTitleEl = document.getElementById("gameInfoTitle");
 const gameInfoTextEl = document.getElementById("gameInfoText");
 const gameInfoCloseBtnEl = document.getElementById("gameInfoCloseBtn");
+const gameChatNoticeEl = document.getElementById("gameChatNotice");
 const gameChatMessagesEl = document.getElementById("gameChatMessages");
 const gameChatInputRowEl = document.getElementById("gameChatInputRow");
 const gameChatInputEl = document.getElementById("gameChatInput");
@@ -73,6 +79,10 @@ const mobileJoystickKnobEl = document.getElementById("mobileJoystickKnob");
 const mobileLookPadEl = document.getElementById("mobileLookPad");
 const mobileSprintBtnEl = document.getElementById("mobileSprintBtn");
 const mobileAttackBtnEl = document.getElementById("mobileAttackBtn");
+const deathOverlayEl = document.getElementById("deathOverlay");
+const deathByTextEl = document.getElementById("deathByText");
+const deathCountdownTextEl = document.getElementById("deathCountdownText");
+const deathLobbyBtnEl = document.getElementById("deathLobbyBtn");
 
 const PLAYER_NAME_KEY = "hidden_player_name";
 const DEBUG_TOKEN_KEY = "hidden_debug_token";
@@ -88,7 +98,7 @@ let socketGeneration = 0;
 let connecting = false;
 let authenticated = false;
 let appMode = "connect"; // connect | lobby | playing | disconnected
-let sessionState = "auth"; // auth | lobby | countdown | alive
+let sessionState = "auth"; // auth | lobby | countdown | alive | dead | won
 let myCharacterId = null;
 let myName = "";
 let sessionReady = false;
@@ -107,6 +117,10 @@ let currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapse
 let lobbyScoreboard = [];
 let lobbyCountdownMsRemaining = 0;
 let lobbyMinPlayersToStart = 2;
+let winReturnToLobbyMsRemaining = 0;
+let deathEliminatedByName = "";
+let killToastText = "";
+let killToastMsRemaining = 0;
 
 const input = {
   forward: false,
@@ -128,6 +142,9 @@ const GAME_CHAT_MAX_LINES = 5;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
 const JOYSTICK_DEADZONE = 0.16;
+const DEATH_CAMERA_HEIGHT = 4.6;
+const DEATH_CAMERA_POS_SMOOTH_RATE = 9;
+const KILL_TOAST_MS = 5000;
 const FORCE_MOBILE_UI = new URLSearchParams(location.search).get("mobileUi") === "1";
 const MOBILE_CONTROLS_PREFS = Object.freeze(["auto", "on", "off"]);
 const IS_TOUCH_DEVICE = (() => {
@@ -368,7 +385,7 @@ function updateMobileControlsVisibility() {
   const show =
     mobileControlsEnabledByPreference() &&
     appMode === "playing" &&
-    sessionState === "alive" &&
+    (sessionState === "alive" || sessionState === "won") &&
     !gameChatOpen &&
     !gameMenuOpen;
   mobileControlsEl.classList.toggle("hidden", !show);
@@ -391,7 +408,9 @@ function setGameChatOpen(open, { restorePointerLock = false } = {}) {
   } else {
     gameChatInputEl?.blur();
   }
-  if (restorePointerLock && appMode === "playing" && sessionState === "alive") requestPointerLockSafe(canvas);
+  if (restorePointerLock && appMode === "playing" && (sessionState === "alive" || sessionState === "won")) {
+    requestPointerLockSafe(canvas);
+  }
   updateMobileControlsVisibility();
 }
 
@@ -407,7 +426,9 @@ function setGameMenuOpen(open, { restorePointerLock = false } = {}) {
     updateMobileControlsVisibility();
     return;
   }
-  if (restorePointerLock && appMode === "playing" && sessionState === "alive") requestPointerLockSafe(canvas);
+  if (restorePointerLock && appMode === "playing" && (sessionState === "alive" || sessionState === "won")) {
+    requestPointerLockSafe(canvas);
+  }
   updateMobileControlsVisibility();
 }
 
@@ -501,11 +522,58 @@ function updateReadyButton() {
   playBtnEl.textContent = "Ready";
 }
 
+function resetDeathState() {
+  deathEliminatedByName = "";
+}
+
+function resetWinState() {
+  winReturnToLobbyMsRemaining = 0;
+}
+
+function resetKillToast() {
+  killToastText = "";
+  killToastMsRemaining = 0;
+}
+
 function updateInGameHud() {
   if (!aliveOthersTextEl) return;
   const others = Math.max(0, activePlayersInGame - (sessionState === "alive" ? 1 : 0));
   const noun = others === 1 ? "annan" : "andra";
   aliveOthersTextEl.textContent = `${others} ${noun} spelar just nu`;
+  if (gameChatNoticeEl) {
+    gameChatNoticeEl.textContent = sessionState === "won" ? "Chatt" : "Systemhändelser";
+  }
+}
+
+function updateDeathOverlay() {
+  if (!deathOverlayEl || !deathByTextEl || !deathCountdownTextEl) return;
+  const dead = appMode === "playing" && sessionState === "dead";
+  deathOverlayEl.classList.toggle("hidden", !dead);
+  gameMenuBtnEl?.classList.toggle("hidden", dead);
+  if (!dead) return;
+
+  const killer = deathEliminatedByName ? String(deathEliminatedByName) : "okänd spelare";
+  deathByTextEl.textContent = `Du dödades av ${killer}`;
+  deathCountdownTextEl.textContent = "Tryck på knappen för att återgå till lobbyn.";
+}
+
+function updateWinOverlay() {
+  if (!winOverlayEl || !winTitleEl || !winCountdownTextEl) return;
+  const won = appMode === "playing" && sessionState === "won";
+  winOverlayEl.classList.toggle("hidden", !won);
+  gameMenuBtnEl?.classList.toggle("hidden", won);
+  if (!won) return;
+  winTitleEl.textContent = "Du vann!";
+  const sec = Math.max(0, Math.ceil(winReturnToLobbyMsRemaining / 1000));
+  winCountdownTextEl.textContent = `Återgå till lobbyn om ${sec}`;
+}
+
+function updateKillToast() {
+  if (!killToastEl) return;
+  const visible =
+    appMode === "playing" && sessionState !== "won" && killToastMsRemaining > 0 && Boolean(killToastText);
+  killToastEl.classList.toggle("hidden", !visible);
+  if (visible) killToastEl.textContent = killToastText;
 }
 
 function updateCrosshairHud(deltaSec) {
@@ -577,6 +645,9 @@ function setAppMode(mode) {
   updateMobileControlsVisibility();
   updateLobbyMatchStatus();
   updateInGameHud();
+  updateDeathOverlay();
+  updateWinOverlay();
+  updateKillToast();
   updateDocumentTitle();
 }
 
@@ -952,7 +1023,8 @@ function appendChatLine(container, entry) {
 
 function appendChat(entry) {
   appendChatLine(chatMessagesEl, entry);
-  if (entry?.system) {
+  const mirrorToGameChat = Boolean(entry?.system) || sessionState === "won";
+  if (mirrorToGameChat) {
     appendChatLine(gameChatMessagesEl, entry);
     if (gameChatMessagesEl) {
       while (gameChatMessagesEl.children.length > GAME_CHAT_MAX_LINES) {
@@ -1014,6 +1086,9 @@ function attachSocket(wsUrl, loginName) {
         lobbyScoreboard = [];
         lobbyCountdownMsRemaining = 0;
         lobbyMinPlayersToStart = 2;
+        resetDeathState();
+        resetWinState();
+        resetKillToast();
         replaceChat(msg.chatHistory || []);
         setConnectError("");
         setPrivateRoomButtonVisible(false);
@@ -1031,6 +1106,9 @@ function attachSocket(wsUrl, loginName) {
         lobbyScoreboard = [];
         lobbyCountdownMsRemaining = 0;
         lobbyMinPlayersToStart = 2;
+        resetDeathState();
+        resetWinState();
+        resetKillToast();
         setAppMode("connect");
         setConnectError(msg.message || "Inloggning misslyckades.");
         setPrivateRoomButtonVisible(msg.reason === "room_full");
@@ -1045,6 +1123,16 @@ function attachSocket(wsUrl, loginName) {
 
       if (msg.type === "chat") {
         appendChat(msg.entry);
+        return;
+      }
+
+      if (msg.type === "kill_confirm") {
+        const victimName = String(msg.victimName || "").trim();
+        if (victimName) {
+          killToastText = `Du dödade ${victimName}`;
+          killToastMsRemaining = KILL_TOAST_MS;
+          updateKillToast();
+        }
         return;
       }
 
@@ -1083,6 +1171,8 @@ function attachSocket(wsUrl, loginName) {
         lobbyMinPlayersToStart = Math.max(1, Number(state.minPlayersToStart || lobbyMinPlayersToStart || 2));
         myCharacterId = state.characterId ?? null;
         activePlayersInGame = Number(state.activePlayers || 0);
+        winReturnToLobbyMsRemaining = Math.max(0, Number(state.returnToLobbyMsRemaining || 0));
+        deathEliminatedByName = state.eliminatedByName ? String(state.eliminatedByName) : "";
         attackCooldownMsRemaining = Math.max(0, Number(state.attackCooldownMsRemaining || 0));
         if (attackCooldownMsRemaining > CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS) {
           attackCooldownVisualMaxMs = Math.max(
@@ -1093,11 +1183,22 @@ function attachSocket(wsUrl, loginName) {
         }
         updateInGameHud();
         updateDocumentTitle();
+      } else {
+        resetDeathState();
+        resetWinState();
+      }
+
+      if (previousSessionState === "alive" && (sessionState === "dead" || sessionState === "won")) {
+        if (document.pointerLockElement) document.exitPointerLock?.();
+        resetInputState();
+        setGameMenuOpen(false);
+        closeGameInfoDialog();
+        setGameChatOpen(false);
       }
 
       if (!authenticated) {
         setAppMode("connect");
-      } else if (sessionState === "alive") {
+      } else if (sessionState === "alive" || sessionState === "dead" || sessionState === "won") {
         setConnectError("");
         setAppMode("playing");
       } else {
@@ -1120,7 +1221,8 @@ function attachSocket(wsUrl, loginName) {
         const controlledYaw = avatarSystem.applyWorldCharacters({
           characters: msg.characters || [],
           myCharacterId,
-          nowMs: performance.now()
+          nowMs: performance.now(),
+          hideMyCharacter: sessionState === "alive" || sessionState === "won"
         });
 
         if (controlledYaw != null) {
@@ -1154,6 +1256,9 @@ function attachSocket(wsUrl, loginName) {
       lobbyScoreboard = [];
       lobbyCountdownMsRemaining = 0;
       lobbyMinPlayersToStart = 2;
+      resetDeathState();
+      resetWinState();
+      resetKillToast();
       updateConnectButton();
       if (leavingGameManually) {
         leavingGameManually = false;
@@ -1174,6 +1279,9 @@ function attachSocket(wsUrl, loginName) {
       lobbyScoreboard = [];
       lobbyCountdownMsRemaining = 0;
       lobbyMinPlayersToStart = 2;
+      resetDeathState();
+      resetWinState();
+      resetKillToast();
       updateConnectButton();
       setConnectError("Kunde inte ansluta till servern.");
       setAppMode("connect");
@@ -1206,6 +1314,9 @@ function connectAndLogin() {
   attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
   myName = "";
   activePlayersInGame = 0;
+  resetDeathState();
+  resetWinState();
+  resetKillToast();
   updateConnectButton();
   setConnectError("");
   setPrivateRoomButtonVisible(false);
@@ -1240,7 +1351,7 @@ function leaveGameCompletely() {
 }
 
 function sendInput() {
-  if (appMode !== "playing" || sessionState !== "alive") return;
+  if (appMode !== "playing" || (sessionState !== "alive" && sessionState !== "won")) return;
   const now = performance.now();
   const payload = { type: "input", input };
   const snapshot = JSON.stringify(payload);
@@ -1327,7 +1438,7 @@ function bindMobileControls() {
   if (mobileAttackBtnEl) {
     mobileAttackBtnEl.addEventListener("pointerdown", (event) => {
       event.preventDefault();
-      if (appMode !== "playing" || sessionState !== "alive") return;
+      if (appMode !== "playing" || (sessionState !== "alive" && sessionState !== "won")) return;
       if (gameMenuOpen) return;
       if (gameChatOpen || isGameChatFocused()) return;
       socket?.sendJson({ type: "attack" });
@@ -1361,7 +1472,7 @@ function bindMobileControls() {
 
     mobileJoystickBaseEl.addEventListener("pointermove", (event) => {
       if (event.pointerId !== mobileMovePointerId) return;
-      if (appMode !== "playing" || sessionState !== "alive") return;
+      if (appMode !== "playing" || (sessionState !== "alive" && sessionState !== "won")) return;
       if (gameMenuOpen) return;
       event.preventDefault();
       updateFromPointer(event);
@@ -1400,7 +1511,14 @@ function bindMobileControls() {
   mobileLookPadEl.addEventListener("pointermove", (event) => {
     if (event.pointerId !== mobileLookPointerId) return;
     if (gameMenuOpen) return;
-    if (appMode !== "playing" || sessionState !== "alive" || gameChatOpen || isGameChatFocused()) return;
+    if (
+      appMode !== "playing" ||
+      (sessionState !== "alive" && sessionState !== "won") ||
+      gameChatOpen ||
+      isGameChatFocused()
+    ) {
+      return;
+    }
 
     event.preventDefault();
     const dx = event.clientX - mobileLookLastX;
@@ -1449,7 +1567,7 @@ nameInputEl?.addEventListener("keydown", (event) => {
 });
 playBtnEl?.addEventListener("click", () => {
   if (!socket || !authenticated) return;
-  if (sessionState === "alive") return;
+  if (sessionState === "alive" || sessionState === "dead" || sessionState === "won") return;
   if (sessionReady && sessionState === "countdown") return;
   const nextReady = !sessionReady;
   socket.sendJson({ type: "ready", ready: nextReady });
@@ -1510,6 +1628,7 @@ chatInputEl?.addEventListener("keydown", (event) => {
 });
 gameMenuBtnEl?.addEventListener("click", () => {
   if (appMode !== "playing") return;
+  if (sessionState !== "alive") return;
   setGameMenuOpen(!gameMenuOpen);
 });
 gameMenuResumeBtnEl?.addEventListener("click", () => {
@@ -1520,18 +1639,20 @@ gameMenuControlsBtnEl?.addEventListener("click", () => {
   openGameInfoDialog("Kontroller", controlsTextForCurrentMode());
 });
 gameMenuLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
+deathLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
+winLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
 gameMenuLeaveBtnEl?.addEventListener("click", leaveGameCompletely);
 gameMenuBackdropEl?.addEventListener("click", (event) => {
   if (event.target === gameMenuBackdropEl) setGameMenuOpen(false, { restorePointerLock: true });
 });
 gameInfoCloseBtnEl?.addEventListener("click", () => {
   closeGameInfoDialog();
-  if (appMode === "playing" && sessionState === "alive") requestPointerLockSafe(canvas);
+  if (appMode === "playing" && (sessionState === "alive" || sessionState === "won")) requestPointerLockSafe(canvas);
 });
 gameInfoBackdropEl?.addEventListener("click", (event) => {
   if (event.target === gameInfoBackdropEl) {
     closeGameInfoDialog();
-    if (appMode === "playing" && sessionState === "alive") requestPointerLockSafe(canvas);
+    if (appMode === "playing" && (sessionState === "alive" || sessionState === "won")) requestPointerLockSafe(canvas);
   }
 });
 lobbyDialogCloseBtnEl?.addEventListener("click", closeLobbyDialog);
@@ -1568,6 +1689,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (appMode === "playing" && event.key === "Escape") {
+    if (sessionState !== "alive") return;
     if (gameInfoBackdropEl && !gameInfoBackdropEl.classList.contains("hidden")) {
       event.preventDefault();
       closeGameInfoDialog();
@@ -1579,6 +1701,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (appMode !== "playing") return;
+  if (sessionState !== "alive" && sessionState !== "won") return;
   if (gameMenuOpen) return;
   if (gameChatOpen || isGameChatFocused()) return;
   let changed = false;
@@ -1607,6 +1730,7 @@ window.addEventListener("keydown", (event) => {
 
 window.addEventListener("keyup", (event) => {
   if (appMode !== "playing") return;
+  if (sessionState !== "alive" && sessionState !== "won") return;
   if (gameMenuOpen) return;
   if (gameChatOpen || isGameChatFocused()) return;
   let changed = false;
@@ -1635,6 +1759,7 @@ window.addEventListener("keyup", (event) => {
 
 canvas.addEventListener("click", () => {
   if (appMode !== "playing") return;
+  if (sessionState !== "alive" && sessionState !== "won") return;
   if (gameMenuOpen) return;
   if (gameChatOpen) return;
   if (!document.pointerLockElement) {
@@ -1644,6 +1769,7 @@ canvas.addEventListener("click", () => {
 
 document.addEventListener("mousemove", (event) => {
   if (appMode !== "playing") return;
+  if (sessionState !== "alive" && sessionState !== "won") return;
   if (gameMenuOpen) return;
   if (!document.pointerLockElement) return;
   yaw -= event.movementX * 0.0022;
@@ -1681,7 +1807,26 @@ function animate() {
   camera.rotation.y = viewYaw;
   camera.rotation.x = viewPitch;
   roomSystem.update?.(deltaSec);
-  avatarSystem.animate(deltaSec, myCharacterId);
+  const controlledCharacterId =
+    appMode === "playing" && (sessionState === "alive" || sessionState === "won") ? myCharacterId : null;
+  avatarSystem.animate(deltaSec, controlledCharacterId);
+  if (appMode === "playing" && sessionState === "dead") {
+    const corpsePos = avatarSystem.getCharacterPosition(myCharacterId);
+    if (corpsePos) {
+      const posSmooth = 1 - Math.exp(-deltaSec * DEATH_CAMERA_POS_SMOOTH_RATE);
+      camera.position.x += (corpsePos.x - camera.position.x) * posSmooth;
+      camera.position.z += (corpsePos.z - camera.position.z) * posSmooth;
+      camera.position.y += (DEATH_CAMERA_HEIGHT - camera.position.y) * posSmooth;
+    }
+    camera.rotation.set(-Math.PI / 2 + 0.0001, 0, 0);
+  }
+  if (appMode === "playing" && sessionState === "won") {
+    winReturnToLobbyMsRemaining = Math.max(0, winReturnToLobbyMsRemaining - deltaSec * 1000);
+  }
+  killToastMsRemaining = Math.max(0, killToastMsRemaining - deltaSec * 1000);
+  updateDeathOverlay();
+  updateWinOverlay();
+  updateKillToast();
   updateCrosshairHud(deltaSec);
   renderer.render(scene, camera);
 }
