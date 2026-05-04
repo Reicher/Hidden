@@ -101,6 +101,15 @@
     </div>
 
     <div id="gameHud" class="hidden" aria-live="polite">
+      <div id="crosshairHud" aria-hidden="true">
+        <div id="crosshairPlus">
+          <span class="crosshair-line crosshair-line-h"></span>
+          <span class="crosshair-line crosshair-line-v"></span>
+        </div>
+        <svg id="crosshairCooldownRing" viewBox="0 0 40 40">
+          <circle id="crosshairCooldownArc" cx="20" cy="20" r="13"></circle>
+        </svg>
+      </div>
       <div id="aliveOthersText">0 andra spelar just nu</div>
       <div id="gameChatNotice">Systemhändelser</div>
       <button id="gameMenuBtn" type="button" aria-label="Spelmeny">⚙</button>

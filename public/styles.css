@@ -546,6 +546,72 @@ button:disabled {
   z-index: 5;
 }
 
+#crosshairHud {
+  --crosshair-color: rgba(255, 255, 255, 0.96);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+}
+
+#crosshairHud.targeting {
+  --crosshair-color: rgba(255, 88, 88, 0.98);
+}
+
+#crosshairPlus {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+#crosshairHud.cooldown #crosshairPlus {
+  opacity: 0;
+}
+
+.crosshair-line {
+  position: absolute;
+  display: block;
+  background: var(--crosshair-color);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.7);
+  border-radius: 2px;
+}
+
+.crosshair-line-h {
+  width: 18px;
+  height: 2px;
+}
+
+.crosshair-line-v {
+  width: 2px;
+  height: 18px;
+}
+
+#crosshairCooldownRing {
+  width: 44px;
+  height: 44px;
+  transform: rotate(-90deg);
+  opacity: 0;
+}
+
+#crosshairHud.cooldown #crosshairCooldownRing {
+  opacity: 1;
+}
+
+#crosshairCooldownArc {
+  fill: none;
+  stroke: var(--crosshair-color);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-dasharray: 81.6814;
+  stroke-dashoffset: 0;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6));
+}
+
 #aliveOthersText {
   position: absolute;
   top: 10px;

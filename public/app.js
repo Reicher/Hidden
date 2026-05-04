@@ -51,6 +51,8 @@ const debugPlayersTextEl = document.getElementById("debugPlayersText");
 const debugEventsTextEl = document.getElementById("debugEventsText");
 const debugMetaEl = document.getElementById("debugMeta");
 const gameHudEl = document.getElementById("gameHud");
+const crosshairHudEl = document.getElementById("crosshairHud");
+const crosshairCooldownArcEl = document.getElementById("crosshairCooldownArc");
 const aliveOthersTextEl = document.getElementById("aliveOthersText");
 const gameMenuBtnEl = document.getElementById("gameMenuBtn");
 const gameMenuBackdropEl = document.getElementById("gameMenuBackdrop");
@@ -91,6 +93,8 @@ let myCharacterId = null;
 let myName = "";
 let sessionReady = false;
 let activePlayersInGame = 0;
+let attackCooldownMsRemaining = 0;
+let attackCooldownVisualMaxMs = 1000;
 let gameChatOpen = false;
 let gameMenuOpen = false;
 let lobbyMenuOpen = false;
@@ -116,6 +120,10 @@ const input = {
 
 const INPUT_SEND_INTERVAL_MS = 33;
 const INPUT_HEARTBEAT_MS = 120;
+const CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS = 8;
+const CROSSHAIR_DEFAULT_COOLDOWN_MS = 1000;
+const CROSSHAIR_RING_CIRCUMFERENCE = Math.PI * 26;
+const CROSSHAIR_HIT_DISTANCE_METERS = 2.8;
 const GAME_CHAT_MAX_LINES = 5;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
@@ -351,7 +359,7 @@ function closeLobbyDialog() {
 }
 
 function isGameChatFocused() {
-  return false;
+  return document.activeElement === gameChatInputEl;
 }
 
 function updateMobileControlsVisibility() {
@@ -374,9 +382,15 @@ function isMobileChatDisabledInGame() {
 
 function setGameChatOpen(open, { restorePointerLock = false } = {}) {
   if (!gameChatInputRowEl) return;
-  gameChatOpen = false;
-  gameChatInputRowEl.classList.add("hidden");
-  gameChatInputEl?.blur();
+  const canOpen = Boolean(open) && !isMobileChatDisabledInGame();
+  gameChatOpen = canOpen;
+  gameChatInputRowEl.classList.toggle("hidden", !canOpen);
+  if (canOpen) {
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    gameChatInputEl?.focus();
+  } else {
+    gameChatInputEl?.blur();
+  }
   if (restorePointerLock && appMode === "playing" && sessionState === "alive") requestPointerLockSafe(canvas);
   updateMobileControlsVisibility();
 }
@@ -494,6 +508,35 @@ function updateInGameHud() {
   aliveOthersTextEl.textContent = `${others} ${noun} spelar just nu`;
 }
 
+function updateCrosshairHud(deltaSec) {
+  if (!crosshairHudEl || !crosshairCooldownArcEl) return;
+
+  const inActiveGameplay = appMode === "playing" && sessionState === "alive" && myCharacterId != null;
+  crosshairHudEl.classList.toggle("hidden", !inActiveGameplay);
+  if (!inActiveGameplay) return;
+
+  attackCooldownMsRemaining = Math.max(0, attackCooldownMsRemaining - Math.max(0, deltaSec) * 1000);
+  const onCooldown = attackCooldownMsRemaining > CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS;
+  crosshairHudEl.classList.toggle("cooldown", onCooldown);
+
+  if (onCooldown) {
+    const visualMax = Math.max(120, attackCooldownVisualMaxMs || CROSSHAIR_DEFAULT_COOLDOWN_MS);
+    const cooldownRatio = Math.max(0, Math.min(1, attackCooldownMsRemaining / visualMax));
+    const dashOffset = CROSSHAIR_RING_CIRCUMFERENCE * (1 - cooldownRatio);
+    crosshairCooldownArcEl.style.strokeDashoffset = dashOffset.toFixed(3);
+    crosshairHudEl.classList.remove("targeting");
+    return;
+  }
+
+  crosshairCooldownArcEl.style.strokeDashoffset = CROSSHAIR_RING_CIRCUMFERENCE.toFixed(3);
+  camera.updateMatrixWorld(true);
+  const aimingAtCharacter = avatarSystem.isAimingAtCharacter({
+    myCharacterId,
+    maxDistance: CROSSHAIR_HIT_DISTANCE_METERS
+  });
+  crosshairHudEl.classList.toggle("targeting", aimingAtCharacter);
+}
+
 function setAppMode(mode) {
   const previous = appMode;
   appMode = mode;
@@ -515,6 +558,8 @@ function setAppMode(mode) {
 
   if (previous === "playing" && mode !== "playing") {
     myCharacterId = null;
+    attackCooldownMsRemaining = 0;
+    attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
     resetInputState();
   }
 
@@ -963,6 +1008,8 @@ function attachSocket(wsUrl, loginName) {
         authenticated = true;
         myName = msg.name || loginName;
         sessionReady = false;
+        attackCooldownMsRemaining = 0;
+        attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
         currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
         lobbyScoreboard = [];
         lobbyCountdownMsRemaining = 0;
@@ -978,6 +1025,8 @@ function attachSocket(wsUrl, loginName) {
         authenticated = false;
         myName = "";
         sessionReady = false;
+        attackCooldownMsRemaining = 0;
+        attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
         currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
         lobbyScoreboard = [];
         lobbyCountdownMsRemaining = 0;
@@ -1034,6 +1083,14 @@ function attachSocket(wsUrl, loginName) {
         lobbyMinPlayersToStart = Math.max(1, Number(state.minPlayersToStart || lobbyMinPlayersToStart || 2));
         myCharacterId = state.characterId ?? null;
         activePlayersInGame = Number(state.activePlayers || 0);
+        attackCooldownMsRemaining = Math.max(0, Number(state.attackCooldownMsRemaining || 0));
+        if (attackCooldownMsRemaining > CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS) {
+          attackCooldownVisualMaxMs = Math.max(
+            attackCooldownVisualMaxMs * 0.9,
+            attackCooldownMsRemaining,
+            CROSSHAIR_DEFAULT_COOLDOWN_MS
+          );
+        }
         updateInGameHud();
         updateDocumentTitle();
       }
@@ -1090,6 +1147,8 @@ function attachSocket(wsUrl, loginName) {
       sessionState = "auth";
       sessionReady = false;
       myCharacterId = null;
+      attackCooldownMsRemaining = 0;
+      attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
       activePlayersInGame = 0;
       currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 };
       lobbyScoreboard = [];
@@ -1110,6 +1169,8 @@ function attachSocket(wsUrl, loginName) {
     onError: () => {
       if (generation !== socketGeneration) return;
       connecting = false;
+      attackCooldownMsRemaining = 0;
+      attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
       lobbyScoreboard = [];
       lobbyCountdownMsRemaining = 0;
       lobbyMinPlayersToStart = 2;
@@ -1141,6 +1202,8 @@ function connectAndLogin() {
   sessionState = "auth";
   sessionReady = false;
   myCharacterId = null;
+  attackCooldownMsRemaining = 0;
+  attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
   myName = "";
   activePlayersInGame = 0;
   updateConnectButton();
@@ -1598,6 +1661,7 @@ window.addEventListener("mousedown", (event) => {
   if (appMode !== "playing" || sessionState !== "alive") return;
   if (gameMenuOpen) return;
   if (gameChatOpen || isGameChatFocused()) return;
+  if (document.pointerLockElement !== canvas) return;
   socket?.sendJson({ type: "attack" });
 });
 
@@ -1618,6 +1682,7 @@ function animate() {
   camera.rotation.x = viewPitch;
   roomSystem.update?.(deltaSec);
   avatarSystem.animate(deltaSec, myCharacterId);
+  updateCrosshairHud(deltaSec);
   renderer.render(scene, camera);
 }
 

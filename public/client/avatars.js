@@ -25,6 +25,10 @@ const PUPIL_RANGE_X_PX = 5.8;
 const PUPIL_RANGE_Y_PX = 4.6;
 const AVATAR_YAW_OFFSET = Math.PI;
 const MAX_LOOK_PITCH_RAD = 1.2;
+const AIM_MAX_DISTANCE = 8;
+const AIM_BODY_RADIUS = 0.44;
+const AIM_HEAD_Y_OFFSET_RATIO = 0.9;
+const AIM_CHEST_Y_OFFSET_RATIO = 0.58;
 const SKIN_TONE_HEX = [
   0xfad7c4, 0xf1c7a5, 0xe6b88a, 0xd8a676, 0xbf8a5d, 0xa9744d, 0x8c603f, 0x714c34, 0x573a2a, 0x3f2b1f
 ];
@@ -180,6 +184,9 @@ export function createAvatarSystem({ scene, camera }) {
   const tmpFallQuat = new THREE.Quaternion();
   const tmpHeadWorld = new THREE.Vector3();
   const tmpHeadLocal = new THREE.Vector3();
+  const tmpAimOrigin = new THREE.Vector3();
+  const tmpAimDirection = new THREE.Vector3();
+  const tmpAimTarget = new THREE.Vector3();
   const firstPersonArmPivot = new THREE.Group();
   const knockdownStarTexture = createKnockdownStarTexture();
   const knockdownStarMaterial = new THREE.SpriteMaterial({
@@ -929,8 +936,44 @@ export function createAvatarSystem({ scene, camera }) {
     animateFirstPersonArm(deltaSec, hasControl);
   }
 
+  function rayHitsSphere(origin, direction, target, radius, maxDistance) {
+    const toX = target.x - origin.x;
+    const toY = target.y - origin.y;
+    const toZ = target.z - origin.z;
+    const alongRay = toX * direction.x + toY * direction.y + toZ * direction.z;
+    if (alongRay <= 0 || alongRay > maxDistance) return false;
+    const closestX = origin.x + direction.x * alongRay;
+    const closestY = origin.y + direction.y * alongRay;
+    const closestZ = origin.z + direction.z * alongRay;
+    const dx = target.x - closestX;
+    const dy = target.y - closestY;
+    const dz = target.z - closestZ;
+    return dx * dx + dy * dy + dz * dz <= radius * radius;
+  }
+
+  function isAimingAtCharacter({ myCharacterId, maxDistance = AIM_MAX_DISTANCE } = {}) {
+    if (myCharacterId == null) return false;
+    tmpAimOrigin.setFromMatrixPosition(camera.matrixWorld);
+    camera.getWorldDirection(tmpAimDirection);
+    const safeMaxDistance = Math.max(0.2, Number(maxDistance) || AIM_MAX_DISTANCE);
+
+    for (const [id, avatar] of avatars.entries()) {
+      if (id === myCharacterId) continue;
+      if (!avatar.group.visible || avatar.isDowned) continue;
+
+      tmpAimTarget.copy(avatar.group.position);
+      tmpAimTarget.y = Math.max(0.7, avatar.eyeHeight * AIM_HEAD_Y_OFFSET_RATIO);
+      if (rayHitsSphere(tmpAimOrigin, tmpAimDirection, tmpAimTarget, AIM_BODY_RADIUS, safeMaxDistance)) return true;
+
+      tmpAimTarget.y = Math.max(0.52, avatar.eyeHeight * AIM_CHEST_Y_OFFSET_RATIO);
+      if (rayHitsSphere(tmpAimOrigin, tmpAimDirection, tmpAimTarget, AIM_BODY_RADIUS, safeMaxDistance)) return true;
+    }
+    return false;
+  }
+
   return {
     applyWorldCharacters,
-    animate
+    animate,
+    isAimingAtCharacter
   };
 }

@@ -89,7 +89,7 @@ function main() {
   }
 
   const { size } = preset;
-  const outputPath = resolve(HERE, `../public/assets/${layoutId}.png`);
+  const outputPath = resolve(HERE, `../server/layouts/${layoutId}.png`);
   const png = new PNG({ width: size, height: size });
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) setPixel(png, size, x, y, COLORS.empty);

@@ -10,6 +10,12 @@ function envInt(name, fallback) {
   return Math.trunc(parsed);
 }
 
+function envPositiveInt(name, fallback) {
+  const parsed = envInt(name, fallback);
+  if (!Number.isInteger(parsed) || parsed < 1) return fallback;
+  return parsed;
+}
+
 function envBool(name, fallback) {
   const value = process.env[name];
   if (value == null) return fallback;
@@ -207,7 +213,7 @@ function readLayoutById(layoutId) {
     throw new Error(`[layout] Unknown layout id "${layoutId}". Available: ${known}`);
   }
   const loaded = loadLayoutFromPng({
-    filePath: resolve(HERE, "../public/assets", preset.fileName),
+    filePath: resolve(HERE, "./layouts", preset.fileName),
     shelfWidth: SHELF_WIDTH,
     shelfDepth: SHELF_DEPTH,
     shelfHeight: SHELF_HEIGHT,
@@ -282,17 +288,17 @@ export function getAvailableLayouts() {
   );
 }
 
-export const HEARTBEAT_INTERVAL_MS = envInt("HEARTBEAT_INTERVAL_MS", 5000);
-export const IDLE_SESSION_TIMEOUT_MS = envInt("IDLE_SESSION_TIMEOUT_MS", 30 * 60 * 1000);
-export const MAX_MESSAGE_BYTES = envInt("MAX_MESSAGE_BYTES", 2048);
+export const HEARTBEAT_INTERVAL_MS = envPositiveInt("HEARTBEAT_INTERVAL_MS", 5000);
+export const IDLE_SESSION_TIMEOUT_MS = envPositiveInt("IDLE_SESSION_TIMEOUT_MS", 30 * 60 * 1000);
+export const MAX_MESSAGE_BYTES = envPositiveInt("MAX_MESSAGE_BYTES", 2048);
 export const INPUT_UPDATE_MIN_MS = envInt("INPUT_UPDATE_MIN_MS", 20);
 export const ATTACK_MESSAGE_MIN_MS = envInt("ATTACK_MESSAGE_MIN_MS", 60);
-export const MESSAGE_WINDOW_MS = envInt("MESSAGE_WINDOW_MS", 1000);
-export const MAX_MESSAGES_PER_WINDOW = envInt("MAX_MESSAGES_PER_WINDOW", 120);
-export const SPAM_DROP_WINDOW_MS = envInt("SPAM_DROP_WINDOW_MS", 1000);
-export const SPAM_MAX_DROPS_PER_WINDOW = envInt("SPAM_MAX_DROPS_PER_WINDOW", 40);
+export const MESSAGE_WINDOW_MS = envPositiveInt("MESSAGE_WINDOW_MS", 1000);
+export const MAX_MESSAGES_PER_WINDOW = envPositiveInt("MAX_MESSAGES_PER_WINDOW", 120);
+export const SPAM_DROP_WINDOW_MS = envPositiveInt("SPAM_DROP_WINDOW_MS", 1000);
+export const SPAM_MAX_DROPS_PER_WINDOW = envPositiveInt("SPAM_MAX_DROPS_PER_WINDOW", 40);
 export const ALLOWED_ORIGINS = new Set(envCsv("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS));
 export const ALLOW_MISSING_ORIGIN = envBool("ALLOW_MISSING_ORIGIN", false);
 export const DEBUG_VIEW_TOKEN = envString("DEBUG_VIEW_TOKEN", "");
 
-export const INVARIANT_LOG_COOLDOWN_MS = envInt("INVARIANT_LOG_COOLDOWN_MS", 5000);
+export const INVARIANT_LOG_COOLDOWN_MS = envPositiveInt("INVARIANT_LOG_COOLDOWN_MS", 5000);

@@ -45,7 +45,7 @@ Privata rum: öppna `http://127.0.0.1:3000/<rumskod>` för ett separat rum som t
 
 ## Kartlayout Från PNG
 
-- Kartan använder `public/assets/layout-50.png` som layoutkälla.
+- Kartan använder `server/layouts/layout-50.png` som layoutkälla.
 - Bilden måste vara exakt `50x50` pixlar (`1 pixel = 1 meter` i spelbar yta).
 - Färglegend:
   - `transparent` (alpha `0`) = tom yta

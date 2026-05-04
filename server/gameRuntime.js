@@ -17,6 +17,7 @@ const PRIVATE_CODE_RE = /^[a-z0-9][a-z0-9-]{2,23}$/i;
 const SETTINGS_DIR_NAME = "logs";
 const SETTINGS_FILE_NAME = "server-settings.json";
 const SETTINGS_TMP_FILE_NAME = "server-settings.json.tmp";
+const MAX_DEBUG_SETTINGS_BODY_BYTES = 16 * 1024;
 
 function parseRoomFromRequestUrl(rawUrl) {
   const parsed = new URL(rawUrl || "/", "http://localhost");
@@ -31,7 +32,12 @@ function parseRoomFromRequestUrl(rawUrl) {
 
   if (segments.length !== 1) return { ok: false, reason: "invalid_path" };
 
-  const roomCode = decodeURIComponent(segments[0]).toLowerCase();
+  let roomCode = "";
+  try {
+    roomCode = decodeURIComponent(segments[0]).toLowerCase();
+  } catch {
+    return { ok: false, reason: "invalid_room_code" };
+  }
   if (!PRIVATE_CODE_RE.test(roomCode)) {
     return { ok: false, reason: "invalid_room_code" };
   }
@@ -193,7 +199,16 @@ export function attachGameRuntime({ server, rootDir }) {
       }
 
       let bodyText = "";
-      for await (const chunk of req) bodyText += chunk;
+      let bodyBytes = 0;
+      for await (const chunk of req) {
+        const chunkText = typeof chunk === "string" ? chunk : chunk.toString();
+        bodyBytes += Buffer.byteLength(chunkText, "utf8");
+        if (bodyBytes > MAX_DEBUG_SETTINGS_BODY_BYTES) {
+          writeJson(res, 413, { error: "payload_too_large", maxBytes: MAX_DEBUG_SETTINGS_BODY_BYTES });
+          return true;
+        }
+        bodyText += chunkText;
+      }
 
       let parsedBody = null;
       try {

@@ -41,6 +41,8 @@ const NAME_MAX_LEN = 20;
 const CHAT_MAX_LEN = 220;
 const CHAT_HISTORY_LIMIT = 80;
 const ROUND_COUNTDOWN_SECONDS = 10;
+const SUPERMAJORITY_READY_TIMEOUT_SECONDS = 30;
+const SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS = 10;
 const PERMANENT_DOWNED_UNTIL = Number.MAX_SAFE_INTEGER;
 const MAX_LOOK_PITCH_RAD = 1.2;
 
@@ -53,6 +55,7 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   let cachedScoreboard = [];
   let nextScoreboardRefreshAt = 0;
   let lobbyCountdown = null;
+  let supermajorityReadyTimeout = null;
   const countdownReadyNames = new Set();
   let activeMatchStartedAt = 0;
   const roomTag = isPrivate ? `privat:${roomCode}` : "publik";
@@ -546,8 +549,43 @@ function sanitizeSystemTextSegment(raw) {
     appendSystemChat([{ type: "text", text: "Nedräkning avbruten" }]);
   }
 
+  function cancelSupermajorityReadyTimeout() {
+    supermajorityReadyTimeout = null;
+  }
+
+  function startSupermajorityReadyTimeout(now) {
+    supermajorityReadyTimeout = {
+      endsAt: now + SUPERMAJORITY_READY_TIMEOUT_SECONDS * 1000,
+      nextAnnounceSecond: SUPERMAJORITY_READY_TIMEOUT_SECONDS - SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS
+    };
+    appendSystemChat([
+      {
+        type: "text",
+        text: `2/3 spelare redo. Matchstart om ${SUPERMAJORITY_READY_TIMEOUT_SECONDS} sekunder om inte alla blir redo tidigare.`
+      }
+    ]);
+  }
+
+  function announceSupermajorityReadyTimeout(now) {
+    if (!supermajorityReadyTimeout) return;
+    while (
+      supermajorityReadyTimeout.nextAnnounceSecond > 0 &&
+      now >= supermajorityReadyTimeout.endsAt - supermajorityReadyTimeout.nextAnnounceSecond * 1000
+    ) {
+      const seconds = supermajorityReadyTimeout.nextAnnounceSecond;
+      appendSystemChat([
+        {
+          type: "text",
+          text: `2/3 spelare redo. Matchstart om ${seconds} sekunder om inte alla blir redo tidigare.`
+        }
+      ]);
+      supermajorityReadyTimeout.nextAnnounceSecond -= SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS;
+    }
+  }
+
   function startLobbyCountdown(now, seconds = ROUND_COUNTDOWN_SECONDS) {
     const endsAt = now + seconds * 1000;
+    cancelSupermajorityReadyTimeout();
     countdownReadyNames.clear();
     lobbyCountdown = {
       endsAt,
@@ -573,9 +611,28 @@ function sanitizeSystemTextSegment(raw) {
     if (lobbyCountdown) return;
     if (activeMatchStartedAt > 0) return;
     const lobbyPlayers = authenticatedSessions().filter((session) => session.state === "lobby");
-    if (lobbyPlayers.length < MIN_PLAYERS_TO_START) return;
-    if (lobbyPlayers.some((session) => !session.ready)) return;
-    startLobbyCountdown(now);
+    if (lobbyPlayers.length < MIN_PLAYERS_TO_START) {
+      cancelSupermajorityReadyTimeout();
+      return;
+    }
+    const readyCount = lobbyPlayers.reduce((count, session) => count + (session.ready ? 1 : 0), 0);
+    if (readyCount >= lobbyPlayers.length) {
+      startLobbyCountdown(now);
+      return;
+    }
+    const readyNeededForSupermajority = Math.ceil((lobbyPlayers.length * 2) / 3);
+    if (readyCount < readyNeededForSupermajority) {
+      cancelSupermajorityReadyTimeout();
+      return;
+    }
+    if (!supermajorityReadyTimeout) {
+      startSupermajorityReadyTimeout(now);
+      return;
+    }
+    announceSupermajorityReadyTimeout(now);
+    if (now >= supermajorityReadyTimeout.endsAt) {
+      startLobbyCountdown(now);
+    }
   }
 
   function finalizeLobbyCountdown(now) {
@@ -646,6 +703,7 @@ function sanitizeSystemTextSegment(raw) {
     }
 
     lobbyCountdown = null;
+    cancelSupermajorityReadyTimeout();
     countdownReadyNames.clear();
     activeMatchStartedAt = 0;
     resetArenaForNextRound(now);
@@ -1192,6 +1250,7 @@ function sanitizeSystemTextSegment(raw) {
           return "ok";
         }
         session.ready = false;
+        maybeStartLobbyCountdown(at);
       }
       return "ok";
     }
