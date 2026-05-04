@@ -26,6 +26,7 @@
       <section id="lobbyView" class="view hidden">
         <div id="lobbyMatchStatus" aria-live="polite">
           <span id="lobbyMatchStatusTitle">Väntar på fler spelare</span>
+          <button id="lobbySettingsBtn" type="button" aria-label="Inställningar">⚙</button>
         </div>
 
         <div id="lobbyMain">
@@ -35,8 +36,9 @@
                 <tr>
                   <th>Namn</th>
                   <th>Vinster</th>
-                  <th>Kills</th>
-                  <th>Deaths</th>
+                  <th>Nedslagningar</th>
+                  <th>Streak</th>
+                  <th>Nedslagen</th>
                   <th>Oskyldiga</th>
                   <th>Status</th>
                 </tr>
@@ -53,35 +55,44 @@
           </div>
         </div>
         <div id="lobbyActionRow">
-          <button id="playBtn" type="button">Ready</button>
-          <button id="lobbySettingsBtn" type="button">Settings</button>
+          <button id="playBtn" type="button">Redo</button>
         </div>
 
-        <div id="lobbyDialogBackdrop" class="hidden">
-          <div id="lobbyDialogCard" role="dialog" aria-modal="true" aria-labelledby="lobbyDialogTitle">
-            <h2 id="lobbyDialogTitle"></h2>
-            <p id="lobbyDialogText"></p>
-            <div id="settingsPanel" class="hidden">
-              <p id="settingsIntro">Styr om mobilkontroller ska visas i match.</p>
-              <div id="settingsMobileControlsRow">
-                <span>Mobilkontroller</span>
-                <button id="mobileControlsModeBtn" type="button">Auto</button>
-              </div>
-              <p id="mobileControlsModeHelp">Auto: visas bara när enheten identifieras som touch.</p>
-            </div>
-            <button id="lobbyDialogCloseBtn" type="button">Stäng</button>
-          </div>
-        </div>
         <div id="lobbyMenuBackdrop" class="hidden">
           <div id="lobbyMenuCard" role="dialog" aria-modal="true" aria-labelledby="lobbyMenuTitle">
-            <h2 id="lobbyMenuTitle">Settings</h2>
-            <button id="lobbyMenuControlsBtn" type="button">Kontroller</button>
+            <h2 id="lobbyMenuTitle">Meny</h2>
             <button id="lobbyMenuSettingsBtn" type="button">Inställningar</button>
-            <button id="lobbyMenuCreditsBtn" type="button">Credits</button>
+            <button id="lobbyMenuCreditsBtn" type="button">Om spelet</button>
             <button id="lobbyMenuCloseBtn" type="button">Stäng</button>
           </div>
         </div>
       </section>
+      <div id="lobbyDialogBackdrop" class="hidden">
+        <div id="lobbyDialogCard" role="dialog" aria-modal="true" aria-labelledby="lobbyDialogTitle">
+          <h2 id="lobbyDialogTitle"></h2>
+          <p id="lobbyDialogText"></p>
+          <div id="settingsPanel" class="hidden">
+            <p id="settingsIntro">Ljudinställningar för matchen.</p>
+            <div class="settingsOptionRow">
+              <span>Kontrollschema</span>
+              <button id="mobileControlsModeBtn" type="button">Auto</button>
+            </div>
+            <p id="mobileControlsModeHelp">Auto: visar mobilkontroller på touch-enheter.</p>
+            <div class="settingsAudioRow">
+              <span>Musikvolym</span>
+              <input id="musicVolumeInput" type="range" min="0" max="100" step="1" value="80" />
+              <button id="musicMuteBtn" type="button">Muta</button>
+            </div>
+            <div class="settingsAudioRow">
+              <span>Ljudvolym</span>
+              <input id="sfxVolumeInput" type="range" min="0" max="100" step="1" value="90" />
+              <button id="sfxMuteBtn" type="button">Muta</button>
+            </div>
+            <p id="settingsAudioHelp">Inställningarna sparas lokalt och används när ljudsystemet är aktivt.</p>
+          </div>
+          <button id="lobbyDialogCloseBtn" type="button">Stäng</button>
+        </div>
+      </div>
     </div>
     <div id="countdownOverlay" class="hidden" aria-live="polite">
       <div id="countdownContent">
@@ -111,16 +122,16 @@
         </svg>
       </div>
       <div id="aliveOthersText">0 andra spelar just nu</div>
-      <div id="killToast" class="hidden">Du dödade X</div>
+      <div id="knockdownToast" class="hidden">Du slog ner X</div>
       <div id="winOverlay" class="hidden">
         <p id="winTitle">Du vann!</p>
         <p id="winCountdownText">Återgå till lobbyn om 10</p>
         <button id="winLobbyBtn" type="button">Återgå till lobbyn</button>
       </div>
-      <div id="deathOverlay" class="hidden">
-        <p id="deathByText">Du dödades av okänd spelare</p>
-        <p id="deathCountdownText">Tryck på knappen för att återgå till lobbyn.</p>
-        <button id="deathLobbyBtn" type="button">Återgå till lobbyn</button>
+      <div id="downedOverlay" class="hidden">
+        <p id="downedByText">Du blev nedslagen av okänd spelare</p>
+        <p id="downedCountdownText">Tryck på knappen för att återgå till lobbyn.</p>
+        <button id="downedLobbyBtn" type="button">Återgå till lobbyn</button>
       </div>
       <div id="gameChatNotice">Systemhändelser</div>
       <button id="gameMenuBtn" type="button" aria-label="Spelmeny">⚙</button>
@@ -132,18 +143,11 @@
       </div>
       <div id="gameMenuBackdrop" class="hidden">
         <div id="gameMenuCard" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
-          <h2 id="gameMenuTitle">Spelmeny</h2>
-          <button id="gameMenuControlsBtn" type="button">Kontroller</button>
-          <button id="gameMenuResumeBtn" type="button">Fortsätt spela</button>
-          <button id="gameMenuLobbyBtn" type="button">Återgå till lobby</button>
-          <button id="gameMenuLeaveBtn" type="button">Lämna spelet</button>
-        </div>
-      </div>
-      <div id="gameInfoBackdrop" class="hidden">
-        <div id="gameInfoCard" role="dialog" aria-modal="true" aria-labelledby="gameInfoTitle">
-          <h2 id="gameInfoTitle"></h2>
-          <p id="gameInfoText"></p>
-          <button id="gameInfoCloseBtn" type="button">Stäng</button>
+          <h2 id="gameMenuTitle">Meny</h2>
+          <button id="gameMenuSettingsBtn" type="button">Inställningar</button>
+          <button id="gameMenuCreditsBtn" type="button">Om spelet</button>
+          <button id="gameMenuLobbyBtn" type="button">Återgå till lobbyn</button>
+          <button id="gameMenuCloseBtn" type="button">Stäng</button>
         </div>
       </div>
       <div id="mobileControls" class="hidden" aria-hidden="true">

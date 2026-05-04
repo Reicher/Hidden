@@ -326,25 +326,23 @@ button:disabled {
 
 #lobbyActionRow {
   display: flex;
-  gap: 14px;
+  justify-content: center;
   align-self: stretch;
   margin-top: 0;
 }
 
 #lobbyActionRow button {
-  flex: 1 1 0;
-  font-size: 14px;
-  padding: 10px 8px;
-}
-
-#lobbySettingsBtn {
   flex: 0 0 auto;
-  min-width: 96px;
+  min-width: 140px;
   font-size: 13px;
-  padding: 8px 10px;
+  padding: 7px 12px;
 }
 
 #lobbyMatchStatus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   flex: 0 0 auto;
   min-height: 1.2em;
   padding: 2px 2px 0;
@@ -357,6 +355,21 @@ button:disabled {
 #lobbyMatchStatusTitle {
   color: inherit;
   font-weight: 700;
+}
+
+#lobbySettingsBtn {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 7px;
+  background: rgba(8, 10, 14, 0.56);
+  color: rgba(236, 241, 250, 0.9);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+  display: grid;
+  place-items: center;
 }
 
 #lobbyDialogBackdrop {
@@ -397,6 +410,7 @@ button:disabled {
 }
 
 #settingsIntro,
+#settingsAudioHelp,
 #mobileControlsModeHelp {
   margin: 0;
   color: var(--muted);
@@ -404,19 +418,50 @@ button:disabled {
   line-height: 1.4;
 }
 
-#settingsMobileControlsRow {
+.settingsOptionRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 
-#settingsMobileControlsRow span {
+.settingsOptionRow span {
   font-size: 14px;
 }
 
-#mobileControlsModeBtn {
-  min-width: 122px;
+.settingsOptionRow button {
+  min-width: 92px;
+  padding: 7px 10px;
+}
+
+.settingsAudioRow {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.settingsAudioRow span {
+  font-size: 14px;
+}
+
+.settingsAudioRow input[type="range"] {
+  width: 100%;
+  accent-color: #66ccff;
+}
+
+.settingsAudioRow button {
+  min-width: 86px;
+  padding: 7px 10px;
+}
+
+@media (max-width: 720px) {
+  .settingsAudioRow {
+    grid-template-columns: 1fr auto;
+  }
+  .settingsAudioRow span:first-child {
+    grid-column: 1 / -1;
+  }
 }
 
 #lobbyDialogCloseBtn {
@@ -433,7 +478,7 @@ button:disabled {
 }
 
 #debugCard {
-  width: min(1120px, calc(100vw - 30px));
+  width: min(1680px, calc(100vw - 30px));
   max-height: calc(100vh - 28px);
   overflow: auto;
   border: 1px solid var(--line);
@@ -465,7 +510,7 @@ button:disabled {
 
 #debugSummary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px;
   margin: 8px 0;
 }
@@ -501,7 +546,7 @@ button:disabled {
 #debugGrid {
   margin-top: 8px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 8px;
 }
 
@@ -509,7 +554,8 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #141a23;
-  min-height: 180px;
+  min-height: 240px;
+  height: clamp(240px, 38vh, 440px);
   display: flex;
   flex-direction: column;
 }
@@ -528,7 +574,8 @@ button:disabled {
   font-size: 12px;
   line-height: 1.4;
   white-space: pre-wrap;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   flex: 1 1 auto;
 }
 
@@ -622,7 +669,7 @@ button:disabled {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 }
 
-#killToast {
+#knockdownToast {
   position: absolute;
   left: 50%;
   top: 18%;
@@ -675,7 +722,7 @@ button:disabled {
   line-height: 1.2;
 }
 
-#deathOverlay {
+#downedOverlay {
   position: absolute;
   left: 50%;
   bottom: max(12px, env(safe-area-inset-bottom));
@@ -686,7 +733,7 @@ button:disabled {
   pointer-events: none;
 }
 
-#deathByText {
+#downedByText {
   margin: 0;
   font-size: 19px;
   font-weight: 700;
@@ -694,14 +741,14 @@ button:disabled {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.78);
 }
 
-#deathCountdownText {
+#downedCountdownText {
   margin: 0;
   font-size: 12px;
   color: rgba(220, 228, 242, 0.84);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.74);
 }
 
-#deathLobbyBtn {
+#downedLobbyBtn {
   pointer-events: auto;
   min-height: 30px;
   padding: 6px 10px;
@@ -1113,8 +1160,8 @@ body.touch-device #gameChatNotice {
   }
 
   #lobbyActionRow {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    justify-content: center;
   }
 
   #lobbyMatchStatus {

@@ -20,7 +20,7 @@
         font-family: "JetBrains Mono", "Fira Code", Menlo, monospace;
       }
       main {
-        max-width: 1180px;
+        width: min(1780px, calc(100vw - 24px));
         margin: 0 auto;
         padding: 16px;
       }
@@ -90,7 +90,7 @@
       #summary {
         margin-top: 8px;
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: 8px;
       }
       .card {
@@ -120,13 +120,14 @@
         margin-top: 8px;
         display: grid;
         gap: 8px;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       }
       .pane {
         border: 1px solid var(--line);
         border-radius: 8px;
         background: #121824;
-        min-height: 220px;
+        min-height: 240px;
+        height: clamp(240px, 38vh, 460px);
         display: flex;
         flex-direction: column;
       }
@@ -164,7 +165,8 @@
         white-space: pre-wrap;
         font-size: 12px;
         line-height: 1.4;
-        overflow: auto;
+        overflow-y: auto;
+        overflow-x: hidden;
         flex: 1 1 auto;
       }
       @media (max-width: 980px) {
@@ -215,7 +217,7 @@
         <canvas id="chart" width="960" height="240"></canvas>
         <div class="grid">
           <section class="pane">
-            <h2>Rum nu</h2>
+            <h2>Rum (nu + historik)</h2>
             <pre id="rooms"></pre>
           </section>
           <section class="pane">

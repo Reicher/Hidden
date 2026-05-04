@@ -30,6 +30,7 @@ let settingsLoading = false;
 let settingsSaving = false;
 let activeTab = "stats";
 let cachedSettings = null;
+const LIST_LIMIT = 20;
 
 function getToken() {
   return localStorage.getItem(TOKEN_KEY) || "";
@@ -198,41 +199,107 @@ function drawChart(samples) {
   drawLine("active", "#ffcf6a");
 }
 
+function roomLabel(room) {
+  if (!room) return "-";
+  return room.isPrivate ? `privat:${room.roomCode || room.roomId}` : "publik";
+}
+
+function buildRoomRows(data) {
+  const activeRooms = Array.isArray(data?.liveRooms) ? data.liveRooms : [];
+  const historicalRooms = Array.isArray(data?.rooms) ? data.rooms : [];
+  const byId = new Map();
+
+  for (const room of historicalRooms) {
+    const roomId = String(room?.roomId || "").trim();
+    if (!roomId) continue;
+    byId.set(roomId, {
+      roomId,
+      roomCode: room.roomCode || null,
+      isPrivate: Boolean(room.isPrivate),
+      lastEventAt: Number(room.lastEventAt || 0),
+      uniqueNames: Array.isArray(room.uniqueNames) ? room.uniqueNames : [],
+      hasLive: false,
+      authenticatedNames: []
+    });
+  }
+
+  for (const room of activeRooms) {
+    const roomId = String(room?.roomId || "").trim();
+    if (!roomId) continue;
+    const existing = byId.get(roomId) || {
+      roomId,
+      roomCode: room.roomCode || null,
+      isPrivate: Boolean(room.isPrivate),
+      lastEventAt: 0,
+      uniqueNames: [],
+      hasLive: false,
+      authenticatedNames: []
+    };
+    existing.roomCode = room.roomCode || existing.roomCode;
+    existing.isPrivate = Boolean(room.isPrivate);
+    existing.hasLive = true;
+    existing.authenticatedNames = Array.isArray(room.authenticatedNames) ? room.authenticatedNames : [];
+    byId.set(roomId, existing);
+  }
+
+  return [...byId.values()].sort((a, b) => {
+    if (a.hasLive !== b.hasLive) return a.hasLive ? -1 : 1;
+    if (b.lastEventAt !== a.lastEventAt) return b.lastEventAt - a.lastEventAt;
+    return a.roomId.localeCompare(b.roomId, "sv");
+  });
+}
+
 function renderText(data) {
+  const roomRows = buildRoomRows(data);
+  const roomLabelById = new Map(roomRows.map((room) => [room.roomId, roomLabel(room)]));
+
   if (roomsEl) {
-    const rooms = Array.isArray(data?.liveRooms) ? data.liveRooms : data?.rooms || [];
-    roomsEl.textContent =
-      rooms.length > 0
-        ? rooms
-            .map((room) => {
-              const c = room.current || {};
-              const label = room.isPrivate ? `privat:${room.roomCode || room.roomId}` : "publik";
-              const names = Array.isArray(room.authenticatedNames) ? room.authenticatedNames : [];
-              return `${label}\nnu: ansl=${c.connected || 0} inlogg=${c.authenticated || 0} spelar=${c.active || 0}\nnamn: ${
-                names.length > 0 ? names.join(", ") : "-"
-              }`;
-            })
-            .join("\n\n")
-        : "Inga rum.";
+    if (roomRows.length === 0) {
+      roomsEl.textContent = "Inga rum.";
+    } else {
+      const visible = roomRows.slice(0, LIST_LIMIT);
+      const activeRows = visible.filter((room) => room.hasLive);
+      const historicalRows = visible.filter((room) => !room.hasLive);
+      const lines = [];
+
+      if (activeRows.length > 0) {
+        lines.push(`Aktiva (${activeRows.length}):`);
+        for (const room of activeRows) {
+          const names = room.authenticatedNames.length > 0 ? room.authenticatedNames.join(", ") : "-";
+          lines.push(`${roomLabel(room)} | namn: ${names}`);
+        }
+      }
+      if (historicalRows.length > 0) {
+        if (lines.length > 0) lines.push("");
+        lines.push(`Tidigare (${historicalRows.length}):`);
+        for (const room of historicalRows) {
+          const names = room.uniqueNames.length > 0 ? room.uniqueNames.join(", ") : "-";
+          lines.push(`${roomLabel(room)} | senast: ${fmtAt(room.lastEventAt)} | namn: ${names}`);
+        }
+      }
+      roomsEl.textContent = lines.join("\n");
+    }
   }
   if (playersEl) {
-    const players = Array.isArray(data?.players) ? data.players.slice(0, 80) : [];
+    const players = Array.isArray(data?.players) ? data.players.slice(0, LIST_LIMIT) : [];
     playersEl.textContent =
       players.length > 0
         ? players
-            .map((p) => `${p.name} | logins=${p.logins} | senast=${fmtAt(p.lastSeenAt)} | rum=${(p.rooms || []).join(", ")}`)
+            .map((p) => {
+              const rooms = (p.rooms || []).map((roomId) => roomLabelById.get(roomId) || roomId).join(", ") || "-";
+              return `${p.name} | senast: ${fmtAt(p.lastSeenAt)} | rum: ${rooms}`;
+            })
             .join("\n")
         : "Inga namn loggade ännu.";
   }
   if (eventsEl) {
-    const events = Array.isArray(data?.recentEvents) ? data.recentEvents.slice(-80).reverse() : [];
+    const events = Array.isArray(data?.recentEvents) ? data.recentEvents.slice(-LIST_LIMIT).reverse() : [];
     eventsEl.textContent =
       events.length > 0
         ? events
             .map((event) => {
-              const snap = event.snapshot || {};
-              const label = event.isPrivate ? `privat:${event.roomCode || event.roomId}` : "publik";
-              return `${fmtAt(event.at)} | ${event.type} | ${label} | ${event.name || "-"} | ansl=${snap.connected || 0} inlogg=${snap.authenticated || 0} spelar=${snap.active || 0}`;
+              const label = roomLabel(event);
+              return `${fmtAt(event.at)} | ${event.type} | ${label} | ${event.name || "-"}`;
             })
             .join("\n")
         : "Inga events ännu.";

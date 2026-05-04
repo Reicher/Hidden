@@ -19,7 +19,6 @@ const chatSendBtnEl = document.getElementById("chatSendBtn");
 const playBtnEl = document.getElementById("playBtn");
 const lobbySettingsBtnEl = document.getElementById("lobbySettingsBtn");
 const lobbyMenuBackdropEl = document.getElementById("lobbyMenuBackdrop");
-const lobbyMenuControlsBtnEl = document.getElementById("lobbyMenuControlsBtn");
 const lobbyMenuSettingsBtnEl = document.getElementById("lobbyMenuSettingsBtn");
 const lobbyMenuCreditsBtnEl = document.getElementById("lobbyMenuCreditsBtn");
 const lobbyMenuCloseBtnEl = document.getElementById("lobbyMenuCloseBtn");
@@ -37,6 +36,10 @@ const lobbyDialogTextEl = document.getElementById("lobbyDialogText");
 const settingsPanelEl = document.getElementById("settingsPanel");
 const mobileControlsModeBtnEl = document.getElementById("mobileControlsModeBtn");
 const mobileControlsModeHelpEl = document.getElementById("mobileControlsModeHelp");
+const musicVolumeInputEl = document.getElementById("musicVolumeInput");
+const musicMuteBtnEl = document.getElementById("musicMuteBtn");
+const sfxVolumeInputEl = document.getElementById("sfxVolumeInput");
+const sfxMuteBtnEl = document.getElementById("sfxMuteBtn");
 const lobbyDialogCloseBtnEl = document.getElementById("lobbyDialogCloseBtn");
 const debugBackdropEl = document.getElementById("debugBackdrop");
 const debugCloseBtnEl = document.getElementById("debugCloseBtn");
@@ -54,21 +57,17 @@ const gameHudEl = document.getElementById("gameHud");
 const crosshairHudEl = document.getElementById("crosshairHud");
 const crosshairCooldownArcEl = document.getElementById("crosshairCooldownArc");
 const aliveOthersTextEl = document.getElementById("aliveOthersText");
-const killToastEl = document.getElementById("killToast");
+const knockdownToastEl = document.getElementById("knockdownToast");
 const winOverlayEl = document.getElementById("winOverlay");
 const winTitleEl = document.getElementById("winTitle");
 const winCountdownTextEl = document.getElementById("winCountdownText");
 const winLobbyBtnEl = document.getElementById("winLobbyBtn");
 const gameMenuBtnEl = document.getElementById("gameMenuBtn");
 const gameMenuBackdropEl = document.getElementById("gameMenuBackdrop");
-const gameMenuControlsBtnEl = document.getElementById("gameMenuControlsBtn");
-const gameMenuResumeBtnEl = document.getElementById("gameMenuResumeBtn");
+const gameMenuSettingsBtnEl = document.getElementById("gameMenuSettingsBtn");
+const gameMenuCreditsBtnEl = document.getElementById("gameMenuCreditsBtn");
+const gameMenuCloseBtnEl = document.getElementById("gameMenuCloseBtn");
 const gameMenuLobbyBtnEl = document.getElementById("gameMenuLobbyBtn");
-const gameMenuLeaveBtnEl = document.getElementById("gameMenuLeaveBtn");
-const gameInfoBackdropEl = document.getElementById("gameInfoBackdrop");
-const gameInfoTitleEl = document.getElementById("gameInfoTitle");
-const gameInfoTextEl = document.getElementById("gameInfoText");
-const gameInfoCloseBtnEl = document.getElementById("gameInfoCloseBtn");
 const gameChatNoticeEl = document.getElementById("gameChatNotice");
 const gameChatMessagesEl = document.getElementById("gameChatMessages");
 const gameChatInputRowEl = document.getElementById("gameChatInputRow");
@@ -79,14 +78,15 @@ const mobileJoystickKnobEl = document.getElementById("mobileJoystickKnob");
 const mobileLookPadEl = document.getElementById("mobileLookPad");
 const mobileSprintBtnEl = document.getElementById("mobileSprintBtn");
 const mobileAttackBtnEl = document.getElementById("mobileAttackBtn");
-const deathOverlayEl = document.getElementById("deathOverlay");
-const deathByTextEl = document.getElementById("deathByText");
-const deathCountdownTextEl = document.getElementById("deathCountdownText");
-const deathLobbyBtnEl = document.getElementById("deathLobbyBtn");
+const downedOverlayEl = document.getElementById("downedOverlay");
+const downedByTextEl = document.getElementById("downedByText");
+const downedCountdownTextEl = document.getElementById("downedCountdownText");
+const downedLobbyBtnEl = document.getElementById("downedLobbyBtn");
 
 const PLAYER_NAME_KEY = "hidden_player_name";
 const DEBUG_TOKEN_KEY = "hidden_debug_token";
 const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
+const AUDIO_SETTINGS_KEY = "hidden_audio_settings";
 
 const sceneSystem = createSceneSystem(canvas);
 const { renderer, scene, camera, resize } = sceneSystem;
@@ -98,7 +98,7 @@ let socketGeneration = 0;
 let connecting = false;
 let authenticated = false;
 let appMode = "connect"; // connect | lobby | playing | disconnected
-let sessionState = "auth"; // auth | lobby | countdown | alive | dead | won
+let sessionState = "auth"; // auth | lobby | countdown | alive | downed | won
 let myCharacterId = null;
 let myName = "";
 let sessionReady = false;
@@ -117,10 +117,11 @@ let currentMatch = { inProgress: false, alivePlayers: 0, startedAt: null, elapse
 let lobbyScoreboard = [];
 let lobbyCountdownMsRemaining = 0;
 let lobbyMinPlayersToStart = 2;
+let lobbyMaxPlayers = 0;
 let winReturnToLobbyMsRemaining = 0;
-let deathEliminatedByName = "";
-let killToastText = "";
-let killToastMsRemaining = 0;
+let downedByName = "";
+let knockdownToastText = "";
+let knockdownToastMsRemaining = 0;
 
 const input = {
   forward: false,
@@ -139,12 +140,13 @@ const CROSSHAIR_DEFAULT_COOLDOWN_MS = 1000;
 const CROSSHAIR_RING_CIRCUMFERENCE = Math.PI * 26;
 const CROSSHAIR_HIT_DISTANCE_METERS = 2.8;
 const GAME_CHAT_MAX_LINES = 5;
+const DEBUG_LIST_LIMIT = 20;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
 const JOYSTICK_DEADZONE = 0.16;
-const DEATH_CAMERA_HEIGHT = 4.6;
-const DEATH_CAMERA_POS_SMOOTH_RATE = 9;
-const KILL_TOAST_MS = 5000;
+const DOWNED_CAMERA_HEIGHT = 4.6;
+const DOWNED_CAMERA_POS_SMOOTH_RATE = 9;
+const KNOCKDOWN_TOAST_MS = 5000;
 const FORCE_MOBILE_UI = new URLSearchParams(location.search).get("mobileUi") === "1";
 const MOBILE_CONTROLS_PREFS = Object.freeze(["auto", "on", "off"]);
 const IS_TOUCH_DEVICE = (() => {
@@ -171,7 +173,11 @@ let mobileMovePointerId = null;
 let joystickCurrentX = 0;
 let joystickCurrentY = 0;
 let mobileControlsPreference = normalizeMobileControlsPreference(localStorage.getItem(MOBILE_CONTROLS_PREF_KEY));
-const GAMEPLAY_SUMMARY_TEXT = "Håll dig gömt, hitta spelare och slå ut dem.";
+let audioSettings = loadAudioSettings();
+const musicLoopEl = new Audio("/assets/music.wav");
+musicLoopEl.loop = true;
+musicLoopEl.preload = "auto";
+const GAMEPLAY_SUMMARY_TEXT = "Håll dig gömd, hitta spelare och slå ner dem.";
 const DESKTOP_CONTROLS_TEXT = "Desktop: C: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack.";
 const MOBILE_CONTROLS_TEXT =
   "Mobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta.";
@@ -299,21 +305,69 @@ function mobileControlsLabel(pref) {
   return "Auto";
 }
 
-function refreshMobileControlsSettingsUi() {
+function clampVolume(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 100;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function normalizeAudioSettings(value) {
+  const src = value && typeof value === "object" ? value : {};
+  return {
+    musicVolume: clampVolume(src.musicVolume ?? 80),
+    musicMuted: Boolean(src.musicMuted),
+    sfxVolume: clampVolume(src.sfxVolume ?? 90),
+    sfxMuted: Boolean(src.sfxMuted)
+  };
+}
+
+function loadAudioSettings() {
+  try {
+    const raw = localStorage.getItem(AUDIO_SETTINGS_KEY);
+    if (!raw) return normalizeAudioSettings(null);
+    return normalizeAudioSettings(JSON.parse(raw));
+  } catch {
+    return normalizeAudioSettings(null);
+  }
+}
+
+function persistAudioSettings() {
+  localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(audioSettings));
+}
+
+function refreshAudioSettingsUi() {
   if (mobileControlsModeBtnEl) {
     mobileControlsModeBtnEl.textContent = mobileControlsLabel(mobileControlsPreference);
   }
   if (mobileControlsModeHelpEl) {
     if (mobileControlsPreference === "on") {
       mobileControlsModeHelpEl.textContent = "På: mobilkontroller visas alltid under spel.";
-      return;
+    } else if (mobileControlsPreference === "off") {
+      mobileControlsModeHelpEl.textContent = "Av: använd tangentbord/mus även på touch-enhet.";
+    } else {
+      mobileControlsModeHelpEl.textContent = "Auto: visar mobilkontroller på touch-enheter.";
     }
-    if (mobileControlsPreference === "off") {
-      mobileControlsModeHelpEl.textContent = "Av: mobilkontroller döljs alltid.";
-      return;
-    }
-    mobileControlsModeHelpEl.textContent = "Auto: visas bara när enheten identifieras som touch.";
   }
+  if (musicVolumeInputEl) musicVolumeInputEl.value = String(audioSettings.musicVolume);
+  if (sfxVolumeInputEl) sfxVolumeInputEl.value = String(audioSettings.sfxVolume);
+  if (musicMuteBtnEl) musicMuteBtnEl.textContent = audioSettings.musicMuted ? "Avmuta" : "Muta";
+  if (sfxMuteBtnEl) sfxMuteBtnEl.textContent = audioSettings.sfxMuted ? "Avmuta" : "Muta";
+  syncMusicLoop();
+}
+
+function syncMusicLoop() {
+  musicLoopEl.volume = Math.max(0, Math.min(1, audioSettings.musicVolume / 100));
+  const shouldPlay =
+    appMode === "playing" && !audioSettings.musicMuted && musicLoopEl.volume > 0;
+  if (shouldPlay) {
+    const playPromise = musicLoopEl.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {});
+    }
+    return;
+  }
+  musicLoopEl.pause();
+  musicLoopEl.currentTime = 0;
 }
 
 function formatDateTime(at) {
@@ -359,10 +413,11 @@ function openLobbyDialog(title, text, { showSettings = false } = {}) {
   lobbyDialogTextEl.textContent = text;
   lobbyDialogTextEl.classList.toggle("hidden", showSettings);
   if (settingsPanelEl) settingsPanelEl.classList.toggle("hidden", !showSettings);
-  if (showSettings) refreshMobileControlsSettingsUi();
+  if (showSettings) refreshAudioSettingsUi();
   lobbyDialogBackdropEl.classList.remove("hidden");
-  if (showSettings && mobileControlsModeBtnEl) {
-    mobileControlsModeBtnEl.focus();
+  updateScreenRootPointerEvents();
+  if (showSettings && musicVolumeInputEl) {
+    musicVolumeInputEl.focus();
   } else {
     lobbyDialogCloseBtnEl.focus();
   }
@@ -373,6 +428,10 @@ function closeLobbyDialog() {
   lobbyDialogBackdropEl.classList.add("hidden");
   if (settingsPanelEl) settingsPanelEl.classList.add("hidden");
   lobbyDialogTextEl?.classList.remove("hidden");
+  updateScreenRootPointerEvents();
+  if (appMode === "playing" && (sessionState === "alive" || sessionState === "won")) {
+    requestPointerLockSafe(canvas);
+  }
 }
 
 function isGameChatFocused() {
@@ -422,7 +481,7 @@ function setGameMenuOpen(open, { restorePointerLock = false } = {}) {
     resetInputState();
     sendInput();
     if (document.pointerLockElement) document.exitPointerLock?.();
-    gameMenuResumeBtnEl?.focus();
+    gameMenuSettingsBtnEl?.focus();
     updateMobileControlsVisibility();
     return;
   }
@@ -437,22 +496,10 @@ function setLobbyMenuOpen(open) {
   lobbyMenuOpen = Boolean(open);
   lobbyMenuBackdropEl.classList.toggle("hidden", !lobbyMenuOpen);
   if (lobbyMenuOpen) {
-    lobbyMenuControlsBtnEl?.focus();
+    lobbyMenuSettingsBtnEl?.focus();
   } else if (appMode === "lobby") {
     lobbySettingsBtnEl?.focus();
   }
-}
-
-function openGameInfoDialog(title, text) {
-  if (!gameInfoBackdropEl || !gameInfoTitleEl || !gameInfoTextEl) return;
-  gameInfoTitleEl.textContent = title;
-  gameInfoTextEl.textContent = text;
-  gameInfoBackdropEl.classList.remove("hidden");
-  gameInfoCloseBtnEl?.focus();
-}
-
-function closeGameInfoDialog() {
-  gameInfoBackdropEl?.classList.add("hidden");
 }
 
 function updateLobbyMatchStatus() {
@@ -470,32 +517,40 @@ function updateLobbyMatchStatus() {
   const minPlayers = Math.max(1, Number(lobbyMinPlayersToStart || 2));
   const players = Array.isArray(lobbyScoreboard) ? lobbyScoreboard : [];
   const playerCount = players.length;
+  const maxPlayers = Math.max(playerCount, Number(lobbyMaxPlayers || 0));
   const readyCount = players.reduce((acc, player) => acc + (player?.ready ? 1 : 0), 0);
+  const readyEligibleCount = players.reduce((acc, player) => {
+    const status = String(player?.status || "").toLowerCase();
+    const canReady = status === "väntar" || status === "redo" || status === "nedräkning";
+    return acc + (canReady ? 1 : 0);
+  }, 0);
+  const playersText = `Spelare ${playerCount}/${maxPlayers}`;
+  const readyText = `Redo ${readyCount}/${readyEligibleCount}`;
   const countdownRunning =
     lobbyCountdownMsRemaining > 0 ||
     players.some((player) => String(player?.status || "").toLowerCase() === "nedräkning") ||
     sessionState === "countdown";
 
   if (countdownRunning) {
-    lobbyMatchStatusTitleEl.textContent = "Startar Spel";
+    lobbyMatchStatusTitleEl.textContent = `${playersText} - Startar match`;
     return;
   }
   if (playerCount < minPlayers) {
-    lobbyMatchStatusTitleEl.textContent = "Väntar på fler spelare";
+    lobbyMatchStatusTitleEl.textContent = `${playersText} - Väntar på fler spelare`;
     return;
   }
-  if (readyCount < playerCount) {
-    lobbyMatchStatusTitleEl.textContent = "Väntar på att spelare ska bli redo";
+  if (readyCount < readyEligibleCount) {
+    lobbyMatchStatusTitleEl.textContent = `${playersText} - Väntar på att spelare ska bli redo (${readyText})`;
     return;
   }
-  lobbyMatchStatusTitleEl.textContent = "Startar Spel";
+  lobbyMatchStatusTitleEl.textContent = `${playersText} - Startar match`;
 }
 
 function updateReadyButton() {
   if (!playBtnEl) return;
   if (!authenticated) {
     playBtnEl.disabled = true;
-    playBtnEl.textContent = "Ready";
+    playBtnEl.textContent = "Redo";
     return;
   }
   if (sessionState === "alive") {
@@ -519,20 +574,20 @@ function updateReadyButton() {
     return;
   }
   playBtnEl.disabled = false;
-  playBtnEl.textContent = "Ready";
+  playBtnEl.textContent = "Redo";
 }
 
-function resetDeathState() {
-  deathEliminatedByName = "";
+function resetDownedState() {
+  downedByName = "";
 }
 
 function resetWinState() {
   winReturnToLobbyMsRemaining = 0;
 }
 
-function resetKillToast() {
-  killToastText = "";
-  killToastMsRemaining = 0;
+function resetKnockdownToast() {
+  knockdownToastText = "";
+  knockdownToastMsRemaining = 0;
 }
 
 function updateInGameHud() {
@@ -545,16 +600,16 @@ function updateInGameHud() {
   }
 }
 
-function updateDeathOverlay() {
-  if (!deathOverlayEl || !deathByTextEl || !deathCountdownTextEl) return;
-  const dead = appMode === "playing" && sessionState === "dead";
-  deathOverlayEl.classList.toggle("hidden", !dead);
-  gameMenuBtnEl?.classList.toggle("hidden", dead);
-  if (!dead) return;
+function updateDownedOverlay() {
+  if (!downedOverlayEl || !downedByTextEl || !downedCountdownTextEl) return;
+  const downed = appMode === "playing" && sessionState === "downed";
+  downedOverlayEl.classList.toggle("hidden", !downed);
+  gameMenuBtnEl?.classList.toggle("hidden", downed);
+  if (!downed) return;
 
-  const killer = deathEliminatedByName ? String(deathEliminatedByName) : "okänd spelare";
-  deathByTextEl.textContent = `Du dödades av ${killer}`;
-  deathCountdownTextEl.textContent = "Tryck på knappen för att återgå till lobbyn.";
+  const killer = downedByName ? String(downedByName) : "okänd spelare";
+  downedByTextEl.textContent = `Du blev nedslagen av ${killer}`;
+  downedCountdownTextEl.textContent = "Tryck på knappen för att återgå till lobbyn.";
 }
 
 function updateWinOverlay() {
@@ -568,12 +623,12 @@ function updateWinOverlay() {
   winCountdownTextEl.textContent = `Återgå till lobbyn om ${sec}`;
 }
 
-function updateKillToast() {
-  if (!killToastEl) return;
+function updateKnockdownToast() {
+  if (!knockdownToastEl) return;
   const visible =
-    appMode === "playing" && sessionState !== "won" && killToastMsRemaining > 0 && Boolean(killToastText);
-  killToastEl.classList.toggle("hidden", !visible);
-  if (visible) killToastEl.textContent = killToastText;
+    appMode === "playing" && sessionState !== "won" && knockdownToastMsRemaining > 0 && Boolean(knockdownToastText);
+  knockdownToastEl.classList.toggle("hidden", !visible);
+  if (visible) knockdownToastEl.textContent = knockdownToastText;
 }
 
 function updateCrosshairHud(deltaSec) {
@@ -618,7 +673,7 @@ function setAppMode(mode) {
 
   const overlayActive = mode !== "playing";
   document.body.classList.toggle("overlay-active", overlayActive);
-  if (screenRootEl) screenRootEl.style.pointerEvents = overlayActive ? "auto" : "none";
+  updateScreenRootPointerEvents();
 
   if (previous === "playing" && mode !== "playing" && document.pointerLockElement) {
     document.exitPointerLock?.();
@@ -637,7 +692,6 @@ function setAppMode(mode) {
 
   if (mode !== "playing") setGameChatOpen(false);
   if (mode !== "playing") setGameMenuOpen(false);
-  if (mode !== "playing") closeGameInfoDialog();
   if (mode !== "lobby") setLobbyMenuOpen(false);
   if (mode === "playing" && isMobileChatDisabledInGame() && gameChatOpen) setGameChatOpen(false);
   if (mode === "connect" || mode === "disconnected") setCountdownTextFromSession({ state: "lobby" });
@@ -645,10 +699,19 @@ function setAppMode(mode) {
   updateMobileControlsVisibility();
   updateLobbyMatchStatus();
   updateInGameHud();
-  updateDeathOverlay();
+  updateDownedOverlay();
   updateWinOverlay();
-  updateKillToast();
+  updateKnockdownToast();
+  syncMusicLoop();
   updateDocumentTitle();
+}
+
+function updateScreenRootPointerEvents() {
+  if (!screenRootEl) return;
+  const overlayActive = appMode !== "playing";
+  const dialogOpenInGame =
+    appMode === "playing" && lobbyDialogBackdropEl && !lobbyDialogBackdropEl.classList.contains("hidden");
+  screenRootEl.style.pointerEvents = overlayActive || dialogOpenInGame ? "auto" : "none";
 }
 
 async function fetchAndRenderDebugData() {
@@ -772,13 +835,17 @@ function renderScoreboard(players) {
     winsCell.textContent = String(p.wins ?? 0);
     tr.appendChild(winsCell);
 
-    const killsCell = document.createElement("td");
-    killsCell.textContent = String(p.kills ?? 0);
-    tr.appendChild(killsCell);
+    const knockdownsCell = document.createElement("td");
+    knockdownsCell.textContent = String(p.knockdowns ?? 0);
+    tr.appendChild(knockdownsCell);
 
-    const deathsCell = document.createElement("td");
-    deathsCell.textContent = String(p.deaths ?? 0);
-    tr.appendChild(deathsCell);
+    const streakCell = document.createElement("td");
+    streakCell.textContent = String(p.streak ?? 0);
+    tr.appendChild(streakCell);
+
+    const downedCell = document.createElement("td");
+    downedCell.textContent = String(p.downed ?? 0);
+    tr.appendChild(downedCell);
 
     const innocentsCell = document.createElement("td");
     innocentsCell.textContent = String(p.innocents ?? 0);
@@ -919,54 +986,117 @@ function drawDebugChart(samples) {
   ctx.fillRect(cssWidth - 116, cssHeight - 13, 8, 8);
 }
 
+function formatRoomLabel(room) {
+  if (!room) return "-";
+  return room.isPrivate ? `privat:${room.roomCode || room.roomId}` : "publik";
+}
+
+function buildDebugRoomRows(data) {
+  const activeRooms = Array.isArray(data?.liveRooms) ? data.liveRooms : [];
+  const historicalRooms = Array.isArray(data?.rooms) ? data.rooms : [];
+  const byId = new Map();
+
+  for (const room of historicalRooms) {
+    const roomId = String(room?.roomId || "").trim();
+    if (!roomId) continue;
+    byId.set(roomId, {
+      roomId,
+      roomCode: room.roomCode || null,
+      isPrivate: Boolean(room.isPrivate),
+      lastEventAt: Number(room.lastEventAt || 0),
+      uniqueNames: Array.isArray(room.uniqueNames) ? room.uniqueNames : [],
+      hasLive: false,
+      authenticatedNames: []
+    });
+  }
+
+  for (const room of activeRooms) {
+    const roomId = String(room?.roomId || "").trim();
+    if (!roomId) continue;
+    const existing = byId.get(roomId) || {
+      roomId,
+      roomCode: room.roomCode || null,
+      isPrivate: Boolean(room.isPrivate),
+      lastEventAt: 0,
+      uniqueNames: [],
+      hasLive: false,
+      authenticatedNames: []
+    };
+    existing.roomCode = room.roomCode || existing.roomCode;
+    existing.isPrivate = Boolean(room.isPrivate);
+    existing.hasLive = true;
+    existing.authenticatedNames = Array.isArray(room.authenticatedNames) ? room.authenticatedNames : [];
+    byId.set(roomId, existing);
+  }
+
+  return [...byId.values()].sort((a, b) => {
+    if (a.hasLive !== b.hasLive) return a.hasLive ? -1 : 1;
+    if (b.lastEventAt !== a.lastEventAt) return b.lastEventAt - a.lastEventAt;
+    return a.roomId.localeCompare(b.roomId, "sv");
+  });
+}
+
 function renderDebugData(data) {
   renderDebugSummary(data);
   drawDebugChart(data?.samples || []);
+  const roomRows = buildDebugRoomRows(data);
+  const roomLabelById = new Map(roomRows.map((room) => [room.roomId, formatRoomLabel(room)]));
 
   if (debugRoomsTextEl) {
-    const rows = Array.isArray(data?.liveRooms) ? data.liveRooms : data?.rooms || [];
-    if (rows.length === 0) {
+    if (roomRows.length === 0) {
       debugRoomsTextEl.textContent = "Inga rum.";
     } else {
-      debugRoomsTextEl.textContent = rows
-        .map((room) => {
-          const current = room.current || {};
-          const label = room.isPrivate ? `privat:${room.roomCode || room.roomId}` : "publik";
-          const names = Array.isArray(room.authenticatedNames)
-            ? room.authenticatedNames
-            : Array.isArray(room.uniqueNames)
-              ? room.uniqueNames
-              : [];
-          return `${label}\nnu: ansl=${current.connected || 0} inlogg=${current.authenticated || 0} spelar=${current.active || 0} lobby=${current.lobby || 0}\ntotal: besok=${room.totalConnections || 0} login=${room.totalLogins || 0}\nnamn: ${
-            names.length > 0 ? names.join(", ") : "-"
-          }`;
-        })
-        .join("\n\n");
+      const visible = roomRows.slice(0, DEBUG_LIST_LIMIT);
+      const activeRows = visible.filter((room) => room.hasLive);
+      const historicalRows = visible.filter((room) => !room.hasLive);
+      const lines = [];
+
+      if (activeRows.length > 0) {
+        lines.push(`Aktiva (${activeRows.length}):`);
+        for (const room of activeRows) {
+          const names = room.authenticatedNames.length > 0 ? room.authenticatedNames.join(", ") : "-";
+          lines.push(`${formatRoomLabel(room)} | namn: ${names}`);
+        }
+      }
+      if (historicalRows.length > 0) {
+        if (lines.length > 0) lines.push("");
+        lines.push(`Tidigare (${historicalRows.length}):`);
+        for (const room of historicalRows) {
+          const names = room.uniqueNames.length > 0 ? room.uniqueNames.join(", ") : "-";
+          lines.push(`${formatRoomLabel(room)} | senast: ${formatDateTime(room.lastEventAt)} | namn: ${names}`);
+        }
+      }
+
+      debugRoomsTextEl.textContent = lines.join("\n");
     }
   }
 
   if (debugPlayersTextEl) {
-    const players = Array.isArray(data?.players) ? data.players.slice(0, 80) : [];
+    const players = Array.isArray(data?.players) ? data.players.slice(0, DEBUG_LIST_LIMIT) : [];
     debugPlayersTextEl.textContent =
       players.length > 0
         ? players
             .map(
               (player) =>
-                `${player.name} | logins=${player.logins} | senast=${formatDateTime(player.lastSeenAt)} | rum=${(player.rooms || []).join(", ")}`
+                `${player.name} | senast: ${formatDateTime(player.lastSeenAt)} | rum: ${
+                  (player.rooms || []).map((roomId) => roomLabelById.get(roomId) || roomId).join(", ") || "-"
+                }`
             )
             .join("\n")
         : "Inga namn loggade ännu.";
   }
 
   if (debugEventsTextEl) {
-    const events = Array.isArray(data?.recentEvents) ? data.recentEvents.slice(-80).reverse() : [];
+    const events = Array.isArray(data?.recentEvents)
+      ? data.recentEvents.slice(-DEBUG_LIST_LIMIT).reverse()
+      : [];
     debugEventsTextEl.textContent =
       events.length > 0
         ? events
             .map((event) => {
-              const label = event.isPrivate ? `privat:${event.roomCode || event.roomId}` : "publik";
-              const snap = event.snapshot || {};
-              return `${formatDateTime(event.at)} | ${event.type} | ${label} | ${event.name || "-"} | ansl=${snap.connected || 0} inlogg=${snap.authenticated || 0} spelar=${snap.active || 0}`;
+              const label = formatRoomLabel(event);
+              const name = event.name || "-";
+              return `${formatDateTime(event.at)} | ${event.type} | ${label} | ${name}`;
             })
             .join("\n")
         : "Inga events ännu.";
@@ -1086,9 +1216,10 @@ function attachSocket(wsUrl, loginName) {
         lobbyScoreboard = [];
         lobbyCountdownMsRemaining = 0;
         lobbyMinPlayersToStart = 2;
-        resetDeathState();
+        lobbyMaxPlayers = Math.max(0, Number(msg.maxPlayers || 0));
+        resetDownedState();
         resetWinState();
-        resetKillToast();
+        resetKnockdownToast();
         replaceChat(msg.chatHistory || []);
         setConnectError("");
         setPrivateRoomButtonVisible(false);
@@ -1106,9 +1237,10 @@ function attachSocket(wsUrl, loginName) {
         lobbyScoreboard = [];
         lobbyCountdownMsRemaining = 0;
         lobbyMinPlayersToStart = 2;
-        resetDeathState();
+        lobbyMaxPlayers = 0;
+        resetDownedState();
         resetWinState();
-        resetKillToast();
+        resetKnockdownToast();
         setAppMode("connect");
         setConnectError(msg.message || "Inloggning misslyckades.");
         setPrivateRoomButtonVisible(msg.reason === "room_full");
@@ -1126,12 +1258,12 @@ function attachSocket(wsUrl, loginName) {
         return;
       }
 
-      if (msg.type === "kill_confirm") {
+      if (msg.type === "knockdown_confirm") {
         const victimName = String(msg.victimName || "").trim();
         if (victimName) {
-          killToastText = `Du dödade ${victimName}`;
-          killToastMsRemaining = KILL_TOAST_MS;
-          updateKillToast();
+          knockdownToastText = `Du slog ner ${victimName}`;
+          knockdownToastMsRemaining = KNOCKDOWN_TOAST_MS;
+          updateKnockdownToast();
         }
         return;
       }
@@ -1152,6 +1284,7 @@ function attachSocket(wsUrl, loginName) {
 
       const previousCharacterId = myCharacterId;
       const previousSessionState = sessionState;
+      let enteredAlive = false;
       const state = msg.session;
       if (msg.match && typeof msg.match === "object") {
         currentMatch = {
@@ -1169,10 +1302,11 @@ function attachSocket(wsUrl, loginName) {
         myName = state.name || myName;
         sessionReady = Boolean(state.ready);
         lobbyMinPlayersToStart = Math.max(1, Number(state.minPlayersToStart || lobbyMinPlayersToStart || 2));
+        lobbyMaxPlayers = Math.max(0, Number(state.maxPlayers || lobbyMaxPlayers || 0));
         myCharacterId = state.characterId ?? null;
         activePlayersInGame = Number(state.activePlayers || 0);
         winReturnToLobbyMsRemaining = Math.max(0, Number(state.returnToLobbyMsRemaining || 0));
-        deathEliminatedByName = state.eliminatedByName ? String(state.eliminatedByName) : "";
+        downedByName = state.eliminatedByName ? String(state.eliminatedByName) : "";
         attackCooldownMsRemaining = Math.max(0, Number(state.attackCooldownMsRemaining || 0));
         if (attackCooldownMsRemaining > CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS) {
           attackCooldownVisualMaxMs = Math.max(
@@ -1183,24 +1317,25 @@ function attachSocket(wsUrl, loginName) {
         }
         updateInGameHud();
         updateDocumentTitle();
+        enteredAlive = previousSessionState !== "alive" && sessionState === "alive";
       } else {
-        resetDeathState();
+        resetDownedState();
         resetWinState();
       }
 
-      if (previousSessionState === "alive" && (sessionState === "dead" || sessionState === "won")) {
+      if (previousSessionState === "alive" && (sessionState === "downed" || sessionState === "won")) {
         if (document.pointerLockElement) document.exitPointerLock?.();
         resetInputState();
         setGameMenuOpen(false);
-        closeGameInfoDialog();
         setGameChatOpen(false);
       }
 
       if (!authenticated) {
         setAppMode("connect");
-      } else if (sessionState === "alive" || sessionState === "dead" || sessionState === "won") {
+      } else if (sessionState === "alive" || sessionState === "downed" || sessionState === "won") {
         setConnectError("");
         setAppMode("playing");
+        if (enteredAlive) requestPointerLockSafe(canvas);
       } else {
         setAppMode("lobby");
       }
@@ -1227,8 +1362,9 @@ function attachSocket(wsUrl, loginName) {
 
         if (controlledYaw != null) {
           const gainedNewCharacter = myCharacterId != null && myCharacterId !== previousCharacterId;
-          const enteredAlive = previousSessionState !== "alive" && sessionState === "alive" && myCharacterId != null;
-          if (gainedNewCharacter || enteredAlive || forceYawSyncOnNextWorld) {
+          const enteredAliveWithCharacter =
+            previousSessionState !== "alive" && sessionState === "alive" && myCharacterId != null;
+          if (gainedNewCharacter || enteredAliveWithCharacter || forceYawSyncOnNextWorld) {
             yaw = controlledYaw;
             viewYaw = controlledYaw;
             input.yaw = yaw;
@@ -1256,9 +1392,10 @@ function attachSocket(wsUrl, loginName) {
       lobbyScoreboard = [];
       lobbyCountdownMsRemaining = 0;
       lobbyMinPlayersToStart = 2;
-      resetDeathState();
+      lobbyMaxPlayers = 0;
+      resetDownedState();
       resetWinState();
-      resetKillToast();
+      resetKnockdownToast();
       updateConnectButton();
       if (leavingGameManually) {
         leavingGameManually = false;
@@ -1279,9 +1416,10 @@ function attachSocket(wsUrl, loginName) {
       lobbyScoreboard = [];
       lobbyCountdownMsRemaining = 0;
       lobbyMinPlayersToStart = 2;
-      resetDeathState();
+      lobbyMaxPlayers = 0;
+      resetDownedState();
       resetWinState();
-      resetKillToast();
+      resetKnockdownToast();
       updateConnectButton();
       setConnectError("Kunde inte ansluta till servern.");
       setAppMode("connect");
@@ -1314,9 +1452,10 @@ function connectAndLogin() {
   attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
   myName = "";
   activePlayersInGame = 0;
-  resetDeathState();
+  lobbyMaxPlayers = 0;
+  resetDownedState();
   resetWinState();
-  resetKillToast();
+  resetKnockdownToast();
   updateConnectButton();
   setConnectError("");
   setPrivateRoomButtonVisible(false);
@@ -1554,7 +1693,7 @@ const savedName = localStorage.getItem(PLAYER_NAME_KEY);
 if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
 if (debugTokenInputEl) debugTokenInputEl.value = getDebugToken();
 if (IS_TOUCH_DEVICE) document.body.classList.add("touch-device");
-refreshMobileControlsSettingsUi();
+refreshAudioSettingsUi();
 bindMobileControls();
 
 connectBtnEl?.addEventListener("click", connectAndLogin);
@@ -1567,7 +1706,7 @@ nameInputEl?.addEventListener("keydown", (event) => {
 });
 playBtnEl?.addEventListener("click", () => {
   if (!socket || !authenticated) return;
-  if (sessionState === "alive" || sessionState === "dead" || sessionState === "won") return;
+  if (sessionState === "alive" || sessionState === "downed" || sessionState === "won") return;
   if (sessionReady && sessionState === "countdown") return;
   const nextReady = !sessionReady;
   socket.sendJson({ type: "ready", ready: nextReady });
@@ -1578,10 +1717,6 @@ lobbySettingsBtnEl?.addEventListener("click", () => {
   if (appMode !== "lobby") return;
   setLobbyMenuOpen(!lobbyMenuOpen);
 });
-lobbyMenuControlsBtnEl?.addEventListener("click", () => {
-  setLobbyMenuOpen(false);
-  openLobbyDialog("Kontroller", controlsTextForCurrentMode());
-});
 lobbyMenuSettingsBtnEl?.addEventListener("click", () => {
   setLobbyMenuOpen(false);
   openLobbyDialog("Inställningar", "", { showSettings: true });
@@ -1589,8 +1724,8 @@ lobbyMenuSettingsBtnEl?.addEventListener("click", () => {
 lobbyMenuCreditsBtnEl?.addEventListener("click", () => {
   setLobbyMenuOpen(false);
   openLobbyDialog(
-    "Credits",
-    "Skapat av Robin Reicher.\nInspirerat av Adam Spraggs spel \"Hidden in Plain Sight\"."
+    "Om spelet",
+    "Skapat av Robin Reicher.\nMusik av Adam von Friesendorff.\nInspirerat av Adam Spraggs spel \"Hidden in Plain Sight\"."
   );
 });
 lobbyMenuCloseBtnEl?.addEventListener("click", () => {
@@ -1631,39 +1766,55 @@ gameMenuBtnEl?.addEventListener("click", () => {
   if (sessionState !== "alive") return;
   setGameMenuOpen(!gameMenuOpen);
 });
-gameMenuResumeBtnEl?.addEventListener("click", () => {
+gameMenuCloseBtnEl?.addEventListener("click", () => {
   setGameMenuOpen(false, { restorePointerLock: true });
 });
-gameMenuControlsBtnEl?.addEventListener("click", () => {
+gameMenuSettingsBtnEl?.addEventListener("click", () => {
   setGameMenuOpen(false);
-  openGameInfoDialog("Kontroller", controlsTextForCurrentMode());
+  openLobbyDialog("Inställningar", "", { showSettings: true });
+});
+gameMenuCreditsBtnEl?.addEventListener("click", () => {
+  setGameMenuOpen(false);
+  openLobbyDialog(
+    "Om spelet",
+    "Skapat av Robin Reicher.\nMusik av Adam von Friesendorff.\nInspirerat av Adam Spraggs spel \"Hidden in Plain Sight\"."
+  );
 });
 gameMenuLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
-deathLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
+downedLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
 winLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
-gameMenuLeaveBtnEl?.addEventListener("click", leaveGameCompletely);
 gameMenuBackdropEl?.addEventListener("click", (event) => {
   if (event.target === gameMenuBackdropEl) setGameMenuOpen(false, { restorePointerLock: true });
-});
-gameInfoCloseBtnEl?.addEventListener("click", () => {
-  closeGameInfoDialog();
-  if (appMode === "playing" && (sessionState === "alive" || sessionState === "won")) requestPointerLockSafe(canvas);
-});
-gameInfoBackdropEl?.addEventListener("click", (event) => {
-  if (event.target === gameInfoBackdropEl) {
-    closeGameInfoDialog();
-    if (appMode === "playing" && (sessionState === "alive" || sessionState === "won")) requestPointerLockSafe(canvas);
-  }
 });
 lobbyDialogCloseBtnEl?.addEventListener("click", closeLobbyDialog);
 lobbyDialogBackdropEl?.addEventListener("click", (event) => {
   if (event.target === lobbyDialogBackdropEl) closeLobbyDialog();
 });
+musicVolumeInputEl?.addEventListener("input", () => {
+  audioSettings.musicVolume = clampVolume(musicVolumeInputEl.value);
+  persistAudioSettings();
+  refreshAudioSettingsUi();
+});
+musicMuteBtnEl?.addEventListener("click", () => {
+  audioSettings.musicMuted = !audioSettings.musicMuted;
+  persistAudioSettings();
+  refreshAudioSettingsUi();
+});
+sfxVolumeInputEl?.addEventListener("input", () => {
+  audioSettings.sfxVolume = clampVolume(sfxVolumeInputEl.value);
+  persistAudioSettings();
+  refreshAudioSettingsUi();
+});
+sfxMuteBtnEl?.addEventListener("click", () => {
+  audioSettings.sfxMuted = !audioSettings.sfxMuted;
+  persistAudioSettings();
+  refreshAudioSettingsUi();
+});
 mobileControlsModeBtnEl?.addEventListener("click", () => {
   const idx = MOBILE_CONTROLS_PREFS.indexOf(mobileControlsPreference);
   const next = MOBILE_CONTROLS_PREFS[(idx + 1) % MOBILE_CONTROLS_PREFS.length];
   persistMobileControlsPreference(next);
-  refreshMobileControlsSettingsUi();
+  refreshAudioSettingsUi();
   if (countdownControlsTextEl) countdownControlsTextEl.textContent = controlsTextForCurrentMode();
   updateMobileControlsVisibility();
 });
@@ -1690,9 +1841,9 @@ window.addEventListener("keydown", (event) => {
   }
   if (appMode === "playing" && event.key === "Escape") {
     if (sessionState !== "alive") return;
-    if (gameInfoBackdropEl && !gameInfoBackdropEl.classList.contains("hidden")) {
+    if (lobbyDialogBackdropEl && !lobbyDialogBackdropEl.classList.contains("hidden")) {
       event.preventDefault();
-      closeGameInfoDialog();
+      closeLobbyDialog();
       requestPointerLockSafe(canvas);
       return;
     }
@@ -1810,23 +1961,23 @@ function animate() {
   const controlledCharacterId =
     appMode === "playing" && (sessionState === "alive" || sessionState === "won") ? myCharacterId : null;
   avatarSystem.animate(deltaSec, controlledCharacterId);
-  if (appMode === "playing" && sessionState === "dead") {
+  if (appMode === "playing" && sessionState === "downed") {
     const corpsePos = avatarSystem.getCharacterPosition(myCharacterId);
     if (corpsePos) {
-      const posSmooth = 1 - Math.exp(-deltaSec * DEATH_CAMERA_POS_SMOOTH_RATE);
+      const posSmooth = 1 - Math.exp(-deltaSec * DOWNED_CAMERA_POS_SMOOTH_RATE);
       camera.position.x += (corpsePos.x - camera.position.x) * posSmooth;
       camera.position.z += (corpsePos.z - camera.position.z) * posSmooth;
-      camera.position.y += (DEATH_CAMERA_HEIGHT - camera.position.y) * posSmooth;
+      camera.position.y += (DOWNED_CAMERA_HEIGHT - camera.position.y) * posSmooth;
     }
     camera.rotation.set(-Math.PI / 2 + 0.0001, 0, 0);
   }
   if (appMode === "playing" && sessionState === "won") {
     winReturnToLobbyMsRemaining = Math.max(0, winReturnToLobbyMsRemaining - deltaSec * 1000);
   }
-  killToastMsRemaining = Math.max(0, killToastMsRemaining - deltaSec * 1000);
-  updateDeathOverlay();
+  knockdownToastMsRemaining = Math.max(0, knockdownToastMsRemaining - deltaSec * 1000);
+  updateDownedOverlay();
   updateWinOverlay();
-  updateKillToast();
+  updateKnockdownToast();
   updateCrosshairHud(deltaSec);
   renderer.render(scene, camera);
 }

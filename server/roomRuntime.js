@@ -441,7 +441,7 @@ function sanitizeSystemTextSegment(raw) {
     if (!session?.authenticated) return "disconnected";
     if (session.state === "alive") return "spelar";
     if (session.state === "won") return "vann";
-    if (session.state === "dead") return "utslagen";
+    if (session.state === "downed") return "nedslagen";
     if (session.state === "countdown") return "nedräkning";
     if (session.state === "lobby") return session.ready ? "redo" : "väntar";
     return "disconnected";
@@ -452,16 +452,18 @@ function sanitizeSystemTextSegment(raw) {
       .map((s) => ({
         name: s.name,
         wins: s.stats.wins,
-        kills: s.stats.kills,
-        deaths: s.stats.deaths,
+        knockdowns: s.stats.knockdowns,
+        downed: s.stats.downed,
+        streak: s.stats.streak,
         innocents: s.stats.innocents,
         status: statusLabel(s),
         ready: Boolean(s.ready || s.state === "countdown")
       }))
       .sort((a, b) => {
         if (b.wins !== a.wins) return b.wins - a.wins;
-        if (b.kills !== a.kills) return b.kills - a.kills;
-        if (a.deaths !== b.deaths) return a.deaths - b.deaths;
+        if (b.knockdowns !== a.knockdowns) return b.knockdowns - a.knockdowns;
+        if (b.streak !== a.streak) return b.streak - a.streak;
+        if (a.downed !== b.downed) return a.downed - b.downed;
         return a.name.localeCompare(b.name, "sv");
       });
   }
@@ -694,7 +696,7 @@ function sanitizeSystemTextSegment(raw) {
       winnerSession.stats.wins += 1;
       appendSystemChat([
         { type: "player", name: winnerSession.name },
-        { type: "text", text: " vann Battle Royale!" }
+        { type: "text", text: " vann matchen!" }
       ]);
     }
 
@@ -709,7 +711,7 @@ function sanitizeSystemTextSegment(raw) {
         session.eliminatedByName = null;
         continue;
       }
-      if (session.state === "alive" || session.state === "dead") returnToLobby(session, "round_ended");
+      if (session.state === "alive" || session.state === "downed") returnToLobby(session, "round_ended");
       if (session.state === "countdown") {
         session.state = "lobby";
         session.readyAt = 0;
@@ -804,13 +806,14 @@ function sanitizeSystemTextSegment(raw) {
     if (owner) {
       const ownerSession = sessions.get(owner);
       if (ownerSession) {
-        ownerSession.stats.deaths += 1;
+        ownerSession.stats.downed += 1;
+        ownerSession.stats.streak = 0;
         logEvent("player_eliminated", {
           sessionId: shortSessionId(owner),
           name: ownerSession.name,
           characterId: charId
         });
-        ownerSession.state = "dead";
+        ownerSession.state = "downed";
         ownerSession.ready = false;
         ownerSession.readyAt = 0;
         ownerSession.characterId = charId;
@@ -847,12 +850,13 @@ function sanitizeSystemTextSegment(raw) {
       const victimSession = victimOwner ? sessions.get(victimOwner) : null;
       if (attackerSession?.authenticated) {
         if (victimOwner && victimOwner !== attackerSessionId) {
-          attackerSession.stats.kills += 1;
+          attackerSession.stats.knockdowns += 1;
+          attackerSession.stats.streak += 1;
           if (victimSession?.authenticated && victimSession.name) {
-            sendToSession(attackerSessionId, "kill_confirm", { victimName: victimSession.name });
+            sendToSession(attackerSessionId, "knockdown_confirm", { victimName: victimSession.name });
             appendSystemChat([
               { type: "player", name: attackerSession.name },
-              { type: "text", text: " dödade " },
+              { type: "text", text: " slog ner " },
               { type: "player", name: victimSession.name }
             ]);
           }
@@ -1266,8 +1270,8 @@ function sanitizeSystemTextSegment(raw) {
         sendToSession(sessionId, "action_error", { message: "Du vann nyss. Återgå till lobbyn för ny runda." });
         return "ok";
       }
-      if (session.state === "dead") {
-        sendToSession(sessionId, "action_error", { message: "Du är utslagen. Vänta på återgång till lobbyn." });
+      if (session.state === "downed") {
+        sendToSession(sessionId, "action_error", { message: "Du är nedslagen. Vänta på återgång till lobbyn." });
         return "ok";
       }
       if (pendingRoundReset) {
@@ -1297,7 +1301,7 @@ function sanitizeSystemTextSegment(raw) {
     }
 
     if (msg.type === "leave_match") {
-      if (session.state === "alive" || session.state === "dead" || session.state === "won") {
+      if (session.state === "alive" || session.state === "downed" || session.state === "won") {
         releaseOwnedCharacter(sessionId);
         returnToLobby(session, "left_match");
         appendSystemChat([
@@ -1485,7 +1489,7 @@ function sanitizeSystemTextSegment(raw) {
               maxPlayers: MAX_PLAYERS,
               returnToLobbyMsRemaining:
                 session.state === "won" ? Math.max(0, (session.returnToLobbyAt || 0) - now) : 0,
-              eliminatedByName: session.state === "dead" ? session.eliminatedByName || null : null,
+              eliminatedByName: session.state === "downed" ? session.eliminatedByName || null : null,
               attackCooldownMsRemaining: playerCharacter
                 ? Math.max(0, ATTACK_COOLDOWN_MS - (now - playerCharacter.lastAttackAt))
                 : 0
@@ -1590,9 +1594,10 @@ function sanitizeSystemTextSegment(raw) {
       eliminatedByName: null,
       stats: {
         wins: 0,
-        kills: 0,
-        deaths: 0,
-        innocents: 0
+        knockdowns: 0,
+        downed: 0,
+        innocents: 0,
+        streak: 0
       },
       input: {
         forward: false,
