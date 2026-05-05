@@ -47,7 +47,7 @@ const SUPERMAJORITY_READY_TIMEOUT_SECONDS = 30;
 const SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS = 10;
 const PERMANENT_DOWNED_UNTIL = Number.MAX_SAFE_INTEGER;
 const MAX_LOOK_PITCH_RAD = 1.2;
-const WINNER_RETURN_TO_LOBBY_MS = 10000;
+const MATCH_END_RETURN_TO_LOBBY_MS = 10000;
 const COUNTDOWN_RECONNECT_GRACE_MS = 7000;
 
 export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = null, onStatsEvent = null }) {
@@ -720,7 +720,11 @@ function sanitizeSystemTextSegment(raw) {
         { type: "player", name: winnerSession.name },
         { type: "text", text: " vann matchen!" }
       ]);
+      appendSystemChat([
+        { type: "text", text: `Spelet avslutas om ${Math.ceil(MATCH_END_RETURN_TO_LOBBY_MS / 1000)} sekunder` }
+      ]);
     }
+    const matchEndsAt = winnerSessionId ? now + MATCH_END_RETURN_TO_LOBBY_MS : 0;
 
     for (const session of sessions.values()) {
       if (!session.authenticated) continue;
@@ -729,17 +733,20 @@ function sanitizeSystemTextSegment(raw) {
         session.ready = false;
         session.readyAt = 0;
         session.input.attackRequested = false;
-        session.returnToLobbyAt = now + WINNER_RETURN_TO_LOBBY_MS;
+        session.returnToLobbyAt = matchEndsAt;
         session.eliminatedByName = null;
         continue;
       }
       if (session.state === "alive") returnToLobby(session, "round_ended");
       if (session.state === "downed") {
-        // Keep downed players in the match view while a winner is still watching.
-        if (!winnerSessionId) returnToLobby(session, "round_ended");
-        session.ready = false;
-        session.readyAt = 0;
-        session.input.attackRequested = false;
+        if (!winnerSessionId) {
+          returnToLobby(session, "round_ended");
+        } else {
+          session.ready = false;
+          session.readyAt = 0;
+          session.input.attackRequested = false;
+          session.returnToLobbyAt = matchEndsAt;
+        }
       }
       if (session.state === "countdown") {
         session.state = "lobby";
@@ -755,15 +762,6 @@ function sanitizeSystemTextSegment(raw) {
     activeMatchStartedAt = 0;
     pendingRoundReset = Boolean(winnerSessionId);
     if (!pendingRoundReset) resetArenaForNextRound(now);
-  }
-
-  function returnDownedSessionsToLobby(reason = "round_ended") {
-    for (const session of sessions.values()) {
-      if (!session?.authenticated) continue;
-      if (session.state !== "downed") continue;
-      releaseOwnedCharacter(session.id);
-      returnToLobby(session, reason);
-    }
   }
 
   function assignCharacterForCountdown(session, now) {
@@ -1438,16 +1436,24 @@ function sanitizeSystemTextSegment(raw) {
     pruneCountdownReconnectGrace(now);
     disconnectIdleSessions(now);
 
+    let matchEndedByTimeout = false;
     for (const session of sessions.values()) {
-      if (!session.authenticated || session.state !== "won") continue;
-      if (now < (session.returnToLobbyAt || 0)) continue;
+      if (!session.authenticated) continue;
+      if (session.state !== "won" && session.state !== "downed") continue;
+      const returnAt = Number(session.returnToLobbyAt || 0);
+      if (!Number.isFinite(returnAt) || returnAt <= 0 || now < returnAt) continue;
       releaseOwnedCharacter(session.id);
-      returnToLobby(session, "winner_timeout");
+      returnToLobby(session, "match_end_timeout");
+      matchEndedByTimeout = true;
+    }
+    if (matchEndedByTimeout) {
+      appendSystemChat([{ type: "text", text: "Spelet avslutat" }]);
     }
     if (pendingRoundReset) {
-      const hasWinnerWatching = authenticatedSessions().some((session) => session.state === "won");
-      if (!hasWinnerWatching) {
-        returnDownedSessionsToLobby("round_ended");
+      const hasEndMatchParticipants = authenticatedSessions().some(
+        (session) => session.state === "won" || session.state === "downed"
+      );
+      if (!hasEndMatchParticipants) {
         resetArenaForNextRound(now);
         pendingRoundReset = false;
       }
@@ -1557,7 +1563,9 @@ function sanitizeSystemTextSegment(raw) {
               minPlayersToStart: MIN_PLAYERS_TO_START,
               maxPlayers: MAX_PLAYERS,
               returnToLobbyMsRemaining:
-                session.state === "won" ? Math.max(0, (session.returnToLobbyAt || 0) - now) : 0,
+                session.state === "won" || session.state === "downed"
+                  ? Math.max(0, (session.returnToLobbyAt || 0) - now)
+                  : 0,
               eliminatedByName: session.state === "downed" ? session.eliminatedByName || null : null,
               attackCooldownMsRemaining: playerCharacter
                 ? Math.max(0, ATTACK_COOLDOWN_MS - (now - playerCharacter.lastAttackAt))

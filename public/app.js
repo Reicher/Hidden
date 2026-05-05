@@ -603,7 +603,8 @@ function updateDownedOverlay() {
     gameMenuBtnEl,
     appMode,
     sessionState,
-    downedByName
+    downedByName,
+    returnToLobbyMsRemaining: winReturnToLobbyMsRemaining
   });
 }
 
@@ -1192,7 +1193,7 @@ function animate() {
     }
     camera.rotation.set(-Math.PI / 2 + 0.0001, 0, 0);
   }
-  if (appMode === "playing" && sessionState === "won") {
+  if (appMode === "playing" && (sessionState === "won" || sessionState === "downed")) {
     winReturnToLobbyMsRemaining = Math.max(0, winReturnToLobbyMsRemaining - deltaSec * 1000);
   }
   knockdownToastMsRemaining = Math.max(0, knockdownToastMsRemaining - deltaSec * 1000);

@@ -15,7 +15,8 @@ export function updateDownedOverlay({
   gameMenuBtnEl,
   appMode,
   sessionState,
-  downedByName
+  downedByName,
+  returnToLobbyMsRemaining
 }) {
   if (!downedOverlayEl || !downedByTextEl || !downedCountdownTextEl) return;
   const downed = appMode === "playing" && sessionState === "downed";
@@ -25,7 +26,9 @@ export function updateDownedOverlay({
 
   const killer = downedByName ? String(downedByName) : "okänd spelare";
   downedByTextEl.textContent = `Du blev nedslagen av ${killer}`;
-  downedCountdownTextEl.textContent = "Tryck på knappen för att återgå till lobbyn.";
+  const sec = Math.max(0, Math.ceil(Number(returnToLobbyMsRemaining || 0) / 1000));
+  downedCountdownTextEl.textContent =
+    sec > 0 ? `Spelet avslutas om ${sec}` : "Tryck på knappen för att återgå till lobbyn.";
 }
 
 export function updateWinOverlay({
@@ -44,7 +47,7 @@ export function updateWinOverlay({
   if (!won) return;
   winTitleEl.textContent = "Du vann!";
   const sec = Math.max(0, Math.ceil(winReturnToLobbyMsRemaining / 1000));
-  winCountdownTextEl.textContent = `Återgå till lobbyn om ${sec}`;
+  winCountdownTextEl.textContent = `Spelet avslutas om ${sec}`;
 }
 
 export function updateKnockdownToast({
