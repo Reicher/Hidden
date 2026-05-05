@@ -66,6 +66,7 @@ const gameMenuCreditsBtnEl = document.getElementById("gameMenuCreditsBtn");
 const gameMenuCloseBtnEl = document.getElementById("gameMenuCloseBtn");
 const gameMenuLobbyBtnEl = document.getElementById("gameMenuLobbyBtn");
 const gameChatNoticeEl = document.getElementById("gameChatNotice");
+const gameChatBoxEl = document.getElementById("gameChatBox");
 const gameChatMessagesEl = document.getElementById("gameChatMessages");
 const gameChatInputRowEl = document.getElementById("gameChatInputRow");
 const gameChatInputEl = document.getElementById("gameChatInput");
@@ -79,11 +80,14 @@ const downedOverlayEl = document.getElementById("downedOverlay");
 const downedByTextEl = document.getElementById("downedByText");
 const downedCountdownTextEl = document.getElementById("downedCountdownText");
 const downedLobbyBtnEl = document.getElementById("downedLobbyBtn");
+const downedChatBtnEl = document.getElementById("downedChatBtn");
 const downedSpectateBtnEl = document.getElementById("downedSpectateBtn");
 const spectatorHudEl = document.getElementById("spectatorHud");
 const spectatorTargetTextEl = document.getElementById("spectatorTargetText");
 const spectatorPrevBtnEl = document.getElementById("spectatorPrevBtn");
 const spectatorNextBtnEl = document.getElementById("spectatorNextBtn");
+const spectatorLobbyBtnEl = document.getElementById("spectatorLobbyBtn");
+const spectatorChatBtnEl = document.getElementById("spectatorChatBtn");
 
 const PLAYER_NAME_KEY = "hidden_player_name";
 const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
@@ -133,7 +137,7 @@ const CROSSHAIR_DEFAULT_COOLDOWN_MS = 1000;
 const CROSSHAIR_RING_CIRCUMFERENCE = Math.PI * 26;
 const CROSSHAIR_HIT_DISTANCE_METERS = 2.8;
 const GAME_CHAT_MAX_LINES = 5;
-const GAME_CHAT_DISABLED_IN_GAME = true;
+const GAME_CHAT_OPEN_SHORTCUT = "KeyC";
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
 const JOYSTICK_DEADZONE = 0.16;
@@ -190,7 +194,10 @@ const chatUi = createChatUi({
   lobbyMessagesEl: chatMessagesEl,
   gameMessagesEl: gameChatMessagesEl,
   colorForName,
-  shouldMirrorToGameChat: (entry) => Boolean(entry?.system) || sessionState === "won",
+  shouldMirrorToGameChat: (entry) => {
+    if (sessionState === "alive") return Boolean(entry?.system);
+    return true;
+  },
   maxGameLines: GAME_CHAT_MAX_LINES
 });
 
@@ -426,6 +433,11 @@ function isGameChatFocused() {
   return document.activeElement === gameChatInputEl;
 }
 
+function canOpenInGameChat() {
+  if (appMode !== "playing") return false;
+  return sessionState === "downed" || sessionState === "spectating" || sessionState === "won";
+}
+
 function updateMobileControlsVisibility() {
   if (!mobileControlsEl) return;
   const wasShown = !mobileControlsEl.classList.contains("hidden");
@@ -441,20 +453,26 @@ function updateMobileControlsVisibility() {
 }
 
 function setGameChatOpen(open, { restorePointerLock = false } = {}) {
-  if (!gameChatInputRowEl) return;
-  const canOpen = Boolean(open) && !GAME_CHAT_DISABLED_IN_GAME;
+  if (!gameChatInputRowEl || !gameChatBoxEl || !gameChatNoticeEl) return;
+  const canOpen = Boolean(open) && canOpenInGameChat();
   gameChatOpen = canOpen;
+  gameChatBoxEl.classList.toggle("open", canOpen);
   gameChatInputRowEl.classList.toggle("hidden", !canOpen);
+  gameChatNoticeEl.textContent = canOpen || sessionState === "won" ? "Chatt" : "Systemhändelser";
+  chatUi.setGameLineLimit(canOpen ? null : GAME_CHAT_MAX_LINES);
   if (canOpen) {
     if (document.pointerLockElement) document.exitPointerLock?.();
     gameChatInputEl?.focus();
   } else {
     gameChatInputEl?.blur();
   }
+  if (!canOpenInGameChat()) gameChatOpen = false;
   if (restorePointerLock && appMode === "playing" && (sessionState === "alive" || sessionState === "won")) {
     requestPointerLockSafe(canvas);
   }
   updateMobileControlsVisibility();
+  updateDownedOverlay();
+  updateSpectatorHud();
 }
 
 function setGameMenuOpen(open, { restorePointerLock = false } = {}) {
@@ -613,6 +631,7 @@ function updateInGameHud() {
     activePlayersInGame,
     sessionState
   });
+  if (gameChatOpen && gameChatNoticeEl) gameChatNoticeEl.textContent = "Chatt";
 }
 
 function updateDownedOverlay() {
@@ -628,6 +647,7 @@ function updateDownedOverlay() {
     canSpectate: currentMatch.inProgress && activePlayersInGame > 0,
     returnToLobbyMsRemaining: winReturnToLobbyMsRemaining
   });
+  if (downedChatBtnEl) downedChatBtnEl.textContent = gameChatOpen ? "Stäng chatt" : "Chatt";
 }
 
 function updateWinOverlay() {
@@ -652,6 +672,7 @@ function updateSpectatorHud() {
   const canCycle = Array.isArray(spectatorCandidates) && spectatorCandidates.length > 1;
   if (spectatorPrevBtnEl) spectatorPrevBtnEl.disabled = !canCycle;
   if (spectatorNextBtnEl) spectatorNextBtnEl.disabled = !canCycle;
+  if (spectatorChatBtnEl) spectatorChatBtnEl.textContent = gameChatOpen ? "Stäng chatt" : "Chatt";
 }
 
 function updateKnockdownToast() {
@@ -725,7 +746,7 @@ function setAppMode(mode) {
   if (mode !== "playing") setGameChatOpen(false);
   if (mode !== "playing") setGameMenuOpen(false);
   if (mode !== "lobby") setLobbyMenuOpen(false);
-  if (mode === "playing" && GAME_CHAT_DISABLED_IN_GAME && gameChatOpen) setGameChatOpen(false);
+  if (mode === "playing" && gameChatOpen && !canOpenInGameChat()) setGameChatOpen(false);
   if (mode === "connect" || mode === "disconnected") setCountdownTextFromSession({ state: "lobby" });
   updateReadyButton();
   updateMobileControlsVisibility();
@@ -989,6 +1010,7 @@ const socketMessageContext = {
     resetSessionRuntimeState,
     replaceChat,
     appendChat,
+    refreshGameChat: () => chatUi.refreshGameChat(),
     setConnectError,
     setPrivateRoomButtonVisible,
     setAppMode,
@@ -1062,7 +1084,7 @@ function attachSocket(wsUrl, loginName) {
 function connectAndLogin() {
   if (connecting) return;
   if (!nameInputEl) return;
-  const rawName = nameInputEl.value.trim();
+  const rawName = String(nameInputEl.value ?? "").trim();
 
   if (rawName.length < 2) {
     setConnectError("Namn måste vara minst 2 tecken.");
@@ -1084,12 +1106,21 @@ function connectAndLogin() {
   attachSocket(wsUrl, rawName);
 }
 
-function sendChat() {
-  if (!chatInputEl) return;
-  const text = chatInputEl.value.trim();
+function sendChatFromInput(inputEl) {
+  if (!inputEl) return;
+  const text = String(inputEl.value ?? "").trim();
   if (!text || !socket) return;
   socket.sendJson({ type: "chat", text });
-  chatInputEl.value = "";
+  inputEl.value = "";
+}
+
+function sendLobbyChat() {
+  sendChatFromInput(chatInputEl);
+}
+
+function sendInGameChat() {
+  if (!canOpenInGameChat()) return;
+  sendChatFromInput(gameChatInputEl);
 }
 
 function requestReturnToLobby() {
@@ -1160,11 +1191,22 @@ lobbyMenuBackdropEl?.addEventListener("click", (event) => {
   if (event.target === lobbyMenuBackdropEl) setLobbyMenuOpen(false);
 });
 
-chatSendBtnEl?.addEventListener("click", sendChat);
+chatSendBtnEl?.addEventListener("click", sendLobbyChat);
 chatInputEl?.addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
   event.preventDefault();
-  sendChat();
+  sendLobbyChat();
+});
+gameChatInputEl?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    sendInGameChat();
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    setGameChatOpen(false, { restorePointerLock: true });
+  }
 });
 gameMenuBtnEl?.addEventListener("click", () => {
   if (appMode !== "playing") return;
@@ -1184,6 +1226,9 @@ gameMenuCreditsBtnEl?.addEventListener("click", () => {
 });
 gameMenuLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
 downedLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
+downedChatBtnEl?.addEventListener("click", () => {
+  setGameChatOpen(!gameChatOpen);
+});
 downedSpectateBtnEl?.addEventListener("click", requestSpectate);
 winLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
 spectatorPrevBtnEl?.addEventListener("click", () => {
@@ -1191,6 +1236,10 @@ spectatorPrevBtnEl?.addEventListener("click", () => {
 });
 spectatorNextBtnEl?.addEventListener("click", () => {
   requestSpectatorCycle(1);
+});
+spectatorLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
+spectatorChatBtnEl?.addEventListener("click", () => {
+  setGameChatOpen(!gameChatOpen);
 });
 gameMenuBackdropEl?.addEventListener("click", (event) => {
   if (event.target === gameMenuBackdropEl) setGameMenuOpen(false, { restorePointerLock: true });
@@ -1232,7 +1281,29 @@ window.addEventListener("resize", () => {
   resize();
 });
 
+function isTextInputTarget(target) {
+  if (!target) return false;
+  if (target instanceof HTMLInputElement) return true;
+  if (target instanceof HTMLTextAreaElement) return true;
+  return Boolean(target.isContentEditable);
+}
+
 window.addEventListener("keydown", (event) => {
+  if (
+    !IS_TOUCH_DEVICE &&
+    appMode === "playing" &&
+    event.code === GAME_CHAT_OPEN_SHORTCUT &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    !event.repeat &&
+    !isTextInputTarget(event.target) &&
+    canOpenInGameChat()
+  ) {
+    event.preventDefault();
+    setGameChatOpen(true);
+    return;
+  }
   if (appMode === "lobby" && event.key === "Escape") {
     if (!lobbyMenuOpen && lobbyDialogBackdropEl?.classList.contains("hidden")) return;
     event.preventDefault();
@@ -1244,6 +1315,11 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (appMode === "playing" && event.key === "Escape") {
+    if (gameChatOpen) {
+      event.preventDefault();
+      setGameChatOpen(false, { restorePointerLock: true });
+      return;
+    }
     if (sessionState !== "alive" && sessionState !== "spectating") return;
     if (lobbyDialogBackdropEl && !lobbyDialogBackdropEl.classList.contains("hidden")) {
       event.preventDefault();

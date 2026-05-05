@@ -49,27 +49,66 @@ export function createChatUi({
   shouldMirrorToGameChat,
   maxGameLines = 5
 }) {
-  const limit = Math.max(1, Number(maxGameLines || 5));
+  let gameLineLimit = Math.max(1, Number(maxGameLines || 5));
+  const historyEntries = [];
 
-  function appendChat(entry) {
-    appendChatLine(lobbyMessagesEl, entry, colorForName);
-    if (!shouldMirrorToGameChat(entry)) return;
-    appendChatLine(gameMessagesEl, entry, colorForName);
-    if (!gameMessagesEl) return;
-    while (gameMessagesEl.children.length > limit) {
+  function trimGameChatLines() {
+    if (!gameMessagesEl || gameLineLimit == null) return;
+    while (gameMessagesEl.children.length > gameLineLimit) {
       gameMessagesEl.removeChild(gameMessagesEl.firstElementChild);
     }
   }
 
-  function replaceChat(history) {
-    if (lobbyMessagesEl) lobbyMessagesEl.textContent = "";
+  function renderGameChatFromHistory() {
     if (gameMessagesEl) gameMessagesEl.textContent = "";
-    if (!Array.isArray(history)) return;
-    for (const entry of history) appendChat(entry);
+    for (const entry of historyEntries) {
+      if (!shouldMirrorToGameChat(entry)) continue;
+      appendChatLine(gameMessagesEl, entry, colorForName);
+    }
+    trimGameChatLines();
+  }
+
+  function appendChat(entry) {
+    historyEntries.push(entry);
+    appendChatLine(lobbyMessagesEl, entry, colorForName);
+    if (!shouldMirrorToGameChat(entry)) return;
+    appendChatLine(gameMessagesEl, entry, colorForName);
+    trimGameChatLines();
+  }
+
+  function replaceChat(history) {
+    historyEntries.length = 0;
+    if (lobbyMessagesEl) lobbyMessagesEl.textContent = "";
+    if (!Array.isArray(history)) {
+      renderGameChatFromHistory();
+      return;
+    }
+    for (const entry of history) {
+      historyEntries.push(entry);
+      appendChatLine(lobbyMessagesEl, entry, colorForName);
+    }
+    renderGameChatFromHistory();
+  }
+
+  function refreshGameChat() {
+    renderGameChatFromHistory();
+  }
+
+  function setGameLineLimit(limit) {
+    if (limit == null) {
+      gameLineLimit = null;
+      renderGameChatFromHistory();
+      return;
+    }
+    const normalized = Number(limit);
+    gameLineLimit = Number.isFinite(normalized) ? Math.max(1, Math.floor(normalized)) : 1;
+    renderGameChatFromHistory();
   }
 
   return {
     appendChat,
-    replaceChat
+    replaceChat,
+    refreshGameChat,
+    setGameLineLimit
   };
 }

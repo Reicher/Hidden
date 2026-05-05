@@ -106,6 +106,7 @@ export function handleSocketMessage(msg, ctx) {
     actions.updateInGameHud();
     actions.updateSpectatorHud();
     actions.updateDocumentTitle();
+    if (previousSessionState !== state.sessionState) actions.refreshGameChat?.();
     enteredAlive = previousSessionState !== "alive" && state.sessionState === "alive";
   } else {
     actions.resetDownedState();

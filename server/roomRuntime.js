@@ -1534,7 +1534,7 @@ function sanitizeSystemTextSegment(raw) {
         returnToLobby(session, "left_match");
         appendSystemChat([
           { type: "player", name: session.name },
-          { type: "text", text: " återgick till lobbyn" }
+          { type: "text", text: " lämnade matchen" }
         ]);
       }
       return "ok";

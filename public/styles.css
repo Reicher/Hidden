@@ -632,6 +632,23 @@ button:disabled {
   color: var(--fg-strong);
 }
 
+#spectatorActionRow {
+  display: flex;
+  gap: 8px;
+}
+
+#spectatorLobbyBtn,
+#spectatorChatBtn {
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface-glass);
+  color: var(--fg-strong);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
 #knockdownToast {
   position: absolute;
   left: 50%;
@@ -693,7 +710,7 @@ button:disabled {
   display: grid;
   justify-items: center;
   gap: 6px;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 #downedByText {
@@ -718,6 +735,7 @@ button:disabled {
 }
 
 #downedLobbyBtn,
+#downedChatBtn,
 #downedSpectateBtn {
   pointer-events: auto;
   min-height: 30px;
@@ -798,15 +816,18 @@ button:disabled {
   right: 12px;
   bottom: 12px;
   width: min(420px, calc(100vw - 24px));
+  max-height: min(70vh, 520px);
   border: 1px solid var(--line-faint);
   border-radius: 8px;
   background: rgba(9, 11, 16, 0.58);
   backdrop-filter: blur(2px);
   pointer-events: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 #gameChatMessages {
-  max-height: none;
+  max-height: 120px;
   overflow: hidden;
   padding: 8px;
   font-size: 12px;
@@ -834,6 +855,11 @@ button:disabled {
   background: rgba(10, 12, 18, 0.9);
   color: var(--fg);
   padding: 7px 8px;
+}
+
+#gameChatBox.open #gameChatMessages {
+  max-height: min(52vh, 380px);
+  overflow-y: auto;
 }
 
 #mobileControls {
