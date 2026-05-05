@@ -83,6 +83,7 @@ const downedLobbyBtnEl = document.getElementById("downedLobbyBtn");
 const PLAYER_NAME_KEY = "hidden_player_name";
 const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
 const AUDIO_SETTINGS_KEY = "hidden_audio_settings";
+const RESERVED_PATH_CODES = new Set(["debug"]);
 
 const sceneSystem = createSceneSystem(canvas);
 const { renderer, scene, camera, resize } = sceneSystem;
@@ -225,7 +226,14 @@ function activeRoomCodeFromPath() {
     .map((part) => part.trim())
     .filter(Boolean);
   if (segments.length !== 1) return null;
-  return decodeURIComponent(segments[0]);
+  try {
+    const roomCode = decodeURIComponent(segments[0]);
+    if (!roomCode) return null;
+    if (RESERVED_PATH_CODES.has(roomCode.toLowerCase())) return null;
+    return roomCode;
+  } catch {
+    return null;
+  }
 }
 
 function activeRoomPath() {
@@ -474,7 +482,7 @@ function updateLobbyMatchStatus() {
 
   if (currentMatch.inProgress) {
     const elapsedMinutes = Math.floor(Math.max(0, Number(currentMatch.elapsedMs || 0)) / 60000);
-    lobbyMatchStatusTitleEl.textContent = `Spel Startat (${elapsedMinutes} minuter)`;
+    lobbyMatchStatusTitleEl.textContent = `Match pågår (${elapsedMinutes} min) - Du väntar på nästa runda`;
     return;
   }
 
@@ -485,14 +493,13 @@ function updateLobbyMatchStatus() {
   const readyCount = players.reduce((acc, player) => acc + (player?.ready ? 1 : 0), 0);
   const readyEligibleCount = players.reduce((acc, player) => {
     const status = String(player?.status || "").toLowerCase();
-    const canReady = status === "väntar" || status === "redo" || status === "nedräkning";
+    const canReady = status === "i lobby";
     return acc + (canReady ? 1 : 0);
   }, 0);
   const playersText = `Spelare ${playerCount}/${maxPlayers}`;
   const readyText = `Redo ${readyCount}/${readyEligibleCount}`;
   const countdownRunning =
     lobbyCountdownMsRemaining > 0 ||
-    players.some((player) => String(player?.status || "").toLowerCase() === "nedräkning") ||
     sessionState === "countdown";
 
   if (countdownRunning) {
@@ -501,6 +508,10 @@ function updateLobbyMatchStatus() {
   }
   if (playerCount < minPlayers) {
     lobbyMatchStatusTitleEl.textContent = `${playersText} - Väntar på fler spelare`;
+    return;
+  }
+  if (readyEligibleCount === 0) {
+    lobbyMatchStatusTitleEl.textContent = `${playersText} - Väntar på nästa runda`;
     return;
   }
   if (readyCount < readyEligibleCount) {
@@ -519,7 +530,7 @@ function updateReadyButton() {
   }
   if (sessionState === "alive") {
     playBtnEl.disabled = true;
-    playBtnEl.textContent = "Spelar...";
+    playBtnEl.textContent = "Du spelar";
     return;
   }
   if (currentMatch.inProgress) {
@@ -529,7 +540,7 @@ function updateReadyButton() {
   }
   if (sessionState === "countdown" && sessionReady) {
     playBtnEl.disabled = true;
-    playBtnEl.textContent = "Nedräkning...";
+    playBtnEl.textContent = "Match startar...";
     return;
   }
   if (sessionReady) {
@@ -732,8 +743,19 @@ function renderScoreboard(players) {
     const tr = document.createElement("tr");
 
     const nameCell = document.createElement("td");
-    nameCell.textContent = p.name || "-";
-    nameCell.style.color = colorForName(p.name);
+    nameCell.className = "name-cell";
+    const nameCellInner = document.createElement("span");
+    nameCellInner.className = "name-cell-inner";
+    const readyLamp = document.createElement("span");
+    readyLamp.className = `ready-lamp name-ready-lamp ${p.ready ? "on" : "off"}`;
+    readyLamp.setAttribute("aria-hidden", "true");
+    nameCellInner.appendChild(readyLamp);
+    const nameLabel = document.createElement("span");
+    nameLabel.className = "name-label";
+    nameLabel.textContent = p.name || "-";
+    nameLabel.style.color = colorForName(p.name);
+    nameCellInner.appendChild(nameLabel);
+    nameCell.appendChild(nameCellInner);
     tr.appendChild(nameCell);
 
     const winsCell = document.createElement("td");
@@ -758,10 +780,6 @@ function renderScoreboard(players) {
 
     const statusCell = document.createElement("td");
     statusCell.className = "status-cell";
-    const readyLamp = document.createElement("span");
-    readyLamp.className = `ready-lamp ${p.ready ? "on" : "off"}`;
-    readyLamp.setAttribute("aria-hidden", "true");
-    statusCell.appendChild(readyLamp);
     const statusText = document.createElement("span");
     statusText.className = "status-label";
     statusText.textContent = p.status || "-";

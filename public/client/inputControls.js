@@ -164,6 +164,7 @@ export function createInputController({
       mobileAttackBtnEl.addEventListener("pointerdown", (event) => {
         event.preventDefault();
         if (!canUseMovementInput()) return;
+        if (getSessionState() !== "alive") return;
         getSocket()?.sendJson({ type: "attack" });
       });
     }

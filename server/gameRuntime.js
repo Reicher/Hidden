@@ -14,6 +14,7 @@ import {
 
 const PUBLIC_ROOM_ID = "public";
 const PRIVATE_CODE_RE = /^[a-z0-9][a-z0-9-]{2,23}$/i;
+const RESERVED_ROOM_CODES = new Set(["debug"]);
 const SETTINGS_DIR_NAME = "logs";
 const SETTINGS_FILE_NAME = "server-settings.json";
 const SETTINGS_TMP_FILE_NAME = "server-settings.json.tmp";
@@ -39,6 +40,9 @@ function parseRoomFromRequestUrl(rawUrl) {
     return { ok: false, reason: "invalid_room_code" };
   }
   if (!PRIVATE_CODE_RE.test(roomCode)) {
+    return { ok: false, reason: "invalid_room_code" };
+  }
+  if (RESERVED_ROOM_CODES.has(roomCode)) {
     return { ok: false, reason: "invalid_room_code" };
   }
 

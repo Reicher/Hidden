@@ -177,6 +177,17 @@ button:disabled {
   white-space: nowrap;
 }
 
+.name-cell {
+  white-space: nowrap;
+}
+
+.name-cell-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
 .ready-lamp {
   display: inline-block;
   width: 10px;
@@ -196,6 +207,16 @@ button:disabled {
 
 .status-label {
   color: var(--fg);
+}
+
+.name-ready-lamp {
+  margin-right: 0;
+  flex: 0 0 auto;
+}
+
+.name-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 #lobbyMain {
@@ -338,25 +359,25 @@ button:disabled {
   flex: 1 1 auto;
 }
 
-#lobbyActionRow {
-  display: flex;
-  justify-content: center;
-  align-self: stretch;
-  margin-top: 0;
-}
-
-#lobbyActionRow button {
-  flex: 0 0 auto;
-  min-width: 140px;
-  font-size: 13px;
-  padding: 7px 12px;
+#playBtn {
+  width: clamp(170px, 26vw, 280px);
+  min-height: 40px;
+  font-size: clamp(14px, 1.8vw, 17px);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, #2a4a30 0%, #1d3322 100%);
+  border-color: #69b36a;
+  box-shadow: 0 5px 12px rgba(4, 6, 10, 0.32);
 }
 
 #lobbyMatchStatus {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex: 0 0 auto;
   min-height: 1.2em;
   padding: 2px 2px 0;
@@ -369,9 +390,13 @@ button:disabled {
 #lobbyMatchStatusTitle {
   color: inherit;
   font-weight: 700;
-  flex: 1 1 auto;
+  grid-column: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+#playBtn {
+  grid-column: 2;
 }
 
 #lobbySettingsBtn,
@@ -929,13 +954,11 @@ body.touch-device #gameChatNotice {
     padding: 6px;
   }
 
-  #lobbyActionRow {
-    gap: 6px;
-  }
-
-  #lobbyActionRow button {
-    font-size: 13px;
-    padding: 8px 6px;
+  #playBtn {
+    width: clamp(154px, 34vw, 230px);
+    min-height: 38px;
+    font-size: clamp(13px, 2.2vw, 16px);
+    padding: 7px 10px;
   }
 
   #gameChatNotice {
@@ -954,9 +977,11 @@ body.touch-device #gameChatNotice {
     line-height: 1.24;
   }
 
-  #lobbyActionRow button {
-    font-size: 12px;
-    padding: 7px 6px;
+  #playBtn {
+    width: clamp(144px, 30vw, 200px);
+    min-height: 34px;
+    font-size: 13px;
+    padding: 6px 9px;
   }
 
   #lobbyMatchStatus {
@@ -991,9 +1016,11 @@ body.touch-device #gameChatNotice {
     font-size: 11px;
   }
 
-  #lobbyActionRow {
-    display: flex;
-    justify-content: center;
+  #playBtn {
+    width: clamp(148px, 45vw, 240px);
+    min-height: 38px;
+    font-size: clamp(13px, 4vw, 16px);
+    padding: 7px 10px;
   }
 
   #lobbyMatchStatus {

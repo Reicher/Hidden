@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "sync:three-local": "node scripts/sync-three-local.js",
+    "postinstall": "npm run sync:three-local",
     "generate:layout": "node scripts/generate-layout-png.js",
     "test:smoke": "node tests/smoke.js",
+    "test:reconnect-countdown-edge": "node tests/reconnect-countdown-edge.js",
     "test:supermajority-ready": "node tests/supermajority-ready.js",
     "test:browser": "node tests/browser-smoke.js",
     "test:combat": "node tests/combat.unit.js",
@@ -15,7 +18,7 @@
     "test:private-rooms": "node tests/private-rooms.js",
     "test:rate-limit": "node tests/rate-limit.js",
     "test:hardening": "node tests/hardening.js",
-    "test:all": "npm run test:combat && npm run test:debug-stats && npm run test:smoke && npm run test:supermajority-ready && npm run test:private-rooms && npm run test:browser && npm run test:heartbeat && npm run test:rate-limit && npm run test:hardening"
+    "test:all": "npm run test:combat && npm run test:debug-stats && npm run test:smoke && npm run test:reconnect-countdown-edge && npm run test:supermajority-ready && npm run test:private-rooms && npm run test:browser && npm run test:heartbeat && npm run test:rate-limit && npm run test:hardening"
   },
   "dependencies": {
     "pngjs": "^7.0.0",

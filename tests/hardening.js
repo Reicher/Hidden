@@ -95,6 +95,21 @@ function postLargeDebugSettingsPayload() {
   });
 }
 
+function httpGet(pathname) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(`${BASE_HTTP}${pathname}`, (res) => {
+      let text = "";
+      res.on("data", (chunk) => {
+        text += chunk.toString("utf8");
+      });
+      res.on("end", () => {
+        resolve({ statusCode: res.statusCode || 0, text });
+      });
+    });
+    req.on("error", reject);
+  });
+}
+
 async function run() {
   const server = await startServer({
     cwd: process.cwd(),
@@ -107,6 +122,26 @@ async function run() {
     assert.ok(
       malformedResponse.includes("400 Bad Request"),
       `expected 400 for malformed room path, got:\n${malformedResponse}`
+    );
+
+    const malformedHttp = await httpGet("/%E0%A4%A");
+    assert.equal(
+      malformedHttp.statusCode,
+      400,
+      `expected 400 for malformed HTTP path, got ${malformedHttp.statusCode}`
+    );
+
+    const debugPageResponse = await httpGet("/debug");
+    assert.equal(debugPageResponse.statusCode, 200, `expected 200 for /debug page, got ${debugPageResponse.statusCode}`);
+    assert.ok(
+      debugPageResponse.text.toLowerCase().includes("<!doctype html"),
+      "expected HTML document for /debug"
+    );
+
+    const debugUpgradeResponse = await sendRawUpgrade("/debug");
+    assert.ok(
+      debugUpgradeResponse.includes("400 Bad Request"),
+      `expected 400 for WS upgrade to reserved /debug path, got:\n${debugUpgradeResponse}`
     );
 
     await wsConnectAndLogin("hardening_player");

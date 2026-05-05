@@ -24,6 +24,14 @@ function hasFileExtension(pathname) {
   return basename.includes(".");
 }
 
+function decodePathname(pathname) {
+  try {
+    return { ok: true, value: decodeURIComponent(pathname || "/") };
+  } catch {
+    return { ok: false, value: "/" };
+  }
+}
+
 export function createStaticHttpServer({ host, port, rootDir, onBeforeStaticRequest = null }) {
   const publicDir = path.resolve(path.join(rootDir, "public"));
 
@@ -34,7 +42,13 @@ export function createStaticHttpServer({ host, port, rootDir, onBeforeStaticRequ
         const handled = await onBeforeStaticRequest({ req, res, requestUrl });
         if (handled) return;
       }
-      const pathname = decodeURIComponent(requestUrl.pathname || "/");
+      const decoded = decodePathname(requestUrl.pathname || "/");
+      if (!decoded.ok) {
+        res.writeHead(400);
+        res.end("Bad request");
+        return;
+      }
+      const pathname = decoded.value;
       let primaryPath = pathname === "/" ? "/index.html" : pathname;
       if (pathname === "/debug" || pathname === "/debug/") {
         primaryPath = "/debug.html";

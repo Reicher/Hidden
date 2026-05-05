@@ -27,6 +27,7 @@ server/
 public/
   index.html              # Spel-UI
   app.js                  # Klientflöde (connect/lobby/spel)
+  vendor/three.module.js  # Syncad från node_modules/three (lokal source of truth)
   client/
     scene.js              # Three.js renderer/scene/camera
     room.js               # Rumsgeometri + texturer
@@ -36,6 +37,8 @@ public/
 tests/
   *.js                    # Node + WebSocket + Playwright tester
 ```
+
+Three.js hanteras lokalt: `node_modules/three/build/three.module.js` är källan och synkas till `public/vendor/three.module.js` via `npm run sync:three-local` (körs automatiskt vid `npm install`).
 
 ## Gameplay (nuvarande)
 

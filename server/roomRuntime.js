@@ -48,6 +48,7 @@ const SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS = 10;
 const PERMANENT_DOWNED_UNTIL = Number.MAX_SAFE_INTEGER;
 const MAX_LOOK_PITCH_RAD = 1.2;
 const WINNER_RETURN_TO_LOBBY_MS = 10000;
+const COUNTDOWN_RECONNECT_GRACE_MS = 7000;
 
 export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = null, onStatsEvent = null }) {
   const sessions = new Map();
@@ -61,6 +62,7 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   let supermajorityReadyTimeout = null;
   let pendingRoundReset = false;
   const countdownReadyNames = new Set();
+  const countdownReconnectGraceByName = new Map();
   let activeMatchStartedAt = 0;
   const roomTag = isPrivate ? `privat:${roomCode}` : "publik";
   let closed = false;
@@ -413,6 +415,31 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
     return trimmed.slice(0, NAME_MAX_LEN);
   }
 
+  function normalizeNameKey(name) {
+    const trimmed = String(name || "").trim();
+    return trimmed ? trimmed.toLowerCase() : "";
+  }
+
+  function markCountdownReconnectGrace(name, now = Date.now()) {
+    const key = normalizeNameKey(name);
+    if (!key) return;
+    countdownReconnectGraceByName.set(key, now + COUNTDOWN_RECONNECT_GRACE_MS);
+  }
+
+  function pruneCountdownReconnectGrace(now = Date.now()) {
+    for (const [key, until] of countdownReconnectGraceByName.entries()) {
+      if (now >= until) countdownReconnectGraceByName.delete(key);
+    }
+  }
+
+  function hasCountdownReconnectGrace(name, now = Date.now()) {
+    const key = normalizeNameKey(name);
+    if (!key) return false;
+    pruneCountdownReconnectGrace(now);
+    const until = countdownReconnectGraceByName.get(key);
+    return Number.isFinite(until) && now < until;
+  }
+
 function normalizeChatText(raw) {
   const trimmed = String(raw || "").replace(/[\u0000-\u001f\u007f]/g, "").trim();
   return trimmed.slice(0, CHAT_MAX_LEN);
@@ -433,11 +460,8 @@ function sanitizeSystemTextSegment(raw) {
 
   function statusLabel(session) {
     if (!session?.authenticated) return "disconnected";
-    if (session.state === "alive") return "spelar";
-    if (session.state === "won") return "vann";
-    if (session.state === "downed") return "nedslagen";
-    if (session.state === "countdown") return "nedräkning";
-    if (session.state === "lobby") return session.ready ? "redo" : "väntar";
+    if (session.state === "lobby" || session.state === "countdown") return "i lobby";
+    if (session.state === "alive" || session.state === "won" || session.state === "downed") return "i spel";
     return "disconnected";
   }
 
@@ -546,6 +570,7 @@ function sanitizeSystemTextSegment(raw) {
     }
     lobbyCountdown = null;
     countdownReadyNames.clear();
+    countdownReconnectGraceByName.clear();
     appendSystemChat([{ type: "text", text: "Nedräkning avbruten" }]);
   }
 
@@ -587,6 +612,7 @@ function sanitizeSystemTextSegment(raw) {
     const endsAt = now + seconds * 1000;
     cancelSupermajorityReadyTimeout();
     countdownReadyNames.clear();
+    pruneCountdownReconnectGrace(now);
     lobbyCountdown = {
       endsAt,
       lastAnnouncedSecond: null
@@ -641,6 +667,8 @@ function sanitizeSystemTextSegment(raw) {
     const participants = authenticatedSessions().filter((session) => session.state === "countdown" && session.ready);
     lobbyCountdown = null;
     countdownReadyNames.clear();
+    pruneCountdownReconnectGrace(now);
+    for (const session of participants) markCountdownReconnectGrace(session.name, now);
     appendSystemChat([{ type: "text", text: "Spel startat" }]);
     for (const session of participants) {
       if (session.characterId == null && !assignCharacterForCountdown(session, now)) continue;
@@ -705,7 +733,14 @@ function sanitizeSystemTextSegment(raw) {
         session.eliminatedByName = null;
         continue;
       }
-      if (session.state === "alive" || session.state === "downed") returnToLobby(session, "round_ended");
+      if (session.state === "alive") returnToLobby(session, "round_ended");
+      if (session.state === "downed") {
+        // Keep downed players in the match view while a winner is still watching.
+        if (!winnerSessionId) returnToLobby(session, "round_ended");
+        session.ready = false;
+        session.readyAt = 0;
+        session.input.attackRequested = false;
+      }
       if (session.state === "countdown") {
         session.state = "lobby";
         session.readyAt = 0;
@@ -716,9 +751,19 @@ function sanitizeSystemTextSegment(raw) {
     lobbyCountdown = null;
     cancelSupermajorityReadyTimeout();
     countdownReadyNames.clear();
+    countdownReconnectGraceByName.clear();
     activeMatchStartedAt = 0;
     pendingRoundReset = Boolean(winnerSessionId);
     if (!pendingRoundReset) resetArenaForNextRound(now);
+  }
+
+  function returnDownedSessionsToLobby(reason = "round_ended") {
+    for (const session of sessions.values()) {
+      if (!session?.authenticated) continue;
+      if (session.state !== "downed") continue;
+      releaseOwnedCharacter(session.id);
+      returnToLobby(session, reason);
+    }
   }
 
   function assignCharacterForCountdown(session, now) {
@@ -1177,15 +1222,39 @@ function sanitizeSystemTextSegment(raw) {
       return "ok";
     }
 
+    const loginAt = Date.now();
+    pruneCountdownReconnectGrace(loginAt);
+
     session.authenticated = true;
     session.name = normalizedName;
     session.state = "lobby";
     session.ready = false;
     session.readyAt = 0;
-    if (lobbyCountdown && countdownReadyNames.has(normalizedName.toLowerCase())) {
+    const normalizedNameKey = normalizedName.toLowerCase();
+    if (lobbyCountdown && countdownReadyNames.has(normalizedNameKey)) {
       session.ready = true;
       toCountdownState(session, lobbyCountdown.endsAt);
+    } else {
+      const activePlayers = activePlayerCount();
+      if (
+        !lobbyCountdown &&
+        !pendingRoundReset &&
+        activePlayers > 0 &&
+        hasCountdownReconnectGrace(normalizedName, loginAt)
+      ) {
+        if (assignCharacterForCountdown(session, loginAt)) {
+          session.state = "alive";
+          session.ready = false;
+          session.readyAt = loginAt;
+          session.input.attackRequested = false;
+          appendSystemChat([
+            { type: "player", name: normalizedName },
+            { type: "text", text: " återanslöt till pågående runda" }
+          ]);
+        }
+      }
     }
+    countdownReconnectGraceByName.delete(normalizedNameKey);
 
     logEvent("session_login", {
       sessionId: shortSessionId(sessionId),
@@ -1267,7 +1336,7 @@ function sanitizeSystemTextSegment(raw) {
         return "ok";
       }
       if (session.state === "downed") {
-        sendToSession(sessionId, "action_error", { message: "Du är nedslagen. Vänta på återgång till lobbyn." });
+        sendToSession(sessionId, "action_error", { message: "Du är nedslagen. Återgå till lobbyn med knappen." });
         return "ok";
       }
       if (pendingRoundReset) {
@@ -1366,6 +1435,7 @@ function sanitizeSystemTextSegment(raw) {
     const dt = Math.min(0.1, (now - lastTickAt) / 1000);
     lastTickAt = now;
     checkInvariants(now);
+    pruneCountdownReconnectGrace(now);
     disconnectIdleSessions(now);
 
     for (const session of sessions.values()) {
@@ -1377,6 +1447,7 @@ function sanitizeSystemTextSegment(raw) {
     if (pendingRoundReset) {
       const hasWinnerWatching = authenticatedSessions().some((session) => session.state === "won");
       if (!hasWinnerWatching) {
+        returnDownedSessionsToLobby("round_ended");
         resetArenaForNextRound(now);
         pendingRoundReset = false;
       }
@@ -1547,6 +1618,7 @@ function sanitizeSystemTextSegment(raw) {
       }
       if (lobbyCountdown && closingSession?.state === "countdown" && closingSession?.name) {
         countdownReadyNames.add(String(closingSession.name).toLowerCase());
+        markCountdownReconnectGrace(closingSession.name);
       }
 
       if (closingSession?.authenticated && closingSession.name) {
