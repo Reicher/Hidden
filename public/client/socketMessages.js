@@ -131,6 +131,8 @@ export function handleSocketMessage(msg, ctx) {
   try {
     roomSystem.syncFromWorld({
       worldSizeMeters: msg.worldSizeMeters,
+      worldWidthMeters: msg.worldWidthMeters,
+      worldHeightMeters: msg.worldHeightMeters,
       shelves: msg.shelves,
       coolers: msg.coolers,
       freezers: msg.freezers

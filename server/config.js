@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { readdirSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { loadLayoutFromPng } from "./layoutFromPng.js";
 
@@ -199,18 +200,29 @@ export const FREEZER_WIDTH = 1.0;
 export const FREEZER_DEPTH = 1.0;
 export const FREEZER_HEIGHT = 1.0;
 
-const LAYOUT_PRESETS = Object.freeze([
-  {
-    id: "layout-30",
-    fileName: "layout-30.png",
-    label: "30x30 meter"
-  },
-  {
-    id: "layout-50",
-    fileName: "layout-50.png",
-    label: "50x50 meter"
+function discoverLayoutPresets() {
+  const layoutsDir = resolve(HERE, "./layouts");
+  const pngFiles = readdirSync(layoutsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.png$/i.test(entry.name))
+    .map((entry) => entry.name)
+    .sort((a, b) => a.localeCompare(b, "sv", { sensitivity: "base", numeric: true }));
+
+  if (pngFiles.length === 0) {
+    throw new Error(`[layout] Inga PNG-filer hittades i ${layoutsDir}.`);
   }
-]);
+
+  return Object.freeze(
+    pngFiles.map((fileName) =>
+      Object.freeze({
+        id: fileName.replace(/\.png$/i, "").toLowerCase(),
+        fileName,
+        label: fileName
+      })
+    )
+  );
+}
+
+const LAYOUT_PRESETS = discoverLayoutPresets();
 
 const LAYOUT_PRESET_BY_ID = new Map(LAYOUT_PRESETS.map((preset) => [preset.id, preset]));
 const loadedLayouts = new Map();
@@ -232,14 +244,18 @@ function cloneFixtureSet(fixtures, { width, depth, height }) {
 }
 
 function readLayoutById(layoutId) {
-  if (loadedLayouts.has(layoutId)) return loadedLayouts.get(layoutId);
   const preset = LAYOUT_PRESET_BY_ID.get(layoutId);
   if (!preset) {
     const known = LAYOUT_PRESETS.map((entry) => entry.id).join(", ");
     throw new Error(`[layout] Unknown layout id "${layoutId}". Available: ${known}`);
   }
+  const filePath = resolve(HERE, "./layouts", preset.fileName);
+  const mtimeMs = statSync(filePath).mtimeMs;
+  const cached = loadedLayouts.get(layoutId);
+  if (cached && cached.mtimeMs === mtimeMs) return cached.layout;
+
   const loaded = loadLayoutFromPng({
-    filePath: resolve(HERE, "./layouts", preset.fileName),
+    filePath,
     shelfWidth: SHELF_WIDTH,
     shelfDepth: SHELF_DEPTH,
     shelfHeight: SHELF_HEIGHT,
@@ -255,11 +271,23 @@ function readLayoutById(layoutId) {
     fileName: preset.fileName,
     label: preset.label,
     worldSizeMeters: loaded.worldSizeMeters,
+    worldWidthMeters: loaded.worldWidthMeters,
+    worldHeightMeters: loaded.worldHeightMeters,
+    warnings: Object.freeze(Array.isArray(loaded.warnings) ? loaded.warnings : []),
     shelves: cloneFixtureSet(loaded.shelves, { width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
     coolers: cloneFixtureSet(loaded.coolers, { width: COOLER_WIDTH, depth: COOLER_DEPTH, height: COOLER_HEIGHT }),
     freezers: cloneFixtureSet(loaded.freezers, { width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT })
   });
-  loadedLayouts.set(layoutId, layout);
+  if (layout.warnings.length > 0) {
+    for (const warning of layout.warnings) {
+      const text = String(warning?.message || "okänd layoutvarning");
+      console.warn(text);
+      if (warning?.details) {
+        console.warn(`[layout] ${preset.fileName}: ${warning.details}`);
+      }
+    }
+  }
+  loadedLayouts.set(layoutId, { mtimeMs, layout });
   return layout;
 }
 
@@ -269,6 +297,8 @@ let activeLayout = (() => {
 
 export let ACTIVE_LAYOUT_ID = activeLayout.id;
 export let WORLD_SIZE_METERS = activeLayout.worldSizeMeters;
+export let WORLD_WIDTH_METERS = activeLayout.worldWidthMeters;
+export let WORLD_HEIGHT_METERS = activeLayout.worldHeightMeters;
 export let SHELVES = activeLayout.shelves;
 export let COOLERS = activeLayout.coolers;
 export let FREEZERS = activeLayout.freezers;
@@ -277,6 +307,8 @@ function applyActiveLayout(layout) {
   activeLayout = layout;
   ACTIVE_LAYOUT_ID = layout.id;
   WORLD_SIZE_METERS = layout.worldSizeMeters;
+  WORLD_WIDTH_METERS = layout.worldWidthMeters;
+  WORLD_HEIGHT_METERS = layout.worldHeightMeters;
   SHELVES = layout.shelves;
   COOLERS = layout.coolers;
   FREEZERS = layout.freezers;
@@ -285,18 +317,22 @@ function applyActiveLayout(layout) {
 export function setActiveLayout(layoutId) {
   const normalized = String(layoutId || "").trim().toLowerCase();
   if (!normalized) return false;
-  if (normalized === ACTIVE_LAYOUT_ID) return false;
   const nextLayout = readLayoutById(normalized);
+  if (normalized === ACTIVE_LAYOUT_ID && nextLayout === activeLayout) return false;
   applyActiveLayout(nextLayout);
   return true;
 }
 
 export function getActiveLayoutInfo() {
+  const latest = readLayoutById(activeLayout.id);
   return Object.freeze({
-    id: activeLayout.id,
-    fileName: activeLayout.fileName,
-    label: activeLayout.label,
-    worldSizeMeters: activeLayout.worldSizeMeters
+    id: latest.id,
+    fileName: latest.fileName,
+    label: latest.label,
+    worldSizeMeters: latest.worldSizeMeters,
+    worldWidthMeters: latest.worldWidthMeters,
+    worldHeightMeters: latest.worldHeightMeters,
+    warnings: latest.warnings
   });
 }
 
@@ -308,7 +344,10 @@ export function getAvailableLayouts() {
         id: preset.id,
         fileName: preset.fileName,
         label: preset.label,
-        worldSizeMeters: loaded.worldSizeMeters
+        worldSizeMeters: loaded.worldSizeMeters,
+        worldWidthMeters: loaded.worldWidthMeters,
+        worldHeightMeters: loaded.worldHeightMeters,
+        warnings: loaded.warnings
       });
     })
   );

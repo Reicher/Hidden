@@ -206,23 +206,112 @@ function buildShelfSegments(shelfCells, width, height) {
   return solution.map((segmentId) => segments[segmentId]);
 }
 
-function buildShelvesFromPixels({ shelfCells, width, height, shelfWidth, shelfDepth, shelfHeight }) {
-  const segments = buildShelfSegments(shelfCells, width, height);
-  const shelves = segments.map((segment) => {
-    const xs = segment.cells.map((c) => c[0]);
-    const ys = segment.cells.map((c) => c[1]);
-    const centerX = (Math.min(...xs) + Math.max(...xs)) * 0.5;
-    const centerY = (Math.min(...ys) + Math.max(...ys)) * 0.5;
-    return Object.freeze({
-      x: toWorldX(centerX, width),
-      z: toWorldZ(centerY, height),
-      width: shelfWidth,
-      depth: shelfDepth,
-      height: shelfHeight,
-      yaw: segment.yaw
+function buildShelvesFromPixels({ shelfCells, width, height, shelfWidth, shelfDepth, shelfHeight, layoutName }) {
+  try {
+    const segments = buildShelfSegments(shelfCells, width, height);
+    const shelves = segments.map((segment) => {
+      const xs = segment.cells.map((c) => c[0]);
+      const ys = segment.cells.map((c) => c[1]);
+      const centerX = (Math.min(...xs) + Math.max(...xs)) * 0.5;
+      const centerY = (Math.min(...ys) + Math.max(...ys)) * 0.5;
+      return Object.freeze({
+        x: toWorldX(centerX, width),
+        z: toWorldZ(centerY, height),
+        width: shelfWidth,
+        depth: shelfDepth,
+        height: shelfHeight,
+        yaw: segment.yaw
+      });
     });
-  });
-  return Object.freeze(shelves);
+    return {
+      shelves: Object.freeze(shelves),
+      warnings: []
+    };
+  } catch (error) {
+    const segmentErrorMessage = String(error?.message || "okänt segmentfel");
+    const remaining = new Set(shelfCells);
+    const shelves = [];
+
+    while (remaining.size > 0) {
+      const start = remaining.values().next().value;
+      remaining.delete(start);
+      const queue = [start];
+      const component = [];
+
+      while (queue.length > 0) {
+        const key = queue.pop();
+        const [x, y] = key.split(",").map(Number);
+        component.push([x, y]);
+
+        const neighbors = [
+          [x + 1, y],
+          [x - 1, y],
+          [x, y + 1],
+          [x, y - 1]
+        ];
+        for (const [nx, ny] of neighbors) {
+          const neighborKey = keyFor(nx, ny);
+          if (!remaining.has(neighborKey)) continue;
+          remaining.delete(neighborKey);
+          queue.push(neighborKey);
+        }
+      }
+
+      const xs = component.map((c) => c[0]);
+      const ys = component.map((c) => c[1]);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const spanX = maxX - minX + 1;
+      const spanY = maxY - minY + 1;
+      const centerX = (minX + maxX) * 0.5;
+      const centerY = (minY + maxY) * 0.5;
+      const isFilledRect = component.length === spanX * spanY;
+
+      if (isFilledRect) {
+        const horizontal = spanX >= spanY;
+        shelves.push(
+          Object.freeze({
+            x: toWorldX(centerX, width),
+            z: toWorldZ(centerY, height),
+            width: horizontal ? spanY : spanX,
+            depth: horizontal ? spanX : spanY,
+            height: shelfHeight,
+            yaw: horizontal ? Math.PI / 2 : 0
+          })
+        );
+        continue;
+      }
+
+      for (const [x, y] of component) {
+        shelves.push(
+          Object.freeze({
+            x: toWorldX(x, width),
+            z: toWorldZ(y, height),
+            width: 1,
+            depth: 1,
+            height: shelfHeight,
+            yaw: 0
+          })
+        );
+      }
+    }
+
+    return {
+      shelves: Object.freeze(shelves),
+      warnings: [
+        Object.freeze({
+          code: "shelf_fallback_used",
+          severity: "warning",
+          message:
+            `[layout] ${layoutName}: hyllor kunde inte delas upp i exakta 1x6-segment. ` +
+            "Fallback användes (sammanhängande regioner/1x1), layouten är spelbar men inte godkänd.",
+          details: segmentErrorMessage
+        })
+      ]
+    };
+  }
 }
 
 export function loadLayoutFromPng({
@@ -242,11 +331,8 @@ export function loadLayoutFromPng({
   const { width, height, data } = png;
   const layoutName = basename(filePath || "layout.png");
 
-  if (width !== height) {
-    throw new Error(`[layout] ${layoutName} måste vara kvadratisk. Fick ${width}x${height}.`);
-  }
-  if (width < SEGMENT_LEN) {
-    throw new Error(`[layout] ${layoutName} är för liten. Minst ${SEGMENT_LEN}x${SEGMENT_LEN} krävs.`);
+  if (width < SEGMENT_LEN && height < SEGMENT_LEN) {
+    throw new Error(`[layout] ${layoutName} är för liten. Minst en sida måste vara >= ${SEGMENT_LEN}.`);
   }
 
   const occupied = Array.from({ length: height }, () => Array.from({ length: width }, () => false));
@@ -290,7 +376,17 @@ export function loadLayoutFromPng({
     );
   }
 
-  const shelves = buildShelvesFromPixels({ shelfCells, width, height, shelfWidth, shelfDepth, shelfHeight });
+  const shelfResult = buildShelvesFromPixels({
+    shelfCells,
+    width,
+    height,
+    shelfWidth,
+    shelfDepth,
+    shelfHeight,
+    layoutName
+  });
+  const shelves = shelfResult.shelves;
+  const warnings = [...shelfResult.warnings];
 
   const coolers = Object.freeze(
     coolerCells.map(([x, y]) => {
@@ -320,7 +416,10 @@ export function loadLayoutFromPng({
   );
 
   return Object.freeze({
-    worldSizeMeters: width,
+    worldSizeMeters: Math.max(width, height),
+    worldWidthMeters: width,
+    worldHeightMeters: height,
+    warnings: Object.freeze(warnings),
     shelves,
     coolers,
     freezers

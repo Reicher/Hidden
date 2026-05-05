@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { WebSocketServer } from "ws";
 import {
   WORLD_SIZE_METERS,
+  WORLD_WIDTH_METERS,
+  WORLD_HEIGHT_METERS,
   MAX_PLAYERS,
   MIN_PLAYERS_TO_START,
   NPC_DOWNED_RESPAWN_MS,
@@ -82,18 +84,20 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   }
 
   function randomSpawn() {
-    const min = -WORLD_SIZE_METERS * 0.5 + 0.5;
-    const max = WORLD_SIZE_METERS * 0.5 - 0.5;
+    const minX = -WORLD_WIDTH_METERS * 0.5 + 0.5;
+    const maxX = WORLD_WIDTH_METERS * 0.5 - 0.5;
+    const minZ = -WORLD_HEIGHT_METERS * 0.5 + 0.5;
+    const maxZ = WORLD_HEIGHT_METERS * 0.5 - 0.5;
     for (let i = 0; i < 180; i += 1) {
-      const x = rand(min, max);
-      const z = rand(min, max);
+      const x = rand(minX, maxX);
+      const z = rand(minZ, maxZ);
       if (isSpawnBlocked(x, z)) continue;
       return { x, z, yaw: rand(-Math.PI, Math.PI) };
     }
 
     const step = Math.max(0.6, CHARACTER_RADIUS * 2.4);
-    for (let x = min; x <= max; x += step) {
-      for (let z = min; z <= max; z += step) {
+    for (let x = minX; x <= maxX; x += step) {
+      for (let z = minZ; z <= maxZ; z += step) {
         if (isSpawnBlocked(x, z)) continue;
         return { x, z, yaw: rand(-Math.PI, Math.PI) };
       }
@@ -257,9 +261,11 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   function logEvent(event, details = {}) {
     const sid = details.sessionId || "-";
     if (event === "runtime_started") {
+      const width = details.worldWidthMeters ?? details.worldSizeMeters ?? "-";
+      const height = details.worldHeightMeters ?? details.worldSizeMeters ?? "-";
       logInfo(
         "runtime",
-        `start world=${details.worldSizeMeters}x${details.worldSizeMeters}m maxPlayers=${details.maxPlayers} chars=${details.totalCharacters}`
+        `start world=${width}x${height}m maxPlayers=${details.maxPlayers} chars=${details.totalCharacters}`
       );
       return;
     }
@@ -863,8 +869,10 @@ function sanitizeSystemTextSegment(raw) {
     });
   }
 
-  const ROOM_BOUNDARY_MIN = -WORLD_SIZE_METERS * 0.5;
-  const ROOM_BOUNDARY_MAX = WORLD_SIZE_METERS * 0.5;
+  const ROOM_BOUNDARY_MIN_X = -WORLD_WIDTH_METERS * 0.5;
+  const ROOM_BOUNDARY_MAX_X = WORLD_WIDTH_METERS * 0.5;
+  const ROOM_BOUNDARY_MIN_Z = -WORLD_HEIGHT_METERS * 0.5;
+  const ROOM_BOUNDARY_MAX_Z = WORLD_HEIGHT_METERS * 0.5;
   const WALL_AVOIDANCE_MARGIN = 1.5;
   const SHELF_AVOIDANCE_MARGIN = 1.1;
   const STATIC_OBSTACLES = [...SHELVES, ...COOLERS, ...FREEZERS];
@@ -887,20 +895,20 @@ function sanitizeSystemTextSegment(raw) {
     let hitMinZ = false;
     let hitMaxZ = false;
 
-    if (character.x < ROOM_BOUNDARY_MIN) {
-      character.x = ROOM_BOUNDARY_MIN;
+    if (character.x < ROOM_BOUNDARY_MIN_X) {
+      character.x = ROOM_BOUNDARY_MIN_X;
       hitMinX = true;
     }
-    if (character.x > ROOM_BOUNDARY_MAX) {
-      character.x = ROOM_BOUNDARY_MAX;
+    if (character.x > ROOM_BOUNDARY_MAX_X) {
+      character.x = ROOM_BOUNDARY_MAX_X;
       hitMaxX = true;
     }
-    if (character.z < ROOM_BOUNDARY_MIN) {
-      character.z = ROOM_BOUNDARY_MIN;
+    if (character.z < ROOM_BOUNDARY_MIN_Z) {
+      character.z = ROOM_BOUNDARY_MIN_Z;
       hitMinZ = true;
     }
-    if (character.z > ROOM_BOUNDARY_MAX) {
-      character.z = ROOM_BOUNDARY_MAX;
+    if (character.z > ROOM_BOUNDARY_MAX_Z) {
+      character.z = ROOM_BOUNDARY_MAX_Z;
       hitMaxZ = true;
     }
 
@@ -923,17 +931,17 @@ function sanitizeSystemTextSegment(raw) {
   function wallAvoidance(character) {
     let ax = 0;
     let az = 0;
-    if (character.x < ROOM_BOUNDARY_MIN + WALL_AVOIDANCE_MARGIN) {
-      ax += (ROOM_BOUNDARY_MIN + WALL_AVOIDANCE_MARGIN - character.x) / WALL_AVOIDANCE_MARGIN;
+    if (character.x < ROOM_BOUNDARY_MIN_X + WALL_AVOIDANCE_MARGIN) {
+      ax += (ROOM_BOUNDARY_MIN_X + WALL_AVOIDANCE_MARGIN - character.x) / WALL_AVOIDANCE_MARGIN;
     }
-    if (character.x > ROOM_BOUNDARY_MAX - WALL_AVOIDANCE_MARGIN) {
-      ax -= (character.x - (ROOM_BOUNDARY_MAX - WALL_AVOIDANCE_MARGIN)) / WALL_AVOIDANCE_MARGIN;
+    if (character.x > ROOM_BOUNDARY_MAX_X - WALL_AVOIDANCE_MARGIN) {
+      ax -= (character.x - (ROOM_BOUNDARY_MAX_X - WALL_AVOIDANCE_MARGIN)) / WALL_AVOIDANCE_MARGIN;
     }
-    if (character.z < ROOM_BOUNDARY_MIN + WALL_AVOIDANCE_MARGIN) {
-      az += (ROOM_BOUNDARY_MIN + WALL_AVOIDANCE_MARGIN - character.z) / WALL_AVOIDANCE_MARGIN;
+    if (character.z < ROOM_BOUNDARY_MIN_Z + WALL_AVOIDANCE_MARGIN) {
+      az += (ROOM_BOUNDARY_MIN_Z + WALL_AVOIDANCE_MARGIN - character.z) / WALL_AVOIDANCE_MARGIN;
     }
-    if (character.z > ROOM_BOUNDARY_MAX - WALL_AVOIDANCE_MARGIN) {
-      az -= (character.z - (ROOM_BOUNDARY_MAX - WALL_AVOIDANCE_MARGIN)) / WALL_AVOIDANCE_MARGIN;
+    if (character.z > ROOM_BOUNDARY_MAX_Z - WALL_AVOIDANCE_MARGIN) {
+      az -= (character.z - (ROOM_BOUNDARY_MAX_Z - WALL_AVOIDANCE_MARGIN)) / WALL_AVOIDANCE_MARGIN;
     }
 
     const len = Math.hypot(ax, az);
@@ -1437,6 +1445,8 @@ function sanitizeSystemTextSegment(raw) {
 
     const worldState = {
       worldSizeMeters: WORLD_SIZE_METERS,
+      worldWidthMeters: WORLD_WIDTH_METERS,
+      worldHeightMeters: WORLD_HEIGHT_METERS,
       shelves: SHELVES,
       coolers: COOLERS,
       freezers: FREEZERS,
@@ -1513,6 +1523,8 @@ function sanitizeSystemTextSegment(raw) {
 
   logEvent("runtime_started", {
     worldSizeMeters: WORLD_SIZE_METERS,
+    worldWidthMeters: WORLD_WIDTH_METERS,
+    worldHeightMeters: WORLD_HEIGHT_METERS,
     maxPlayers: MAX_PLAYERS,
     totalCharacters: TOTAL_CHARACTERS
   });

@@ -67,12 +67,21 @@ function setSettingsStatus(text, isError = false) {
   settingsStatusEl.classList.toggle("error", Boolean(text) && isError);
 }
 
-function parseIntField(inputEl, fieldName) {
+function readOptionalPatchedIntField(inputEl, fieldName, currentValue) {
   const raw = inputEl?.value?.trim() || "";
-  if (!raw) throw new Error(`${fieldName} saknas.`);
-  const num = Number(raw);
-  if (!Number.isInteger(num) || num < 1) throw new Error(`${fieldName} måste vara ett heltal >= 1.`);
-  return num;
+  const hasCurrent = Number.isFinite(Number(currentValue));
+  if (!raw) {
+    if (hasCurrent) return { changed: false, value: Number(currentValue) };
+    throw new Error(`${fieldName} saknas.`);
+  }
+  if (hasCurrent && String(Number(currentValue)) === raw) {
+    return { changed: false, value: Number(currentValue) };
+  }
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${fieldName} måste vara ett heltal >= 1.`);
+  }
+  return { changed: true, value: parsed };
 }
 
 function fmtN(value) {
@@ -316,12 +325,18 @@ function renderSettings(settings) {
   if (!layoutSelectEl) return;
   const available = Array.isArray(settings?.availableLayouts) ? settings.availableLayouts : [];
   const activeLayoutId = String(settings?.layout?.id || "");
+  const activeWarnings = Array.isArray(settings?.layout?.warnings) ? settings.layout.warnings : [];
 
   layoutSelectEl.textContent = "";
   for (const entry of available) {
     const option = document.createElement("option");
     option.value = entry.id;
-    option.textContent = `${entry.label} (${entry.worldSizeMeters}x${entry.worldSizeMeters} m)`;
+    const width = Number(entry.worldWidthMeters ?? entry.worldSizeMeters);
+    const height = Number(entry.worldHeightMeters ?? entry.worldSizeMeters);
+    const sizeText = Number.isFinite(width) && Number.isFinite(height) ? `${width}x${height} m` : "-";
+    const warningCount = Array.isArray(entry?.warnings) ? entry.warnings.length : 0;
+    const warningTag = warningCount > 0 ? " [VARNING]" : "";
+    option.textContent = `${entry.fileName || entry.label || entry.id} (${sizeText})${warningTag}`;
     layoutSelectEl.appendChild(option);
   }
   if (activeLayoutId) layoutSelectEl.value = activeLayoutId;
@@ -344,8 +359,11 @@ function renderSettings(settings) {
   }
 
   if (settingsInfoEl) {
-    const activeLabel = settings?.layout?.label || activeLayoutId || "-";
-    const activeSize = settings?.layout?.worldSizeMeters;
+    const activeLabel = settings?.layout?.fileName || settings?.layout?.label || activeLayoutId || "-";
+    const activeWidth = Number(settings?.layout?.worldWidthMeters ?? settings?.layout?.worldSizeMeters);
+    const activeHeight = Number(settings?.layout?.worldHeightMeters ?? settings?.layout?.worldSizeMeters);
+    const activeSize =
+      Number.isFinite(activeWidth) && Number.isFinite(activeHeight) ? `${activeWidth}x${activeHeight} meter` : null;
     const infoMax = Number.isFinite(Number(gameplay.maxPlayers)) ? gameplay.maxPlayers : "-";
     const infoChars = Number.isFinite(Number(gameplay.totalCharacters)) ? gameplay.totalCharacters : "-";
     const infoMinStart = Number.isFinite(Number(gameplay.minPlayersToStart)) ? gameplay.minPlayersToStart : "-";
@@ -355,8 +373,34 @@ function renderSettings(settings) {
     const infoAttackCooldown = Number.isFinite(Number(gameplay.playerAttackCooldownSeconds))
       ? gameplay.playerAttackCooldownSeconds
       : "-";
-    settingsInfoEl.textContent = `Aktiv karta: ${activeLabel}${activeSize ? ` (${activeSize}x${activeSize} meter)` : ""}. Karaktärer: ${infoChars}, max spelare: ${infoMax}, min start: ${infoMinStart}, NPC återresning: ${infoNpcRespawn}s, slag-cooldown: ${infoAttackCooldown}s. Ändringar startar om aktiva rum.`;
+    const warningText =
+      activeWarnings.length > 0
+        ? ` VARNING: ${activeWarnings.map((warning) => warning?.message || "Okänd varning").join(" | ")}`
+        : "";
+    settingsInfoEl.textContent = `Aktiv karta: ${activeLabel}${activeSize ? ` (${activeSize})` : ""}. Karaktärer: ${infoChars}, max spelare: ${infoMax}, min start: ${infoMinStart}, NPC återresning: ${infoNpcRespawn}s, slag-cooldown: ${infoAttackCooldown}s.${warningText} Ändringar startar om aktiva rum.`;
   }
+}
+
+function hasUnsavedSettingsFormChanges(referenceSettings) {
+  const settings = referenceSettings || cachedSettings || {};
+  const gameplay = settings?.gameplaySettings || {};
+  const referenceLayoutId = String(settings?.layout?.id || "");
+  const selectedLayoutId = String(layoutSelectEl?.value || "");
+  if (referenceLayoutId && selectedLayoutId && referenceLayoutId !== selectedLayoutId) return true;
+
+  const pairs = [
+    [totalCharactersInputEl, gameplay.totalCharacters],
+    [maxPlayersInputEl, gameplay.maxPlayers],
+    [minPlayersToStartInputEl, gameplay.minPlayersToStart],
+    [npcDownedRespawnSecondsInputEl, gameplay.npcDownedRespawnSeconds],
+    [playerAttackCooldownSecondsInputEl, gameplay.playerAttackCooldownSeconds]
+  ];
+  for (const [inputEl, expectedValue] of pairs) {
+    const currentRaw = inputEl?.value?.trim() || "";
+    const expectedRaw = Number.isFinite(Number(expectedValue)) ? String(Number(expectedValue)) : "";
+    if (currentRaw && expectedRaw && currentRaw !== expectedRaw) return true;
+  }
+  return false;
 }
 
 function mergeSettingsFromStats(data) {
@@ -367,12 +411,15 @@ function mergeSettingsFromStats(data) {
   const hasGameplay = gameplaySettings && typeof gameplaySettings === "object";
   if (!hasLayout && !hasGameplay) return;
   const source = cachedSettings || {};
+  const hadUnsavedChanges = activeTab === "settings" && hasUnsavedSettingsFormChanges(source);
   const availableLayouts = Array.isArray(source.availableLayouts) ? source.availableLayouts : [];
-  cachedSettings = {
+  const nextSettings = {
     layout: hasLayout ? layout : source.layout,
     gameplaySettings: hasGameplay ? gameplaySettings : source.gameplaySettings,
     availableLayouts
   };
+  cachedSettings = nextSettings;
+  if (hadUnsavedChanges) return;
   renderSettings(cachedSettings);
 }
 
@@ -470,17 +517,46 @@ async function saveSettings() {
       setSettingsStatus("Välj en karta först.", true);
       return;
     }
-    const totalCharacters = parseIntField(totalCharactersInputEl, "Antal karaktärer");
-    const maxPlayers = parseIntField(maxPlayersInputEl, "Max antal spelare");
-    const minPlayersToStart = parseIntField(minPlayersToStartInputEl, "Min spelare för spelstart");
-    const npcDownedRespawnSeconds = parseIntField(
+    const currentGameplay = cachedSettings?.gameplaySettings || {};
+    const totalCharactersPatch = readOptionalPatchedIntField(
+      totalCharactersInputEl,
+      "Antal karaktärer",
+      currentGameplay.totalCharacters
+    );
+    const maxPlayersPatch = readOptionalPatchedIntField(
+      maxPlayersInputEl,
+      "Max antal spelare",
+      currentGameplay.maxPlayers
+    );
+    const minPlayersToStartPatch = readOptionalPatchedIntField(
+      minPlayersToStartInputEl,
+      "Min spelare för spelstart",
+      currentGameplay.minPlayersToStart
+    );
+    const npcDownedRespawnSecondsPatch = readOptionalPatchedIntField(
       npcDownedRespawnSecondsInputEl,
-      "NPC återresning (sek)"
+      "NPC återresning (sek)",
+      currentGameplay.npcDownedRespawnSeconds
     );
-    const playerAttackCooldownSeconds = parseIntField(
+    const playerAttackCooldownSecondsPatch = readOptionalPatchedIntField(
       playerAttackCooldownSecondsInputEl,
-      "Spelarslag cooldown (sek)"
+      "Spelarslag cooldown (sek)",
+      currentGameplay.playerAttackCooldownSeconds
     );
+
+    const totalCharacters = totalCharactersPatch.value;
+    const maxPlayers = maxPlayersPatch.value;
+    const minPlayersToStart = minPlayersToStartPatch.value;
+    const npcDownedRespawnSeconds = npcDownedRespawnSecondsPatch.value;
+    const playerAttackCooldownSeconds = playerAttackCooldownSecondsPatch.value;
+
+    const gameplayChanged =
+      totalCharactersPatch.changed ||
+      maxPlayersPatch.changed ||
+      minPlayersToStartPatch.changed ||
+      npcDownedRespawnSecondsPatch.changed ||
+      playerAttackCooldownSecondsPatch.changed;
+
     if (maxPlayers >= totalCharacters) {
       setSettingsStatus("Max antal spelare måste vara mindre än antal karaktärer.", true);
       return;
@@ -493,14 +569,17 @@ async function saveSettings() {
       setSettingsStatus("Min spelare för spelstart kan inte vara större än max antal spelare.", true);
       return;
     }
-    if (npcDownedRespawnSeconds < 1) {
-      setSettingsStatus("NPC återresning måste vara minst 1 sekund.", true);
-      return;
+
+    const payload = {};
+    payload.layoutId = layoutId;
+    if (gameplayChanged) {
+      payload.totalCharacters = totalCharacters;
+      payload.maxPlayers = maxPlayers;
+      payload.minPlayersToStart = minPlayersToStart;
+      payload.npcDownedRespawnSeconds = npcDownedRespawnSeconds;
+      payload.playerAttackCooldownSeconds = playerAttackCooldownSeconds;
     }
-    if (playerAttackCooldownSeconds < 1) {
-      setSettingsStatus("Spelarslag cooldown måste vara minst 1 sekund.", true);
-      return;
-    }
+
     const url = buildDebugUrl("/api/debug/settings", token);
     const res = await fetch(url, {
       method: "POST",
@@ -508,14 +587,7 @@ async function saveSettings() {
         Accept: "application/json",
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        layoutId,
-        totalCharacters,
-        maxPlayers,
-        minPlayersToStart,
-        npcDownedRespawnSeconds,
-        playerAttackCooldownSeconds
-      })
+      body: JSON.stringify(payload)
     });
     if (res.status === 401) {
       setSettingsStatus("Fel token för settings.", true);
@@ -535,7 +607,8 @@ async function saveSettings() {
     const data = await res.json();
     cachedSettings = data;
     renderSettings(data);
-    setSettingsStatus("Settings sparade. Rum har startats om.");
+    const activeName = data?.layout?.fileName || data?.layout?.label || data?.layout?.id || "-";
+    setSettingsStatus(`Settings sparade. Aktiv karta: ${activeName}. Rum har startats om.`);
     refresh();
   } catch (error) {
     const message = error?.message || "";

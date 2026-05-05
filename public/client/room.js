@@ -3,6 +3,8 @@ import { seededRandom } from "./utils.js";
 
 const WALL_HEIGHT = 5.0;
 const DEFAULT_WORLD_SIZE_METERS = 50;
+const DEFAULT_WORLD_WIDTH_METERS = DEFAULT_WORLD_SIZE_METERS;
+const DEFAULT_WORLD_HEIGHT_METERS = DEFAULT_WORLD_SIZE_METERS;
 const SHELF_WIDTH = 1.0;
 const SHELF_DEPTH = 6.0;
 const SHELF_HEIGHT = 2.0;
@@ -91,7 +93,8 @@ export function createRoomSystem({ scene, renderer }) {
   const coolerFrontMaterials = [];
   const freezerLidMaterials = [];
   const fluorescentUnits = [];
-  let currentPlaneSizeMeters = 30;
+  let currentPlaneWidthMeters = 30;
+  let currentPlaneHeightMeters = 30;
 
   function hasImageData(texture) {
     const image = texture?.image;
@@ -118,7 +121,8 @@ export function createRoomSystem({ scene, renderer }) {
   const blinkRng = seededRandom(20260501);
   const textureStates = new Map();
 
-  let builtWorldSizeMeters = null;
+  let builtWorldWidthMeters = null;
+  let builtWorldHeightMeters = null;
   let builtFixturesSignature = "";
 
   function createTextureState(spec) {
@@ -235,20 +239,21 @@ export function createRoomSystem({ scene, renderer }) {
     return map;
   }
 
-  function createRandomizedSurfaceMap({ state, planeSizeMeters, tileSizeMeters, rng }) {
+  function createRandomizedSurfaceMap({ state, planeWidthMeters, planeHeightMeters, tileSizeMeters, rng }) {
     if (!state.available || !hasImageData(state.texture)) return null;
     const image = state.texture?.image;
     if (!image || typeof document === "undefined") return null;
-    const tileCount = Math.max(1, Math.ceil(planeSizeMeters / tileSizeMeters));
+    const tileCountX = Math.max(1, Math.ceil(planeWidthMeters / tileSizeMeters));
+    const tileCountY = Math.max(1, Math.ceil(planeHeightMeters / tileSizeMeters));
     const canvas = document.createElement("canvas");
-    canvas.width = state.cellWidth * tileCount;
-    canvas.height = state.cellHeight * tileCount;
+    canvas.width = state.cellWidth * tileCountX;
+    canvas.height = state.cellHeight * tileCountY;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     ctx.imageSmoothingEnabled = false;
 
-    for (let y = 0; y < tileCount; y += 1) {
-      for (let x = 0; x < tileCount; x += 1) {
+    for (let y = 0; y < tileCountY; y += 1) {
+      for (let x = 0; x < tileCountX; x += 1) {
         const variantSeed = chooseVariantSeed(rng);
         const variantIndex = variantIndexFromSeed(variantSeed, state.variantCount);
         const col = variantIndex % state.variantsX;
@@ -289,7 +294,8 @@ export function createRoomSystem({ scene, renderer }) {
 
     const nextMap = createRandomizedSurfaceMap({
       state,
-      planeSizeMeters: currentPlaneSizeMeters,
+      planeWidthMeters: currentPlaneWidthMeters,
+      planeHeightMeters: currentPlaneHeightMeters,
       tileSizeMeters,
       rng
     });
@@ -596,21 +602,25 @@ export function createRoomSystem({ scene, renderer }) {
     roomRoot.add(group);
   }
 
-  function createFluorescentGrid(halfWorldSize) {
+  function createFluorescentGrid(halfWorldWidth, halfWorldHeight) {
     fluorescentUnits.length = 0;
     const ceilingY = WALL_HEIGHT - 0.2;
-    const edgeMargin = Math.max(2.8, halfWorldSize * 0.15);
-    const minCoord = -halfWorldSize + edgeMargin;
-    const maxCoord = halfWorldSize - edgeMargin;
-    const xStep = FLUORESCENT_COLS > 1 ? (maxCoord - minCoord) / (FLUORESCENT_COLS - 1) : 0;
-    const zStep = FLUORESCENT_ROWS > 1 ? (maxCoord - minCoord) / (FLUORESCENT_ROWS - 1) : 0;
-    const tubeLength = Math.max(3.6, Math.min(5.4, halfWorldSize * 0.24));
+    const edgeMarginX = Math.max(2.2, halfWorldWidth * 0.12);
+    const edgeMarginZ = Math.max(2.2, halfWorldHeight * 0.12);
+    const minX = -halfWorldWidth + edgeMarginX;
+    const maxX = halfWorldWidth - edgeMarginX;
+    const minZ = -halfWorldHeight + edgeMarginZ;
+    const maxZ = halfWorldHeight - edgeMarginZ;
+    const xStep = FLUORESCENT_COLS > 1 ? (maxX - minX) / (FLUORESCENT_COLS - 1) : 0;
+    const zStep = FLUORESCENT_ROWS > 1 ? (maxZ - minZ) / (FLUORESCENT_ROWS - 1) : 0;
+    const tubeLength = Math.max(3.2, Math.min(5.4, Math.min(halfWorldWidth, halfWorldHeight) * 0.28));
+    const lightDistance = Math.max(halfWorldWidth, halfWorldHeight) * 1.06;
 
     for (let row = 0; row < FLUORESCENT_ROWS; row += 1) {
       for (let col = 0; col < FLUORESCENT_COLS; col += 1) {
         const index = row * FLUORESCENT_COLS + col;
-        const x = minCoord + col * xStep;
-        const z = minCoord + row * zStep;
+        const x = minX + col * xStep;
+        const z = minZ + row * zStep;
         const isBlinker = index === FLUORESCENT_BLINK_INDEX;
 
         const fixture = new THREE.Group();
@@ -634,7 +644,7 @@ export function createRoomSystem({ scene, renderer }) {
         diffuser.position.y = -0.06;
         fixture.add(diffuser);
 
-        const glow = new THREE.PointLight(0xeef7ff, 1.4, halfWorldSize * 1.06, 2);
+        const glow = new THREE.PointLight(0xeef7ff, 1.4, lightDistance, 2);
         glow.position.y = -0.24;
         fixture.add(glow);
 
@@ -681,22 +691,28 @@ export function createRoomSystem({ scene, renderer }) {
     }
   }
 
-  function buildRoomGeometry(worldSizeMeters, shelves, coolers, freezers) {
-    const halfWorldSize = worldSizeMeters * 0.5;
+  function buildRoomGeometry(worldWidthMeters, worldHeightMeters, shelves, coolers, freezers) {
+    const halfWorldWidth = worldWidthMeters * 0.5;
+    const halfWorldHeight = worldHeightMeters * 0.5;
     const wallThickness = 1;
     const wallSegmentsPerSide = 4;
-    const wallCenterOffset = halfWorldSize + wallThickness * 0.5;
-    const wallSpan = worldSizeMeters + wallThickness;
-    const wallSegmentSpan = wallSpan / wallSegmentsPerSide;
-    const planeSize = wallSpan + 5;
-    currentPlaneSizeMeters = planeSize;
+    const wallCenterOffsetX = halfWorldWidth + wallThickness * 0.5;
+    const wallCenterOffsetZ = halfWorldHeight + wallThickness * 0.5;
+    const wallSpanX = worldWidthMeters + wallThickness;
+    const wallSpanZ = worldHeightMeters + wallThickness;
+    const wallSegmentSpanX = wallSpanX / wallSegmentsPerSide;
+    const wallSegmentSpanZ = wallSpanZ / wallSegmentsPerSide;
+    const planeWidth = wallSpanX + 5;
+    const planeHeight = wallSpanZ + 5;
+    currentPlaneWidthMeters = planeWidth;
+    currentPlaneHeightMeters = planeHeight;
 
     clearRoomRootGeometry();
     floor.geometry.dispose();
     ceiling.geometry.dispose();
 
-    floor.geometry = new THREE.PlaneGeometry(planeSize, planeSize);
-    ceiling.geometry = new THREE.PlaneGeometry(planeSize, planeSize);
+    floor.geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+    ceiling.geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
     ceiling.position.y = WALL_HEIGHT;
 
     roomRoot.add(floor);
@@ -704,17 +720,18 @@ export function createRoomSystem({ scene, renderer }) {
     refreshFloorAndCeilingTextures();
 
     for (let i = 0; i < wallSegmentsPerSide; i += 1) {
-      const offset = -wallSpan / 2 + wallSegmentSpan * (i + 0.5);
-      createWall(offset, -wallCenterOffset, wallSegmentSpan, wallThickness);
-      createWall(offset, wallCenterOffset, wallSegmentSpan, wallThickness);
-      createWall(-wallCenterOffset, offset, wallThickness, wallSegmentSpan);
-      createWall(wallCenterOffset, offset, wallThickness, wallSegmentSpan);
+      const xOffset = -wallSpanX / 2 + wallSegmentSpanX * (i + 0.5);
+      const zOffset = -wallSpanZ / 2 + wallSegmentSpanZ * (i + 0.5);
+      createWall(xOffset, -wallCenterOffsetZ, wallSegmentSpanX, wallThickness);
+      createWall(xOffset, wallCenterOffsetZ, wallSegmentSpanX, wallThickness);
+      createWall(-wallCenterOffsetX, zOffset, wallThickness, wallSegmentSpanZ);
+      createWall(wallCenterOffsetX, zOffset, wallThickness, wallSegmentSpanZ);
     }
 
     for (const shelf of shelves) createShelf(shelf);
     for (const cooler of coolers) createCooler(cooler);
     for (const freezer of freezers) createFreezer(freezer);
-    createFluorescentGrid(halfWorldSize);
+    createFluorescentGrid(halfWorldWidth, halfWorldHeight);
   }
 
   function normalizeFixtures(fixtures, fallback) {
@@ -736,11 +753,19 @@ export function createRoomSystem({ scene, renderer }) {
       .join("|");
   }
 
-  function syncFromWorld({ worldSizeMeters, shelves, coolers, freezers }) {
-    const normalizedWorldSize =
+  function syncFromWorld({ worldSizeMeters, worldWidthMeters, worldHeightMeters, shelves, coolers, freezers }) {
+    const legacyWorldSize =
       typeof worldSizeMeters === "number" && Number.isFinite(worldSizeMeters)
         ? worldSizeMeters
         : DEFAULT_WORLD_SIZE_METERS;
+    const normalizedWorldWidth =
+      typeof worldWidthMeters === "number" && Number.isFinite(worldWidthMeters)
+        ? worldWidthMeters
+        : legacyWorldSize;
+    const normalizedWorldHeight =
+      typeof worldHeightMeters === "number" && Number.isFinite(worldHeightMeters)
+        ? worldHeightMeters
+        : legacyWorldSize;
     const normalizedShelves = normalizeFixtures(shelves, DEFAULT_SHELVES);
     const normalizedCoolers = normalizeFixtures(coolers, DEFAULT_COOLERS);
     const normalizedFreezers = normalizeFixtures(freezers, DEFAULT_FREEZERS);
@@ -749,16 +774,22 @@ export function createRoomSystem({ scene, renderer }) {
       fixtureSignature(normalizedCoolers),
       fixtureSignature(normalizedFreezers)
     ].join("||");
-    const shouldRebuild = builtWorldSizeMeters !== normalizedWorldSize || builtFixturesSignature !== nextSignature;
+    const shouldRebuild =
+      builtWorldWidthMeters !== normalizedWorldWidth ||
+      builtWorldHeightMeters !== normalizedWorldHeight ||
+      builtFixturesSignature !== nextSignature;
     if (!shouldRebuild) return;
 
-    buildRoomGeometry(normalizedWorldSize, normalizedShelves, normalizedCoolers, normalizedFreezers);
-    builtWorldSizeMeters = normalizedWorldSize;
+    buildRoomGeometry(normalizedWorldWidth, normalizedWorldHeight, normalizedShelves, normalizedCoolers, normalizedFreezers);
+    builtWorldWidthMeters = normalizedWorldWidth;
+    builtWorldHeightMeters = normalizedWorldHeight;
     builtFixturesSignature = nextSignature;
   }
 
   syncFromWorld({
     worldSizeMeters: DEFAULT_WORLD_SIZE_METERS,
+    worldWidthMeters: DEFAULT_WORLD_WIDTH_METERS,
+    worldHeightMeters: DEFAULT_WORLD_HEIGHT_METERS,
     shelves: DEFAULT_SHELVES,
     coolers: DEFAULT_COOLERS,
     freezers: DEFAULT_FREEZERS
