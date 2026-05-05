@@ -1,8 +1,5 @@
 export function normalizeAngle(a) {
-  let out = a;
-  while (out > Math.PI) out -= Math.PI * 2;
-  while (out < -Math.PI) out += Math.PI * 2;
-  return out;
+  return ((a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
 }
 
 export function canAttack({ attacker, now, cooldownMs }) {

@@ -3,10 +3,24 @@ export function clamp01(v) {
 }
 
 export function normalizeAngle(angle) {
-  let out = angle;
-  while (out > Math.PI) out -= Math.PI * 2;
-  while (out < -Math.PI) out += Math.PI * 2;
-  return out;
+  return ((angle + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+}
+
+export function hashString(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+export function colorForName(name) {
+  const h = hashString(String(name || "").toLowerCase());
+  const hue = h % 360;
+  const sat = 60 + ((h >>> 9) % 20);
+  const light = 62 + ((h >>> 16) % 10);
+  return `hsl(${hue} ${sat}% ${light}%)`;
 }
 
 export function seededRandom(seed) {

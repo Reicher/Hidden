@@ -13,85 +13,34 @@ import {
 import { GAME_CREDITS_TEXT } from "./client/about.js";
 import { createInputController } from "./client/inputControls.js";
 import { handleSocketMessage } from "./client/socketMessages.js";
-
-const canvas = document.getElementById("game");
-const screenRootEl = document.getElementById("screenRoot");
-const connectViewEl = document.getElementById("connectView");
-const lobbyViewEl = document.getElementById("lobbyView");
-const connectErrorEl = document.getElementById("connectError");
-const roomInfoEl = document.getElementById("roomInfo");
-const nameInputEl = document.getElementById("nameInput");
-const connectBtnEl = document.getElementById("connectBtn");
-const createPrivateRoomBtnEl = document.getElementById("createPrivateRoomBtn");
-const scoreBodyEl = document.getElementById("scoreBody");
-const chatMessagesEl = document.getElementById("chatMessages");
-const chatInputEl = document.getElementById("chatInput");
-const chatSendBtnEl = document.getElementById("chatSendBtn");
-const playBtnEl = document.getElementById("playBtn");
-const lobbySettingsBtnEl = document.getElementById("lobbySettingsBtn");
-const lobbyMenuBackdropEl = document.getElementById("lobbyMenuBackdrop");
-const lobbyMenuSettingsBtnEl = document.getElementById("lobbyMenuSettingsBtn");
-const lobbyMenuCreditsBtnEl = document.getElementById("lobbyMenuCreditsBtn");
-const lobbyMenuCloseBtnEl = document.getElementById("lobbyMenuCloseBtn");
-const lobbyMatchStatusEl = document.getElementById("lobbyMatchStatus");
-const lobbyMatchStatusTitleEl = document.getElementById("lobbyMatchStatusTitle");
-const countdownOverlayEl = document.getElementById("countdownOverlay");
-const countdownTextEl = document.getElementById("countdownText");
-const countdownCharacterCanvasEl = document.getElementById("countdownCharacterCanvas");
-const countdownCharacterMetaEl = document.getElementById("countdownCharacterMeta");
-const countdownControlsTextEl = document.getElementById("countdownControlsText");
-const lobbyDialogBackdropEl = document.getElementById("lobbyDialogBackdrop");
-const lobbyDialogTitleEl = document.getElementById("lobbyDialogTitle");
-const lobbyDialogTextEl = document.getElementById("lobbyDialogText");
-const settingsPanelEl = document.getElementById("settingsPanel");
-const mobileControlsModeBtnEl = document.getElementById("mobileControlsModeBtn");
-const musicVolumeInputEl = document.getElementById("musicVolumeInput");
-const musicMuteBtnEl = document.getElementById("musicMuteBtn");
-const sfxVolumeInputEl = document.getElementById("sfxVolumeInput");
-const sfxMuteBtnEl = document.getElementById("sfxMuteBtn");
-const lobbyDialogCloseBtnEl = document.getElementById("lobbyDialogCloseBtn");
-const gameHudEl = document.getElementById("gameHud");
-const crosshairHudEl = document.getElementById("crosshairHud");
-const crosshairCooldownArcEl = document.getElementById("crosshairCooldownArc");
-const aliveOthersTextEl = document.getElementById("aliveOthersText");
-const knockdownToastEl = document.getElementById("knockdownToast");
-const winOverlayEl = document.getElementById("winOverlay");
-const winTitleEl = document.getElementById("winTitle");
-const winCountdownTextEl = document.getElementById("winCountdownText");
-const winLobbyBtnEl = document.getElementById("winLobbyBtn");
-const gameMenuBtnEl = document.getElementById("gameMenuBtn");
-const gameMenuBackdropEl = document.getElementById("gameMenuBackdrop");
-const gameMenuSettingsBtnEl = document.getElementById("gameMenuSettingsBtn");
-const gameMenuCreditsBtnEl = document.getElementById("gameMenuCreditsBtn");
-const gameMenuCloseBtnEl = document.getElementById("gameMenuCloseBtn");
-const gameMenuLobbyBtnEl = document.getElementById("gameMenuLobbyBtn");
-const gameChatNoticeEl = document.getElementById("gameChatNotice");
-const gameChatBoxEl = document.getElementById("gameChatBox");
-const gameChatMessagesEl = document.getElementById("gameChatMessages");
-const gameChatInputRowEl = document.getElementById("gameChatInputRow");
-const gameChatInputEl = document.getElementById("gameChatInput");
-const mobileControlsEl = document.getElementById("mobileControls");
-const mobileJoystickBaseEl = document.getElementById("mobileJoystickBase");
-const mobileJoystickKnobEl = document.getElementById("mobileJoystickKnob");
-const mobileLookPadEl = document.getElementById("mobileLookPad");
-const mobileSprintBtnEl = document.getElementById("mobileSprintBtn");
-const mobileAttackBtnEl = document.getElementById("mobileAttackBtn");
-const downedOverlayEl = document.getElementById("downedOverlay");
-const downedByTextEl = document.getElementById("downedByText");
-const downedCountdownTextEl = document.getElementById("downedCountdownText");
-const downedLobbyBtnEl = document.getElementById("downedLobbyBtn");
-const downedChatBtnEl = document.getElementById("downedChatBtn");
-const downedSpectateBtnEl = document.getElementById("downedSpectateBtn");
-const spectatorHudEl = document.getElementById("spectatorHud");
-const spectatorTargetTextEl = document.getElementById("spectatorTargetText");
-const spectatorPrevBtnEl = document.getElementById("spectatorPrevBtn");
-const spectatorNextBtnEl = document.getElementById("spectatorNextBtn");
-const spectatorLobbyBtnEl = document.getElementById("spectatorLobbyBtn");
-const spectatorChatBtnEl = document.getElementById("spectatorChatBtn");
+import { normalizeAngle, hashString, colorForName } from "./client/utils.js";
+import { renderScoreboard as renderScoreboardFn } from "./client/scoreboard.js";
+import {
+  clampVolume,
+  normalizeAudioSettings,
+  loadAudioSettings,
+  persistAudioSettings
+} from "./client/audioSettings.js";
+import {
+  canvas, screenRootEl,
+  connectViewEl, connectErrorEl, roomInfoEl, nameInputEl, connectBtnEl, createPrivateRoomBtnEl,
+  lobbyViewEl, scoreBodyEl, chatMessagesEl, chatInputEl, chatSendBtnEl, playBtnEl,
+  lobbyMatchStatusEl, lobbyMatchStatusTitleEl,
+  lobbySettingsBtnEl, lobbyMenuBackdropEl, lobbyMenuSettingsBtnEl, lobbyMenuCreditsBtnEl, lobbyMenuCloseBtnEl,
+  lobbyDialogBackdropEl, lobbyDialogTitleEl, lobbyDialogTextEl, lobbyDialogCloseBtnEl, settingsPanelEl,
+  countdownOverlayEl, countdownTextEl, countdownCharacterCanvasEl, countdownCharacterMetaEl, countdownControlsTextEl,
+  gameHudEl, crosshairHudEl, crosshairCooldownArcEl, aliveOthersTextEl, knockdownToastEl,
+  gameMenuBtnEl, gameMenuBackdropEl, gameMenuSettingsBtnEl, gameMenuCreditsBtnEl, gameMenuCloseBtnEl, gameMenuLobbyBtnEl,
+  gameChatNoticeEl, gameChatBoxEl, gameChatMessagesEl, gameChatInputRowEl, gameChatInputEl,
+  mobileControlsModeBtnEl, musicVolumeInputEl, musicMuteBtnEl, sfxVolumeInputEl, sfxMuteBtnEl,
+  mobileControlsEl, mobileJoystickBaseEl, mobileJoystickKnobEl, mobileLookPadEl, mobileSprintBtnEl, mobileAttackBtnEl,
+  downedOverlayEl, downedByTextEl, downedCountdownTextEl, downedLobbyBtnEl, downedChatBtnEl, downedSpectateBtnEl,
+  winOverlayEl, winTitleEl, winCountdownTextEl, winLobbyBtnEl,
+  spectatorHudEl, spectatorTargetTextEl, spectatorPrevBtnEl, spectatorNextBtnEl, spectatorLobbyBtnEl, spectatorChatBtnEl
+} from "./client/domRefs.js";
 
 const PLAYER_NAME_KEY = "hidden_player_name";
 const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
-const AUDIO_SETTINGS_KEY = "hidden_audio_settings";
 const RESERVED_PATH_CODES = new Set(["debug"]);
 
 const sceneSystem = createSceneSystem(canvas);
@@ -173,23 +122,6 @@ const MOBILE_CONTROLS_TEXT =
   "Mobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta.";
 let lastCountdownPreviewCharacterId = null;
 
-function hashString(str) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i += 1) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-function colorForName(name) {
-  const h = hashString(String(name || "").toLowerCase());
-  const hue = h % 360;
-  const sat = 60 + ((h >>> 9) % 20);
-  const light = 62 + ((h >>> 16) % 10);
-  return `hsl(${hue} ${sat}% ${light}%)`;
-}
-
 const chatUi = createChatUi({
   lobbyMessagesEl: chatMessagesEl,
   gameMessagesEl: gameChatMessagesEl,
@@ -200,13 +132,6 @@ const chatUi = createChatUi({
   },
   maxGameLines: GAME_CHAT_MAX_LINES
 });
-
-function normalizeAngle(angle) {
-  let out = angle;
-  while (out > Math.PI) out -= Math.PI * 2;
-  while (out < -Math.PI) out += Math.PI * 2;
-  return out;
-}
 
 function clampPitch(value) {
   return Math.max(-1.2, Math.min(1.2, value));
@@ -317,36 +242,6 @@ function mobileControlsLabel(pref) {
   if (pref === "on") return "På";
   if (pref === "off") return "AV";
   return "Auto";
-}
-
-function clampVolume(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return 100;
-  return Math.max(0, Math.min(100, Math.round(n)));
-}
-
-function normalizeAudioSettings(value) {
-  const src = value && typeof value === "object" ? value : {};
-  return {
-    musicVolume: clampVolume(src.musicVolume ?? 80),
-    musicMuted: Boolean(src.musicMuted),
-    sfxVolume: clampVolume(src.sfxVolume ?? 90),
-    sfxMuted: Boolean(src.sfxMuted)
-  };
-}
-
-function loadAudioSettings() {
-  try {
-    const raw = localStorage.getItem(AUDIO_SETTINGS_KEY);
-    if (!raw) return normalizeAudioSettings(null);
-    return normalizeAudioSettings(JSON.parse(raw));
-  } catch {
-    return normalizeAudioSettings(null);
-  }
-}
-
-function persistAudioSettings() {
-  localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(audioSettings));
 }
 
 function refreshAudioSettingsUi() {
@@ -802,60 +697,7 @@ function setCountdownTextFromSession(state) {
 function renderScoreboard(players) {
   if (!scoreBodyEl) return;
   lobbyScoreboard = Array.isArray(players) ? players.slice() : [];
-  scoreBodyEl.textContent = "";
-  if (!Array.isArray(players)) {
-    updateLobbyMatchStatus();
-    return;
-  }
-  for (const p of players) {
-    const tr = document.createElement("tr");
-
-    const nameCell = document.createElement("td");
-    nameCell.className = "name-cell";
-    const nameCellInner = document.createElement("span");
-    nameCellInner.className = "name-cell-inner";
-    const readyLamp = document.createElement("span");
-    readyLamp.className = `ready-lamp name-ready-lamp ${p.ready ? "on" : "off"}`;
-    readyLamp.setAttribute("aria-hidden", "true");
-    nameCellInner.appendChild(readyLamp);
-    const nameLabel = document.createElement("span");
-    nameLabel.className = "name-label";
-    nameLabel.textContent = p.name || "-";
-    nameLabel.style.color = colorForName(p.name);
-    nameCellInner.appendChild(nameLabel);
-    nameCell.appendChild(nameCellInner);
-    tr.appendChild(nameCell);
-
-    const winsCell = document.createElement("td");
-    winsCell.textContent = String(p.wins ?? 0);
-    tr.appendChild(winsCell);
-
-    const knockdownsCell = document.createElement("td");
-    knockdownsCell.textContent = String(p.knockdowns ?? 0);
-    tr.appendChild(knockdownsCell);
-
-    const streakCell = document.createElement("td");
-    streakCell.textContent = String(p.streak ?? 0);
-    tr.appendChild(streakCell);
-
-    const downedCell = document.createElement("td");
-    downedCell.textContent = String(p.downed ?? 0);
-    tr.appendChild(downedCell);
-
-    const innocentsCell = document.createElement("td");
-    innocentsCell.textContent = String(p.innocents ?? 0);
-    tr.appendChild(innocentsCell);
-
-    const statusCell = document.createElement("td");
-    statusCell.className = "status-cell";
-    const statusText = document.createElement("span");
-    statusText.className = "status-label";
-    statusText.textContent = p.status || "-";
-    statusCell.appendChild(statusText);
-    tr.appendChild(statusCell);
-
-    scoreBodyEl.appendChild(tr);
-  }
+  renderScoreboardFn(scoreBodyEl, players, colorForName);
   updateLobbyMatchStatus();
 }
 
@@ -1250,22 +1092,22 @@ lobbyDialogBackdropEl?.addEventListener("click", (event) => {
 });
 musicVolumeInputEl?.addEventListener("input", () => {
   audioSettings.musicVolume = clampVolume(musicVolumeInputEl.value);
-  persistAudioSettings();
+  persistAudioSettings(audioSettings);
   refreshAudioSettingsUi();
 });
 musicMuteBtnEl?.addEventListener("click", () => {
   audioSettings.musicMuted = !audioSettings.musicMuted;
-  persistAudioSettings();
+  persistAudioSettings(audioSettings);
   refreshAudioSettingsUi();
 });
 sfxVolumeInputEl?.addEventListener("input", () => {
   audioSettings.sfxVolume = clampVolume(sfxVolumeInputEl.value);
-  persistAudioSettings();
+  persistAudioSettings(audioSettings);
   refreshAudioSettingsUi();
 });
 sfxMuteBtnEl?.addEventListener("click", () => {
   audioSettings.sfxMuted = !audioSettings.sfxMuted;
-  persistAudioSettings();
+  persistAudioSettings(audioSettings);
   refreshAudioSettingsUi();
 });
 mobileControlsModeBtnEl?.addEventListener("click", () => {

@@ -1,6 +1,5 @@
-import { fileURLToPath } from "node:url";
 import { readdirSync, statSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
 import { loadLayoutFromPng } from "./layoutFromPng.js";
 
 function envInt(name, fallback) {
@@ -187,7 +186,7 @@ function freezeFixture(fixture) {
   return Object.freeze(fixture);
 }
 
-const HERE = dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 export const SHELF_WIDTH = 1.0;
 export const SHELF_DEPTH = 6.0;
 export const SHELF_HEIGHT = 2.0;

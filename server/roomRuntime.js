@@ -37,6 +37,16 @@ import {
 } from "./config.js";
 import { normalizeAngle, canAttack, markAttack, collectVictimIds } from "./runtime/combat.js";
 import { rawSizeBytes, rawToText } from "./runtime/net.js";
+import { obstacleHalfExtents } from "./runtime/physics.js";
+import { createMovementSystem } from "./runtime/ai.js";
+import {
+  createSpectatorSystem,
+  SPECTATOR_CYCLE_NEXT,
+  SPECTATOR_CYCLE_PREV
+} from "./runtime/spectator.js";
+import { createSession } from "./runtime/session.js";
+import { createRoomLogger, createInvariantChecker } from "./runtime/logger.js";
+import { createCharacterSystem } from "./runtime/characters.js";
 
 const NAME_MIN_LEN = 2;
 const NAME_MAX_LEN = 20;
@@ -45,19 +55,14 @@ const CHAT_HISTORY_LIMIT = 80;
 const ROUND_COUNTDOWN_SECONDS = 10;
 const SUPERMAJORITY_READY_TIMEOUT_SECONDS = 30;
 const SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS = 10;
-const PERMANENT_DOWNED_UNTIL = Number.MAX_SAFE_INTEGER;
 const MAX_LOOK_PITCH_RAD = 1.2;
 const MATCH_END_RETURN_TO_LOBBY_MS = 10000;
 const COUNTDOWN_RECONNECT_GRACE_MS = 7000;
-const SPECTATOR_CYCLE_NEXT = 1;
-const SPECTATOR_CYCLE_PREV = -1;
 
 export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = null, onStatsEvent = null }) {
   const sessions = new Map();
   const sockets = new Map();
-  const characters = [];
   const chatHistory = [];
-  const invariantLastLogAt = new Map();
   let cachedScoreboard = [];
   let nextScoreboardRefreshAt = 0;
   let lobbyCountdown = null;
@@ -73,115 +78,30 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
     return min + Math.random() * (max - min);
   }
 
-  const SPAWN_OBSTACLES = [...SHELVES, ...COOLERS, ...FREEZERS];
-
-  function isSpawnBlocked(x, z, margin = CHARACTER_RADIUS + 0.14) {
-    for (const obstacle of SPAWN_OBSTACLES) {
-      const { halfW, halfD } = obstacleHalfExtents(obstacle);
-      const minX = obstacle.x - halfW - margin;
-      const maxX = obstacle.x + halfW + margin;
-      const minZ = obstacle.z - halfD - margin;
-      const maxZ = obstacle.z + halfD + margin;
-      if (x >= minX && x <= maxX && z >= minZ && z <= maxZ) return true;
-    }
-    return false;
-  }
-
-  function randomSpawn() {
-    const minX = -WORLD_WIDTH_METERS * 0.5 + 0.5;
-    const maxX = WORLD_WIDTH_METERS * 0.5 - 0.5;
-    const minZ = -WORLD_HEIGHT_METERS * 0.5 + 0.5;
-    const maxZ = WORLD_HEIGHT_METERS * 0.5 - 0.5;
-    for (let i = 0; i < 180; i += 1) {
-      const x = rand(minX, maxX);
-      const z = rand(minZ, maxZ);
-      if (isSpawnBlocked(x, z)) continue;
-      return { x, z, yaw: rand(-Math.PI, Math.PI) };
-    }
-
-    const step = Math.max(0.6, CHARACTER_RADIUS * 2.4);
-    for (let x = minX; x <= maxX; x += step) {
-      for (let z = minZ; z <= maxZ; z += step) {
-        if (isSpawnBlocked(x, z)) continue;
-        return { x, z, yaw: rand(-Math.PI, Math.PI) };
-      }
-    }
-
-    return { x: 0, z: 0, yaw: rand(-Math.PI, Math.PI) };
-  }
-
-  function createCharacter(id) {
-    const p = randomSpawn();
-    return {
-      id,
-      x: p.x,
-      z: p.z,
-      yaw: p.yaw,
-      pitch: 0,
-      controllerType: "AI",
-      ownerSessionId: null,
-      everPlayerControlled: false,
-      lastAttackAt: 0,
-      downedUntil: 0,
-      fallAwayX: 0,
-      fallAwayZ: 1,
-      ai: {
-        mode: "move",
-        desiredYaw: p.yaw,
-        nextDecisionAt: Date.now() + rand(AI_DECISION_MS_MIN, AI_DECISION_MS_MAX),
-        desiredPitch: rand(-0.28, 0.28),
-        nextPitchDecisionAt: Date.now() + rand(320, 980)
-      }
-    };
-  }
-
-  function clampPitch(value) {
-    return Math.max(-MAX_LOOK_PITCH_RAD, Math.min(MAX_LOOK_PITCH_RAD, value));
-  }
-
-  for (let i = 0; i < TOTAL_CHARACTERS; i += 1) characters.push(createCharacter(i));
-
-  function isCharacterDowned(character, now) {
-    return Boolean(character) && now < (character.downedUntil || 0);
-  }
-
-  function normalizeHorizontalVector(x, z, fallbackX = 0, fallbackZ = 1) {
-    const len = Math.hypot(x, z);
-    if (len < 0.0001) return { x: fallbackX, z: fallbackZ };
-    return { x: x / len, z: z / len };
-  }
-
-  function computeFallAwayVector(attacker, victim) {
-    if (attacker && victim) {
-      const rawAwayX = victim.x - attacker.x;
-      const rawAwayZ = victim.z - attacker.z;
-      const normalized = normalizeHorizontalVector(
-        rawAwayX,
-        rawAwayZ,
-        Math.sin(victim.yaw),
-        Math.cos(victim.yaw)
-      );
-      return normalized;
-    }
-    return normalizeHorizontalVector(Math.sin(victim?.yaw || 0), Math.cos(victim?.yaw || 0), 0, 1);
-  }
-
-  function downCharacter(victim, now, fallAwayX, fallAwayZ) {
-    const shouldStayDownPermanentlyInMatch = activeMatchStartedAt > 0 && victim.everPlayerControlled;
-    victim.downedUntil = shouldStayDownPermanentlyInMatch ? PERMANENT_DOWNED_UNTIL : now + NPC_DOWNED_RESPAWN_MS;
-    victim.fallAwayX = fallAwayX;
-    victim.fallAwayZ = fallAwayZ;
-    victim.lastAttackAt = now;
-    victim.ai.mode = "stop";
-    victim.ai.desiredYaw = victim.yaw;
-    victim.ai.nextDecisionAt = victim.downedUntil + rand(120, 360);
-  }
-
-  function clearDownedState(character) {
-    character.downedUntil = 0;
-    character.fallAwayX = 0;
-    character.fallAwayZ = 1;
-  }
+  const charSystem = createCharacterSystem({
+    totalCharacters: TOTAL_CHARACTERS,
+    worldWidthMeters: WORLD_WIDTH_METERS,
+    worldHeightMeters: WORLD_HEIGHT_METERS,
+    obstacles: [...SHELVES, ...COOLERS, ...FREEZERS],
+    characterRadius: CHARACTER_RADIUS,
+    aiDecisionMsMin: AI_DECISION_MS_MIN,
+    aiDecisionMsMax: AI_DECISION_MS_MAX,
+    npcDownedRespawnMs: NPC_DOWNED_RESPAWN_MS,
+    permanentDownedUntil: Number.MAX_SAFE_INTEGER,
+    maxLookPitchRad: MAX_LOOK_PITCH_RAD,
+    getActiveMatchStartedAt: () => activeMatchStartedAt,
+    rand
+  });
+  const characters = charSystem.characters;
+  const {
+    clampPitch,
+    isCharacterDowned,
+    clearDownedState,
+    computeFallAwayVector,
+    downCharacter,
+    releaseOwnedCharacter,
+    resetArenaForNextRound
+  } = charSystem;
 
   function shortSessionId(sessionId) {
     return sessionId ? String(sessionId).slice(0, 8) : "-";
@@ -250,167 +170,16 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
     }
   }
 
-  function nowTime() {
-    return new Date().toISOString().slice(11, 19);
-  }
-
-  function logInfo(topic, message) {
-    console.log(`[${nowTime()}] [${topic}] [${roomTag}] ${message}`);
-  }
-
-  function logWarn(topic, message) {
-    console.warn(`[${nowTime()}] [${topic}] [${roomTag}] ${message}`);
-  }
-
-  function logEvent(event, details = {}) {
-    const sid = details.sessionId || "-";
-    if (event === "runtime_started") {
-      const width = details.worldWidthMeters ?? details.worldSizeMeters ?? "-";
-      const height = details.worldHeightMeters ?? details.worldSizeMeters ?? "-";
-      logInfo(
-        "runtime",
-        `start world=${width}x${height}m maxPlayers=${details.maxPlayers} chars=${details.totalCharacters}`
-      );
-      return;
-    }
-    if (event === "session_connected") {
-      const ua = details.userAgent ? String(details.userAgent).slice(0, 68) : "-";
-      logInfo("anslutning", `ny session sid=${sid} ip=${details.ip || "-"} origin=${details.origin || "-"} ua="${ua}" ${stateSummary()}`);
-      return;
-    }
-    if (event === "session_disconnected") {
-      const code = details.code == null ? "-" : String(details.code);
-      const name = details.name || "-";
-      logInfo(
-        "anslutning",
-        `frankoppling sid=${sid} namn=${name} reason=${details.reason || "-"} code=${code} ${stateSummary()}`
-      );
-      return;
-    }
-    if (event === "session_login") {
-      logInfo("spelare", `${details.name} loggade in sid=${sid} ${stateSummary()}`);
-      return;
-    }
-    if (event === "countdown_start") {
-      logInfo("spel", `nedrakning start sid=${sid} sek=${details.seconds ?? "-"}`);
-      return;
-    }
-    if (event === "session_possess") {
-      logInfo(
-        "spel",
-        `${details.name || "-"} tog karaktar ${details.characterId} sid=${sid} pos=(${details.x},${details.z}) yaw=${details.yaw}`
-      );
-      return;
-    }
-    if (event === "attack") {
-      const victimList =
-        Array.isArray(details.victimCharacterIds) && details.victimCharacterIds.length > 0
-          ? details.victimCharacterIds.join(",")
-          : "-";
-      logInfo(
-        "strid",
-        `attack sid=${sid} char=${details.attackerCharacterId} traffar=${details.victims ?? 0} victimIds=${victimList}`
-      );
-      return;
-    }
-    if (event === "player_eliminated") {
-      logInfo("strid", `${details.name || "-"} dog (char=${details.characterId}, sid=${sid})`);
-      return;
-    }
-    if (event === "character_respawn") {
-      logInfo("world", `respawn char=${details.characterId} pos=(${details.x},${details.z}) yaw=${details.yaw}`);
-      return;
-    }
-    if (event === "chat") {
-      logInfo("chat", `${details.name || "-"}: ${details.text || ""}`);
-      return;
-    }
-    if (event === "heartbeat_timeout") {
-      logWarn("anslutning", `heartbeat timeout sid=${sid}`);
-      return;
-    }
-    if (event === "message_drop") {
-      logWarn(
-        "ratelimit",
-        `drop sid=${sid} reason=${details.reason || "-"} total=${details.droppedTotal ?? 0} window=${details.droppedInWindow ?? 0}`
-      );
-      return;
-    }
-    logInfo("game", `${event} ${stateSummary()}`);
-  }
-
-  function warnInvariant(key, now, details) {
-    const last = invariantLastLogAt.get(key) ?? 0;
-    if (now - last < INVARIANT_LOG_COOLDOWN_MS) return;
-    invariantLastLogAt.set(key, now);
-    logWarn(`invariant:${key}`, details);
-  }
-
-  function checkInvariants(now) {
-    if (characters.length !== TOTAL_CHARACTERS) {
-      warnInvariant(
-        "character_count",
-        now,
-        `Expected ${TOTAL_CHARACTERS} characters, got ${characters.length}.`
-      );
-    }
-
-    const alivePlayers = activePlayerCount();
-    if (alivePlayers > MAX_PLAYERS) {
-      warnInvariant(
-        "max_players",
-        now,
-        `Expected at most ${MAX_PLAYERS} alive players, got ${alivePlayers}.`
-      );
-    }
-
-    const ownerToChars = new Map();
-    for (const c of characters) {
-      if (!c.ownerSessionId) continue;
-      const owned = ownerToChars.get(c.ownerSessionId) || [];
-      owned.push(c.id);
-      ownerToChars.set(c.ownerSessionId, owned);
-      if (c.controllerType !== "PLAYER") {
-        warnInvariant(
-          "owner_controller_mismatch",
-          now,
-          `Character ${c.id} has owner ${c.ownerSessionId} but controllerType=${c.controllerType}.`
-        );
-      }
-    }
-
-    for (const [sessionId, ownedCharIds] of ownerToChars.entries()) {
-      if (ownedCharIds.length > 1) {
-        warnInvariant(
-          "multi_char_owner",
-          now,
-          `Session ${sessionId} owns multiple characters: ${ownedCharIds.join(", ")}.`
-        );
-      }
-
-      const session = sessions.get(sessionId);
-      const ownsCharacterWhileActive =
-        session &&
-        (session.state === "alive" || session.state === "countdown") &&
-        session.characterId != null;
-      if (!ownsCharacterWhileActive) {
-        warnInvariant(
-          "owner_without_alive_session",
-          now,
-          `Character owner ${sessionId} missing valid active session.`
-        );
-        continue;
-      }
-
-      if (!ownedCharIds.includes(session.characterId)) {
-        warnInvariant(
-          "session_character_mismatch",
-          now,
-          `Session ${sessionId} points to character ${session.characterId} but owns [${ownedCharIds.join(", ")}].`
-        );
-      }
-    }
-  }
+  const { logInfo, logWarn, logEvent } = createRoomLogger(roomTag, stateSummary);
+  const { checkInvariants } = createInvariantChecker({
+    characters,
+    sessions,
+    getActivePlayerCount: activePlayerCount,
+    logWarn,
+    totalCharacters: TOTAL_CHARACTERS,
+    maxPlayers: MAX_PLAYERS,
+    cooldownMs: INVARIANT_LOG_COOLDOWN_MS
+  });
 
   function normalizePlayerName(raw) {
     const trimmed = String(raw || "").trim().replace(/\s+/g, " ");
@@ -499,106 +268,21 @@ function sanitizeSystemTextSegment(raw) {
     return "disconnected";
   }
 
-  function aliveSpectatorCandidates(now) {
-    return sortedAuthenticatedSessionsForScoreboard()
-      .filter((session) => session.state === "alive" && session.characterId != null)
-      .filter((session) => {
-        const character = characters[session.characterId];
-        return Boolean(character) && !isCharacterDowned(character, now);
-      })
-      .map((session) => ({
-        sessionId: session.id,
-        name: session.name,
-        characterId: session.characterId
-      }));
-  }
-
-  function clearSpectatorTarget(session) {
-    if (!session) return;
-    session.spectatingCharacterId = null;
-    session.spectatingSessionId = null;
-  }
-
-  function setSpectatorTarget(session, candidate) {
-    if (!session || !candidate) return false;
-    session.spectatingCharacterId = candidate.characterId;
-    session.spectatingSessionId = candidate.sessionId;
-    return true;
-  }
-
-  function setSessionSpectating(session, now, { randomTarget = true } = {}) {
-    if (!session || !session.authenticated) return false;
-    if (activeMatchStartedAt <= 0) return false;
-    if (session.characterId != null) {
-      const ownedCharacter = characters[session.characterId];
-      if (ownedCharacter?.ownerSessionId === session.id) releaseOwnedCharacter(session.id);
-    }
-    session.state = "spectating";
-    session.ready = false;
-    session.readyAt = 0;
-    session.characterId = null;
-    session.input.attackRequested = false;
-    session.eliminatedByName = null;
-    if (!randomTarget) return true;
-    const candidates = aliveSpectatorCandidates(now);
-    if (candidates.length === 0) {
-      clearSpectatorTarget(session);
-      return true;
-    }
-    const picked = candidates[Math.floor(Math.random() * candidates.length)];
-    return setSpectatorTarget(session, picked);
-  }
-
-  function cycleSpectatorTarget(session, direction, now) {
-    if (!session || session.state !== "spectating") return false;
-    const candidates = aliveSpectatorCandidates(now);
-    if (candidates.length === 0) {
-      clearSpectatorTarget(session);
-      return false;
-    }
-    const dir = direction === SPECTATOR_CYCLE_PREV ? SPECTATOR_CYCLE_PREV : SPECTATOR_CYCLE_NEXT;
-    const currentIndex = candidates.findIndex((candidate) => candidate.characterId === session.spectatingCharacterId);
-    if (currentIndex < 0) {
-      const fallbackIndex = dir === SPECTATOR_CYCLE_PREV ? candidates.length - 1 : 0;
-      return setSpectatorTarget(session, candidates[fallbackIndex]);
-    }
-    const nextIndex = (currentIndex + dir + candidates.length) % candidates.length;
-    return setSpectatorTarget(session, candidates[nextIndex]);
-  }
-
-  function maintainSpectatorTarget(session, now) {
-    if (!session || session.state !== "spectating") return;
-    const candidates = aliveSpectatorCandidates(now);
-    if (candidates.length === 0) {
-      const targetedSession = session.spectatingSessionId ? sessions.get(session.spectatingSessionId) : null;
-      const targetedCharacter =
-        session.spectatingCharacterId != null ? characters[session.spectatingCharacterId] : null;
-      if (
-        targetedSession &&
-        targetedCharacter &&
-        (targetedSession.state === "downed" || targetedSession.state === "won")
-      ) {
-        return;
-      }
-      clearSpectatorTarget(session);
-      return;
-    }
-    if (session.spectatingCharacterId == null) {
-      setSpectatorTarget(session, candidates[0]);
-      return;
-    }
-    if (candidates.some((candidate) => candidate.characterId === session.spectatingCharacterId)) return;
-
-    const targetedSession = session.spectatingSessionId ? sessions.get(session.spectatingSessionId) : null;
-    const targetedCharacter = characters[session.spectatingCharacterId];
-    const targetedStillVisible =
-      targetedSession &&
-      targetedCharacter &&
-      (targetedSession.state === "downed" || targetedSession.state === "won");
-    if (targetedStillVisible) return;
-
-    setSpectatorTarget(session, candidates[0]);
-  }
+  const spectator = createSpectatorSystem({
+    sessions,
+    characters,
+    isCharacterDowned,
+    getSortedActiveSessions: sortedAuthenticatedSessionsForScoreboard,
+    releaseOwnedCharacter,
+    getActiveMatchStartedAt: () => activeMatchStartedAt
+  });
+  const {
+    aliveSpectatorCandidates,
+    clearSpectatorTarget,
+    setSessionSpectating,
+    cycleSpectatorTarget,
+    maintainSpectatorTarget
+  } = spectator;
 
   function scoreboardSnapshot() {
     return sortedAuthenticatedSessionsForScoreboard()
@@ -809,35 +493,6 @@ function sanitizeSystemTextSegment(raw) {
         sessionId: shortSessionId(session.id),
         name: session.name
       });
-    }
-  }
-
-  function releaseOwnedCharacter(sessionId) {
-    if (!sessionId) return;
-    for (const c of characters) {
-      if (c.ownerSessionId !== sessionId) continue;
-      c.controllerType = "AI";
-      c.ownerSessionId = null;
-    }
-  }
-
-  function resetArenaForNextRound(now) {
-    for (const c of characters) {
-      const spawn = randomSpawn();
-      c.x = spawn.x;
-      c.z = spawn.z;
-      c.yaw = spawn.yaw;
-      c.pitch = 0;
-      c.controllerType = "AI";
-      c.ownerSessionId = null;
-      c.everPlayerControlled = false;
-      c.lastAttackAt = 0;
-      clearDownedState(c);
-      c.ai.mode = "move";
-      c.ai.desiredYaw = spawn.yaw;
-      c.ai.nextDecisionAt = now + rand(AI_DECISION_MS_MIN, AI_DECISION_MS_MAX);
-      c.ai.desiredPitch = rand(-0.3, 0.3);
-      c.ai.nextPitchDecisionAt = now + rand(320, 980);
     }
   }
 
@@ -1060,251 +715,26 @@ function sanitizeSystemTextSegment(raw) {
   const SHELF_AVOIDANCE_MARGIN = 1.1;
   const STATIC_OBSTACLES = [...SHELVES, ...COOLERS, ...FREEZERS];
 
-  function obstacleHalfExtents(obstacle) {
-    const width = typeof obstacle.width === "number" ? obstacle.width : 1;
-    const depth = typeof obstacle.depth === "number" ? obstacle.depth : 1;
-    const yaw = typeof obstacle.yaw === "number" ? obstacle.yaw : 0;
-    const quarterTurns = Math.round(yaw / (Math.PI / 2));
-    const isSwapped = Math.abs(quarterTurns) % 2 === 1;
-    return {
-      halfW: (isSwapped ? depth : width) * 0.5,
-      halfD: (isSwapped ? width : depth) * 0.5
-    };
-  }
-
-  function clampInsideRoom(character, { steerOnClamp = false } = {}) {
-    let hitMinX = false;
-    let hitMaxX = false;
-    let hitMinZ = false;
-    let hitMaxZ = false;
-
-    if (character.x < ROOM_BOUNDARY_MIN_X) {
-      character.x = ROOM_BOUNDARY_MIN_X;
-      hitMinX = true;
-    }
-    if (character.x > ROOM_BOUNDARY_MAX_X) {
-      character.x = ROOM_BOUNDARY_MAX_X;
-      hitMaxX = true;
-    }
-    if (character.z < ROOM_BOUNDARY_MIN_Z) {
-      character.z = ROOM_BOUNDARY_MIN_Z;
-      hitMinZ = true;
-    }
-    if (character.z > ROOM_BOUNDARY_MAX_Z) {
-      character.z = ROOM_BOUNDARY_MAX_Z;
-      hitMaxZ = true;
-    }
-
-    if (!steerOnClamp || (!hitMinX && !hitMaxX && !hitMinZ && !hitMaxZ)) return;
-
-    const forwardX = Math.sin(character.yaw);
-    const forwardZ = Math.cos(character.yaw);
-    const pushingOutward =
-      (hitMinX && forwardX < -0.02) ||
-      (hitMaxX && forwardX > 0.02) ||
-      (hitMinZ && forwardZ < -0.02) ||
-      (hitMaxZ && forwardZ > 0.02);
-    if (!pushingOutward) return;
-
-    const towardCenterX = -character.x;
-    const towardCenterZ = -character.z;
-    character.yaw = normalizeAngle(Math.atan2(towardCenterX, towardCenterZ));
-  }
-
-  function wallAvoidance(character) {
-    let ax = 0;
-    let az = 0;
-    if (character.x < ROOM_BOUNDARY_MIN_X + WALL_AVOIDANCE_MARGIN) {
-      ax += (ROOM_BOUNDARY_MIN_X + WALL_AVOIDANCE_MARGIN - character.x) / WALL_AVOIDANCE_MARGIN;
-    }
-    if (character.x > ROOM_BOUNDARY_MAX_X - WALL_AVOIDANCE_MARGIN) {
-      ax -= (character.x - (ROOM_BOUNDARY_MAX_X - WALL_AVOIDANCE_MARGIN)) / WALL_AVOIDANCE_MARGIN;
-    }
-    if (character.z < ROOM_BOUNDARY_MIN_Z + WALL_AVOIDANCE_MARGIN) {
-      az += (ROOM_BOUNDARY_MIN_Z + WALL_AVOIDANCE_MARGIN - character.z) / WALL_AVOIDANCE_MARGIN;
-    }
-    if (character.z > ROOM_BOUNDARY_MAX_Z - WALL_AVOIDANCE_MARGIN) {
-      az -= (character.z - (ROOM_BOUNDARY_MAX_Z - WALL_AVOIDANCE_MARGIN)) / WALL_AVOIDANCE_MARGIN;
-    }
-
-    const len = Math.hypot(ax, az);
-    if (len < 0.001) return null;
-    return {
-      x: ax / len,
-      z: az / len,
-      strength: Math.min(1, len)
-    };
-  }
-
-  function shelfAvoidance(character) {
-    let ax = 0;
-    let az = 0;
-
-    for (const obstacle of STATIC_OBSTACLES) {
-      const { halfW, halfD } = obstacleHalfExtents(obstacle);
-      const minX = obstacle.x - halfW;
-      const maxX = obstacle.x + halfW;
-      const minZ = obstacle.z - halfD;
-      const maxZ = obstacle.z + halfD;
-
-      const nearestX = Math.max(minX, Math.min(maxX, character.x));
-      const nearestZ = Math.max(minZ, Math.min(maxZ, character.z));
-      const dx = character.x - nearestX;
-      const dz = character.z - nearestZ;
-      const dist = Math.hypot(dx, dz);
-      if (dist < 0.001 || dist >= SHELF_AVOIDANCE_MARGIN) continue;
-
-      const falloff = 1 - dist / SHELF_AVOIDANCE_MARGIN;
-      ax += (dx / dist) * falloff;
-      az += (dz / dist) * falloff;
-    }
-
-    const len = Math.hypot(ax, az);
-    if (len < 0.001) return null;
-    return {
-      x: ax / len,
-      z: az / len,
-      strength: Math.min(1, len)
-    };
-  }
-
-  function resolveShelfCollisions(character, maxIterations = 3) {
-    let hit = false;
-    let pushX = 0;
-    let pushZ = 0;
-
-    for (let iteration = 0; iteration < maxIterations; iteration += 1) {
-      let hitThisIteration = false;
-
-      for (const obstacle of STATIC_OBSTACLES) {
-        const { halfW, halfD } = obstacleHalfExtents(obstacle);
-        const minX = obstacle.x - halfW - CHARACTER_RADIUS;
-        const maxX = obstacle.x + halfW + CHARACTER_RADIUS;
-        const minZ = obstacle.z - halfD - CHARACTER_RADIUS;
-        const maxZ = obstacle.z + halfD + CHARACTER_RADIUS;
-
-        if (character.x < minX || character.x > maxX || character.z < minZ || character.z > maxZ) continue;
-
-        hit = true;
-        hitThisIteration = true;
-        const toMinX = Math.abs(character.x - minX);
-        const toMaxX = Math.abs(maxX - character.x);
-        const toMinZ = Math.abs(character.z - minZ);
-        const toMaxZ = Math.abs(maxZ - character.z);
-        const smallest = Math.min(toMinX, toMaxX, toMinZ, toMaxZ);
-
-        if (smallest === toMinX) {
-          character.x = minX;
-          pushX -= 1;
-        } else if (smallest === toMaxX) {
-          character.x = maxX;
-          pushX += 1;
-        } else if (smallest === toMinZ) {
-          character.z = minZ;
-          pushZ -= 1;
-        } else {
-          character.z = maxZ;
-          pushZ += 1;
-        }
-      }
-
-      if (!hitThisIteration) break;
-    }
-
-    if (!hit) return null;
-    const len = Math.hypot(pushX, pushZ);
-    if (len < 0.001) return { x: 0, z: 0 };
-    return { x: pushX / len, z: pushZ / len };
-  }
-
-  function updateAI(c, dt, now) {
-    if (now >= c.ai.nextDecisionAt) {
-      c.ai.mode = Math.random() < 0.25 ? "stop" : "move";
-      c.ai.desiredYaw = normalizeAngle(c.yaw + rand(-Math.PI / 2, Math.PI / 2));
-      c.ai.nextDecisionAt = now + rand(AI_DECISION_MS_MIN, AI_DECISION_MS_MAX);
-    }
-
-    const wallPush = wallAvoidance(c);
-    const shelfPush = shelfAvoidance(c);
-    let avoidance = null;
-    if (wallPush || shelfPush) {
-      const ax = (wallPush?.x || 0) + (shelfPush?.x || 0);
-      const az = (wallPush?.z || 0) + (shelfPush?.z || 0);
-      const len = Math.hypot(ax, az);
-      if (len > 0.001) {
-        avoidance = {
-          x: ax / len,
-          z: az / len,
-          strength: Math.min(1, len)
-        };
-      }
-    }
-
-    if (avoidance) {
-      c.ai.mode = "move";
-      c.ai.desiredYaw = normalizeAngle(Math.atan2(avoidance.x, avoidance.z));
-      c.ai.nextDecisionAt = Math.max(c.ai.nextDecisionAt, now + 260);
-    }
-
-    const deltaYaw = normalizeAngle(c.ai.desiredYaw - c.yaw);
-    const turnBoost = avoidance ? 1 + avoidance.strength * 0.8 : 1;
-    const maxTurn = TURN_SPEED * dt * turnBoost;
-    if (Math.abs(deltaYaw) <= maxTurn) c.yaw = c.ai.desiredYaw;
-    else c.yaw = normalizeAngle(c.yaw + Math.sign(deltaYaw) * maxTurn);
-
-    if (c.ai.mode === "move") {
-      const speedScale = avoidance ? 1 - avoidance.strength * 0.3 : 1;
-      const speed = MOVE_SPEED * Math.max(0.55, speedScale);
-      c.x += Math.sin(c.yaw) * speed * dt;
-      c.z += Math.cos(c.yaw) * speed * dt;
-    }
-
-    if (now >= c.ai.nextPitchDecisionAt) {
-      c.ai.desiredPitch = rand(-0.3, 0.3);
-      c.ai.nextPitchDecisionAt = now + rand(320, 980);
-    }
-    const pitchSmooth = 1 - Math.exp(-dt * 4.2);
-    c.pitch = clampPitch(c.pitch + (c.ai.desiredPitch - c.pitch) * pitchSmooth);
-
-    clampInsideRoom(c, { steerOnClamp: true });
-    const shelfHitNormal = resolveShelfCollisions(c);
-    if (shelfHitNormal) {
-      c.ai.mode = "move";
-      c.ai.desiredYaw = normalizeAngle(Math.atan2(shelfHitNormal.x, shelfHitNormal.z));
-      c.yaw = c.ai.desiredYaw;
-      c.ai.nextDecisionAt = now + rand(300, 700);
-    }
-  }
-
-  function updatePlayer(c, session, dt) {
-    const input = session.input;
-    c.yaw = input.yaw;
-    c.pitch = input.pitch;
-
-    let localX = 0;
-    let localZ = 0;
-    if (input.forward) localZ += 1;
-    if (input.backward) localZ -= 1;
-    if (input.left) localX -= 1;
-    if (input.right) localX += 1;
-
-    const len = Math.hypot(localX, localZ);
-    if (len > 0.001) {
-      localX /= len;
-      localZ /= len;
-
-      const worldX = localX * Math.cos(c.yaw) - localZ * Math.sin(c.yaw);
-      const worldZ = -localX * Math.sin(c.yaw) - localZ * Math.cos(c.yaw);
-
-      const sprintScale = input.sprint ? PLAYER_SPRINT_MULTIPLIER : 1;
-      const playerSpeed = MOVE_SPEED * sprintScale;
-      c.x += worldX * playerSpeed * dt;
-      c.z += worldZ * playerSpeed * dt;
-    }
-
-    clampInsideRoom(c);
-    resolveShelfCollisions(c);
-  }
+  const roomBoundaries = {
+    minX: ROOM_BOUNDARY_MIN_X,
+    maxX: ROOM_BOUNDARY_MAX_X,
+    minZ: ROOM_BOUNDARY_MIN_Z,
+    maxZ: ROOM_BOUNDARY_MAX_Z
+  };
+  const movement = createMovementSystem({
+    boundaries: roomBoundaries,
+    obstacles: STATIC_OBSTACLES,
+    wallMargin: WALL_AVOIDANCE_MARGIN,
+    shelfMargin: SHELF_AVOIDANCE_MARGIN,
+    characterRadius: CHARACTER_RADIUS,
+    aiDecisionMsMin: AI_DECISION_MS_MIN,
+    aiDecisionMsMax: AI_DECISION_MS_MAX,
+    moveSpeed: MOVE_SPEED,
+    sprintMultiplier: PLAYER_SPRINT_MULTIPLIER,
+    turnSpeed: TURN_SPEED,
+    rand,
+    clampPitch
+  });
 
   function dropMessage(session, reason) {
     session.net.droppedMessages += 1;
@@ -1484,7 +914,7 @@ function sanitizeSystemTextSegment(raw) {
     if (msg.type === "spectate_cycle") {
       if (session.state !== "spectating") return "ok";
       const direction = Number(msg.direction) < 0 ? SPECTATOR_CYCLE_PREV : SPECTATOR_CYCLE_NEXT;
-      cycleSpectatorTarget(session, direction, at);
+      spectator.cycleSpectatorTarget(session, direction, at);
       return "ok";
     }
 
@@ -1640,7 +1070,7 @@ function sanitizeSystemTextSegment(raw) {
       }
 
       if (c.controllerType === "AI") {
-        updateAI(c, dt, now);
+        movement.updateAI(c, dt, now);
         continue;
       }
 
@@ -1651,7 +1081,7 @@ function sanitizeSystemTextSegment(raw) {
         continue;
       }
 
-      if (ownerSession.state === "alive" || ownerSession.state === "won") updatePlayer(c, ownerSession, dt);
+      if (ownerSession.state === "alive" || ownerSession.state === "won") movement.updatePlayer(c, ownerSession, dt);
 
       if (ownerSession.state === "alive" && ownerSession.input.attackRequested) {
         handleAttack(c.id, now);
@@ -1843,48 +1273,7 @@ function sanitizeSystemTextSegment(raw) {
       }
     };
 
-    const session = {
-      id: sessionId,
-      authenticated: false,
-      name: null,
-      state: "auth",
-      ready: false,
-      readyAt: 0,
-      characterId: null,
-      spectatingCharacterId: null,
-      spectatingSessionId: null,
-      eliminatedAt: 0,
-      returnToLobbyAt: 0,
-      eliminatedByName: null,
-      stats: {
-        wins: 0,
-        knockdowns: 0,
-        downed: 0,
-        innocents: 0,
-        streak: 0
-      },
-      input: {
-        forward: false,
-        backward: false,
-        left: false,
-        right: false,
-        sprint: false,
-        yaw: 0,
-        pitch: 0,
-        attackRequested: false
-      },
-      net: {
-        lastInputAt: 0,
-        lastAttackRequestAt: 0,
-        lastActivityAt: now,
-        windowStartAt: now,
-        windowCount: 0,
-        droppedMessages: 0,
-        lastDropReason: null,
-        dropWindowStartAt: now,
-        dropWindowCount: 0
-      }
-    };
+    const session = createSession(sessionId, now);
 
     sessions.set(sessionId, session);
     sockets.set(sessionId, ws);
