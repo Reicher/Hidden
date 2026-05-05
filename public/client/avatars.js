@@ -38,6 +38,7 @@ const HAT_COLOR_HEX_BY_TYPE = {
   Trollkarlshatt: [0x1f2b44, 0x2d3561, 0x4a2f44, 0x2c2f36],
   Sombrero: [0xd9c39a, 0xc5a77f, 0xb89365, 0x9f7b54]
 };
+const MOUTH_TYPES = ["happy", "neutral", "surprised", "sad"];
 
 function noHatBodyHeight({ heightScale, legScale, torsoScale, headScale }) {
   const shoeHeight = 0.11 * heightScale;
@@ -82,11 +83,13 @@ function previewStyleForCharacter(characterId) {
     const palette = HAT_COLOR_HEX_BY_TYPE[hatType] || HAT_COLOR_HEX_BY_TYPE.CylinderHatt;
     hatHex = palette[Math.floor(rng() * palette.length)];
   }
+  const mouthType = MOUTH_TYPES[Math.floor(rng() * MOUTH_TYPES.length)];
   return {
     skin: hexToCss(skinHex),
     shirt: `hsl(${shirtHue} ${shirtSat}% ${shirtLight}%)`,
     hatType,
-    hat: hatHex == null ? null : hexToCss(hatHex)
+    hat: hatHex == null ? null : hexToCss(hatHex),
+    mouthType
   };
 }
 
@@ -104,6 +107,40 @@ function fillRoundedRect(ctx, x, y, w, h, r) {
   ctx.quadraticCurveTo(x, y, x + radius, y);
   ctx.closePath();
   ctx.fill();
+}
+
+function traceHeadShapePath(ctx, cx, cy, headR) {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - headR * 1.02);
+  ctx.bezierCurveTo(cx + headR * 0.78, cy - headR * 0.96, cx + headR * 0.9, cy + headR * 0.1, cx + headR * 0.5, cy + headR * 0.9);
+  ctx.bezierCurveTo(cx + headR * 0.22, cy + headR * 1.15, cx - headR * 0.22, cy + headR * 1.15, cx - headR * 0.5, cy + headR * 0.9);
+  ctx.bezierCurveTo(cx - headR * 0.9, cy + headR * 0.1, cx - headR * 0.78, cy - headR * 0.96, cx, cy - headR * 1.02);
+  ctx.closePath();
+}
+
+function strokeSimpleMouth(ctx, cx, mouthY, size, mouthType) {
+  ctx.lineWidth = Math.max(1.5, size * 0.12);
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#211915";
+  ctx.beginPath();
+  if (mouthType === "happy") {
+    ctx.arc(cx, mouthY - size * 0.1, size, Math.PI * 0.15, Math.PI * 0.85);
+    ctx.stroke();
+    return;
+  }
+  if (mouthType === "sad") {
+    ctx.arc(cx, mouthY + size * 1.02, size, Math.PI * 1.14, Math.PI * 1.86);
+    ctx.stroke();
+    return;
+  }
+  if (mouthType === "surprised") {
+    ctx.arc(cx, mouthY + size * 0.22, size * 0.46, 0, Math.PI * 2);
+    ctx.stroke();
+    return;
+  }
+  ctx.moveTo(cx - size * 0.92, mouthY + size * 0.28);
+  ctx.lineTo(cx + size * 0.92, mouthY + size * 0.28);
+  ctx.stroke();
 }
 
 export function drawCountdownCharacterPreview(canvas, characterId) {
@@ -130,8 +167,8 @@ export function drawCountdownCharacterPreview(canvas, characterId) {
   fillRoundedRect(ctx, width * 0.22, height * 0.56, width * 0.56, height * 0.34, 16);
 
   ctx.fillStyle = style.skin;
-  ctx.beginPath();
-  ctx.arc(cx, headCy, headR, 0, Math.PI * 2);
+  fillRoundedRect(ctx, cx - headR * 0.24, headCy + headR * 0.84, headR * 0.48, headR * 0.44, 8);
+  traceHeadShapePath(ctx, cx, headCy, headR);
   ctx.fill();
 
   ctx.fillStyle = "#ffffff";
@@ -142,9 +179,10 @@ export function drawCountdownCharacterPreview(canvas, characterId) {
 
   ctx.fillStyle = "#111111";
   ctx.beginPath();
-  ctx.arc(cx - headR * 0.35, headCy - headR * 0.03, headR * 0.08, 0, Math.PI * 2);
-  ctx.arc(cx + headR * 0.35, headCy - headR * 0.03, headR * 0.08, 0, Math.PI * 2);
+  ctx.arc(cx - headR * 0.33, headCy - headR * 0.02, headR * 0.078, 0, Math.PI * 2);
+  ctx.arc(cx + headR * 0.33, headCy - headR * 0.02, headR * 0.078, 0, Math.PI * 2);
   ctx.fill();
+  strokeSimpleMouth(ctx, cx, headCy + headR * 0.45, headR * 0.22, style.mouthType);
 
   if (style.hat) {
     ctx.fillStyle = style.hat;
@@ -245,6 +283,7 @@ export function createAvatarSystem({ scene, camera }) {
       const palette = HAT_COLOR_HEX_BY_TYPE[hatType] || HAT_COLOR_HEX_BY_TYPE.CylinderHatt;
       hat = new THREE.Color(palette[Math.floor(rng() * palette.length)]);
     }
+    const mouthType = MOUTH_TYPES[Math.floor(rng() * MOUTH_TYPES.length)];
 
     const baseHeightNoHat = noHatBodyHeight({ heightScale, legScale, torsoScale, headScale });
     const targetHeightNoHat = 1.5 + heightRng() * 0.5;
@@ -266,6 +305,7 @@ export function createAvatarSystem({ scene, camera }) {
       shoe,
       hat: hat || new THREE.Color(0x2a2a2a),
       hatType,
+      mouthType,
       visualScale
     };
   }
@@ -326,7 +366,26 @@ export function createAvatarSystem({ scene, camera }) {
     return null;
   }
 
-  function createHeadFaceTexture(skinColor) {
+  function createHeadGeometry(headRadius) {
+    const geometry = new THREE.SphereGeometry(headRadius, 24, 18);
+    const positions = geometry.attributes.position;
+    const vertex = new THREE.Vector3();
+    for (let i = 0; i < positions.count; i += 1) {
+      vertex.fromBufferAttribute(positions, i);
+      const yNorm = THREE.MathUtils.clamp(vertex.y / headRadius, -1, 1);
+      const chin = THREE.MathUtils.clamp(-yNorm, 0, 1);
+      const temple = THREE.MathUtils.clamp((yNorm + 0.1) / 1.1, 0, 1);
+      vertex.x *= 1 - chin * 0.15 - temple * 0.05;
+      vertex.z *= 1 - chin * 0.11 - temple * 0.03;
+      if (yNorm < -0.5) vertex.y *= 0.92;
+      positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
+    }
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  function createHeadFaceTexture(skinColor, mouthType = "neutral") {
     const canvas = document.createElement("canvas");
     canvas.width = HEAD_TEX_SIZE;
     canvas.height = HEAD_TEX_SIZE;
@@ -374,6 +433,9 @@ export function createAvatarSystem({ scene, camera }) {
         ctx.arc(rightEyeCx + ox, faceCy + oy, PUPIL_RADIUS_PX, 0, Math.PI * 2);
         ctx.fill();
       }
+
+      const mouthY = faceCy + EYE_RADIUS_Y_PX * 2.25;
+      strokeSimpleMouth(ctx, faceCx, mouthY, EYE_RADIUS_X_PX * 0.85, mouthType);
 
       if (texture.image) texture.needsUpdate = true;
     }
@@ -437,14 +499,14 @@ export function createAvatarSystem({ scene, camera }) {
     const pantsMaterial = new THREE.MeshStandardMaterial({ color: profile.pants, roughness: 0.9 });
     const skinMaterialPlain = new THREE.MeshStandardMaterial({ color: profile.skin, roughness: 0.8 });
     const shoeMaterial = new THREE.MeshStandardMaterial({ color: profile.shoe, roughness: 0.92 });
-    const headFace = createHeadFaceTexture(profile.skin);
+    const headFace = createHeadFaceTexture(profile.skin, profile.mouthType);
     const skinMaterial = headFace
       ? new THREE.MeshStandardMaterial({ color: 0xffffff, map: headFace.texture, roughness: 0.8 })
       : new THREE.MeshStandardMaterial({ color: profile.skin, roughness: 0.8 });
 
     const shoeHeight = 0.11 * profile.heightScale;
-    const shoeWidth = 0.2 * profile.heightScale * (0.92 + profile.fatness * 0.2);
-    const shoeLength = 0.34 * profile.heightScale;
+    const shoeWidth = 0.16 * profile.heightScale * (0.86 + profile.fatness * 0.14);
+    const shoeLength = 0.26 * profile.heightScale;
 
     const legRadius = 0.078 * profile.heightScale * profile.legScale;
     const legTotal = 0.84 * profile.heightScale * profile.legScale;
@@ -455,14 +517,16 @@ export function createAvatarSystem({ scene, camera }) {
     const torsoTotal = 0.9 * profile.heightScale * profile.torsoScale;
     const torsoCore = Math.max(0.06, torsoTotal - torsoRadius * 2);
     const torsoHalfWidth = torsoRadius * profile.torsoWidthScale;
-    const legGap = Math.max(legRadius * 0.56, torsoHalfWidth * 0.56 - legRadius * 0.12);
+    const legGap = Math.max(legRadius * 0.72, torsoHalfWidth * 0.62 - legRadius * 0.06);
     const shoulderY = hipY + torsoTotal * 0.8;
 
     const armRadius = 0.066 * profile.heightScale * profile.armScale;
-    const armTotal = 0.72 * profile.heightScale * profile.armScale;
+    const armTotal = 0.64 * profile.heightScale * profile.armScale;
     const armCore = Math.max(0.05, armTotal - armRadius * 2);
     const shoulderX = torsoRadius * profile.torsoWidthScale + armRadius * 0.58;
-    const handRadius = armRadius * 0.74;
+    const handRadius = armRadius * 0.9;
+    const handCore = handRadius * 0.9;
+    const shoeOutset = shoeWidth * 0.14;
 
     const headRadius = 0.24 * profile.heightScale * profile.headScale;
     const headY = hipY + torsoTotal + headRadius * 0.84;
@@ -470,11 +534,16 @@ export function createAvatarSystem({ scene, camera }) {
 
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(torsoRadius, torsoCore, 6, 14), torsoMaterial);
     torso.scale.set(profile.torsoWidthScale, 1, profile.torsoDepthScale);
-    torso.position.set(0, hipY + torsoTotal * 0.5, 0);
+    torso.position.set(0, hipY + torsoTotal * 0.48, 0);
     poseRoot.add(torso);
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(headRadius, 24, 18), skinMaterial);
-    head.scale.set(0.92, 1.06, 0.95);
+    const pelvis = new THREE.Mesh(new THREE.SphereGeometry(Math.max(legRadius * 1.35, torsoRadius * 0.36), 16, 12), pantsMaterial);
+    pelvis.scale.set(1.42, 0.82, 1.06);
+    pelvis.position.set(0, hipY - legRadius * 0.1, 0);
+    poseRoot.add(pelvis);
+
+    const head = new THREE.Mesh(createHeadGeometry(headRadius), skinMaterial);
+    head.scale.set(0.98, 1.02, 0.98);
     head.position.set(0, headY, 0);
     poseRoot.add(head);
     const hat = createHatMesh(profile, headRadius);
@@ -499,8 +568,8 @@ export function createAvatarSystem({ scene, camera }) {
     const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(armRadius, armCore, 5, 12), torsoMaterial);
     leftArm.position.set(0, -armTotal * 0.5, 0);
     leftArmPivot.add(leftArm);
-    const leftHand = new THREE.Mesh(new THREE.SphereGeometry(handRadius, 12, 10), skinMaterialPlain);
-    leftHand.position.set(0, -armTotal + handRadius * 0.55, 0);
+    const leftHand = new THREE.Mesh(new THREE.CapsuleGeometry(handRadius * 0.72, handCore, 4, 8), skinMaterialPlain);
+    leftHand.position.set(0, -armTotal + handRadius * 0.7, 0);
     leftArmPivot.add(leftHand);
     poseRoot.add(leftArmPivot);
 
@@ -509,8 +578,8 @@ export function createAvatarSystem({ scene, camera }) {
     const rightArm = new THREE.Mesh(new THREE.CapsuleGeometry(armRadius, armCore, 5, 12), torsoMaterial);
     rightArm.position.set(0, -armTotal * 0.5, 0);
     rightArmPivot.add(rightArm);
-    const rightHand = new THREE.Mesh(new THREE.SphereGeometry(handRadius, 12, 10), skinMaterialPlain);
-    rightHand.position.set(0, -armTotal + handRadius * 0.55, 0);
+    const rightHand = new THREE.Mesh(new THREE.CapsuleGeometry(handRadius * 0.72, handCore, 4, 8), skinMaterialPlain);
+    rightHand.position.set(0, -armTotal + handRadius * 0.7, 0);
     rightArmPivot.add(rightHand);
     poseRoot.add(rightArmPivot);
 
@@ -520,7 +589,7 @@ export function createAvatarSystem({ scene, camera }) {
     leftLeg.position.set(0, -legTotal * 0.5, 0);
     leftLegPivot.add(leftLeg);
     const leftShoe = new THREE.Mesh(new THREE.BoxGeometry(shoeWidth, shoeHeight, shoeLength), shoeMaterial);
-    leftShoe.position.set(0, -legTotal - shoeHeight * 0.35, shoeLength * 0.08);
+    leftShoe.position.set(-shoeOutset, -legTotal - shoeHeight * 0.35, shoeLength * 0.08);
     leftLegPivot.add(leftShoe);
     poseRoot.add(leftLegPivot);
 
@@ -530,7 +599,7 @@ export function createAvatarSystem({ scene, camera }) {
     rightLeg.position.set(0, -legTotal * 0.5, 0);
     rightLegPivot.add(rightLeg);
     const rightShoe = new THREE.Mesh(new THREE.BoxGeometry(shoeWidth, shoeHeight, shoeLength), shoeMaterial);
-    rightShoe.position.set(0, -legTotal - shoeHeight * 0.35, shoeLength * 0.08);
+    rightShoe.position.set(shoeOutset, -legTotal - shoeHeight * 0.35, shoeLength * 0.08);
     rightLegPivot.add(rightShoe);
     poseRoot.add(rightLegPivot);
     group.scale.setScalar(profile.visualScale);
