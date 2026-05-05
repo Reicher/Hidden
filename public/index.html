@@ -117,6 +117,13 @@
         </svg>
       </div>
       <div id="aliveOthersText">0 andra spelar just nu</div>
+      <div id="spectatorHud" class="hidden">
+        <p id="spectatorTargetText">Åskådar ingen</p>
+        <div id="spectatorCycleButtons">
+          <button id="spectatorPrevBtn" type="button" aria-label="Föregående spelare">◀</button>
+          <button id="spectatorNextBtn" type="button" aria-label="Nästa spelare">▶</button>
+        </div>
+      </div>
       <div id="knockdownToast" class="hidden">Du slog ner X</div>
       <div id="winOverlay" class="hidden">
         <p id="winTitle">Du vann!</p>
@@ -126,7 +133,10 @@
       <div id="downedOverlay" class="hidden">
         <p id="downedByText">Du blev nedslagen av okänd spelare</p>
         <p id="downedCountdownText">Spelet avslutas om 10</p>
-        <button id="downedLobbyBtn" type="button">Återgå till lobbyn</button>
+        <div id="downedActionRow">
+          <button id="downedLobbyBtn" type="button">Återgå till lobbyn</button>
+          <button id="downedSpectateBtn" type="button">Åskåda</button>
+        </div>
       </div>
       <div id="gameChatNotice">Systemhändelser</div>
       <button id="gameMenuBtn" type="button" aria-label="Spelmeny">⚙</button>

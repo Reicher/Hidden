@@ -12,16 +12,19 @@ export function updateDownedOverlay({
   downedOverlayEl,
   downedByTextEl,
   downedCountdownTextEl,
+  downedSpectateBtnEl,
   gameMenuBtnEl,
   appMode,
   sessionState,
   downedByName,
+  canSpectate,
   returnToLobbyMsRemaining
 }) {
   if (!downedOverlayEl || !downedByTextEl || !downedCountdownTextEl) return;
   const downed = appMode === "playing" && sessionState === "downed";
   downedOverlayEl.classList.toggle("hidden", !downed);
   gameMenuBtnEl?.classList.toggle("hidden", downed);
+  if (downedSpectateBtnEl) downedSpectateBtnEl.disabled = !canSpectate;
   if (!downed) return;
 
   const killer = downedByName ? String(downedByName) : "okänd spelare";
@@ -42,10 +45,13 @@ export function updateWinOverlay({
 }) {
   if (!winOverlayEl || !winTitleEl || !winCountdownTextEl) return;
   const won = appMode === "playing" && sessionState === "won";
-  winOverlayEl.classList.toggle("hidden", !won);
+  const spectatingEnd =
+    appMode === "playing" && sessionState === "spectating" && winReturnToLobbyMsRemaining > 0;
+  const visible = won || spectatingEnd;
+  winOverlayEl.classList.toggle("hidden", !visible);
   gameMenuBtnEl?.classList.toggle("hidden", won);
-  if (!won) return;
-  winTitleEl.textContent = "Du vann!";
+  if (!visible) return;
+  winTitleEl.textContent = won ? "Du vann!" : "Matchen avslutas";
   const sec = Math.max(0, Math.ceil(winReturnToLobbyMsRemaining / 1000));
   winCountdownTextEl.textContent = `Spelet avslutas om ${sec}`;
 }

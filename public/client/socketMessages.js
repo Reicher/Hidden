@@ -90,6 +90,9 @@ export function handleSocketMessage(msg, ctx) {
     state.activePlayersInGame = Number(session.activePlayers || 0);
     state.winReturnToLobbyMsRemaining = Math.max(0, Number(session.returnToLobbyMsRemaining || 0));
     state.downedByName = session.eliminatedByName ? String(session.eliminatedByName) : "";
+    state.spectatorTargetCharacterId = session.spectatorTargetCharacterId ?? null;
+    state.spectatorTargetName = session.spectatorTargetName ? String(session.spectatorTargetName) : "";
+    state.spectatorCandidates = Array.isArray(session.spectatorCandidates) ? session.spectatorCandidates : [];
     state.attackCooldownMsRemaining = Math.max(0, Number(session.attackCooldownMsRemaining || 0));
     if (state.attackCooldownMsRemaining > constants.CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS) {
       const newCooldownStarted = state.attackCooldownMsRemaining > previousAttackCooldownMsRemaining + 16;
@@ -101,14 +104,21 @@ export function handleSocketMessage(msg, ctx) {
       }
     }
     actions.updateInGameHud();
+    actions.updateSpectatorHud();
     actions.updateDocumentTitle();
     enteredAlive = previousSessionState !== "alive" && state.sessionState === "alive";
   } else {
     actions.resetDownedState();
     actions.resetWinState();
+    state.spectatorTargetCharacterId = null;
+    state.spectatorTargetName = "";
+    state.spectatorCandidates = [];
   }
 
-  if (previousSessionState === "alive" && (state.sessionState === "downed" || state.sessionState === "won")) {
+  if (
+    previousSessionState === "alive" &&
+    (state.sessionState === "downed" || state.sessionState === "won" || state.sessionState === "spectating")
+  ) {
     if (document.pointerLockElement) document.exitPointerLock?.();
     actions.resetInputState();
     actions.setGameMenuOpen(false);
@@ -117,7 +127,12 @@ export function handleSocketMessage(msg, ctx) {
 
   if (!state.authenticated) {
     actions.setAppMode("connect");
-  } else if (state.sessionState === "alive" || state.sessionState === "downed" || state.sessionState === "won") {
+  } else if (
+    state.sessionState === "alive" ||
+    state.sessionState === "downed" ||
+    state.sessionState === "won" ||
+    state.sessionState === "spectating"
+  ) {
     actions.setConnectError("");
     actions.setAppMode("playing");
     if (enteredAlive) actions.requestPointerLockSafe();

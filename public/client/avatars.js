@@ -982,10 +982,23 @@ export function createAvatarSystem({ scene, camera }) {
     };
   }
 
+  function getCharacterCameraState(characterId) {
+    if (characterId == null) return null;
+    const avatar = avatars.get(characterId);
+    if (!avatar?.initialized) return null;
+    return {
+      x: avatar.group.position.x,
+      z: avatar.group.position.z,
+      yaw: avatar.currentYaw,
+      eyeHeight: avatar.eyeHeight
+    };
+  }
+
   return {
     applyWorldCharacters,
     animate,
     isAimingAtCharacter,
-    getCharacterPosition
+    getCharacterPosition,
+    getCharacterCameraState
   };
 }

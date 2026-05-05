@@ -49,6 +49,8 @@ const PERMANENT_DOWNED_UNTIL = Number.MAX_SAFE_INTEGER;
 const MAX_LOOK_PITCH_RAD = 1.2;
 const MATCH_END_RETURN_TO_LOBBY_MS = 10000;
 const COUNTDOWN_RECONNECT_GRACE_MS = 7000;
+const SPECTATOR_CYCLE_NEXT = 1;
+const SPECTATOR_CYCLE_PREV = -1;
 
 export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = null, onStatsEvent = null }) {
   const sessions = new Map();
@@ -458,15 +460,148 @@ function sanitizeSystemTextSegment(raw) {
     return null;
   }
 
+  function compareScoreboardEntries(a, b) {
+    if (b.wins !== a.wins) return b.wins - a.wins;
+    if (b.knockdowns !== a.knockdowns) return b.knockdowns - a.knockdowns;
+    if (b.streak !== a.streak) return b.streak - a.streak;
+    if (a.downed !== b.downed) return a.downed - b.downed;
+    return a.name.localeCompare(b.name, "sv");
+  }
+
+  function compareSessionsForScoreboard(a, b) {
+    return compareScoreboardEntries(
+      {
+        name: a.name,
+        wins: a.stats.wins,
+        knockdowns: a.stats.knockdowns,
+        streak: a.stats.streak,
+        downed: a.stats.downed
+      },
+      {
+        name: b.name,
+        wins: b.stats.wins,
+        knockdowns: b.stats.knockdowns,
+        streak: b.stats.streak,
+        downed: b.stats.downed
+      }
+    );
+  }
+
+  function sortedAuthenticatedSessionsForScoreboard() {
+    return authenticatedSessions().sort(compareSessionsForScoreboard);
+  }
+
   function statusLabel(session) {
     if (!session?.authenticated) return "disconnected";
     if (session.state === "lobby" || session.state === "countdown") return "i lobby";
+    if (session.state === "spectating") return "åskådar";
     if (session.state === "alive" || session.state === "won" || session.state === "downed") return "i spel";
     return "disconnected";
   }
 
+  function aliveSpectatorCandidates(now) {
+    return sortedAuthenticatedSessionsForScoreboard()
+      .filter((session) => session.state === "alive" && session.characterId != null)
+      .filter((session) => {
+        const character = characters[session.characterId];
+        return Boolean(character) && !isCharacterDowned(character, now);
+      })
+      .map((session) => ({
+        sessionId: session.id,
+        name: session.name,
+        characterId: session.characterId
+      }));
+  }
+
+  function clearSpectatorTarget(session) {
+    if (!session) return;
+    session.spectatingCharacterId = null;
+    session.spectatingSessionId = null;
+  }
+
+  function setSpectatorTarget(session, candidate) {
+    if (!session || !candidate) return false;
+    session.spectatingCharacterId = candidate.characterId;
+    session.spectatingSessionId = candidate.sessionId;
+    return true;
+  }
+
+  function setSessionSpectating(session, now, { randomTarget = true } = {}) {
+    if (!session || !session.authenticated) return false;
+    if (activeMatchStartedAt <= 0) return false;
+    if (session.characterId != null) {
+      const ownedCharacter = characters[session.characterId];
+      if (ownedCharacter?.ownerSessionId === session.id) releaseOwnedCharacter(session.id);
+    }
+    session.state = "spectating";
+    session.ready = false;
+    session.readyAt = 0;
+    session.characterId = null;
+    session.input.attackRequested = false;
+    session.eliminatedByName = null;
+    if (!randomTarget) return true;
+    const candidates = aliveSpectatorCandidates(now);
+    if (candidates.length === 0) {
+      clearSpectatorTarget(session);
+      return true;
+    }
+    const picked = candidates[Math.floor(Math.random() * candidates.length)];
+    return setSpectatorTarget(session, picked);
+  }
+
+  function cycleSpectatorTarget(session, direction, now) {
+    if (!session || session.state !== "spectating") return false;
+    const candidates = aliveSpectatorCandidates(now);
+    if (candidates.length === 0) {
+      clearSpectatorTarget(session);
+      return false;
+    }
+    const dir = direction === SPECTATOR_CYCLE_PREV ? SPECTATOR_CYCLE_PREV : SPECTATOR_CYCLE_NEXT;
+    const currentIndex = candidates.findIndex((candidate) => candidate.characterId === session.spectatingCharacterId);
+    if (currentIndex < 0) {
+      const fallbackIndex = dir === SPECTATOR_CYCLE_PREV ? candidates.length - 1 : 0;
+      return setSpectatorTarget(session, candidates[fallbackIndex]);
+    }
+    const nextIndex = (currentIndex + dir + candidates.length) % candidates.length;
+    return setSpectatorTarget(session, candidates[nextIndex]);
+  }
+
+  function maintainSpectatorTarget(session, now) {
+    if (!session || session.state !== "spectating") return;
+    const candidates = aliveSpectatorCandidates(now);
+    if (candidates.length === 0) {
+      const targetedSession = session.spectatingSessionId ? sessions.get(session.spectatingSessionId) : null;
+      const targetedCharacter =
+        session.spectatingCharacterId != null ? characters[session.spectatingCharacterId] : null;
+      if (
+        targetedSession &&
+        targetedCharacter &&
+        (targetedSession.state === "downed" || targetedSession.state === "won")
+      ) {
+        return;
+      }
+      clearSpectatorTarget(session);
+      return;
+    }
+    if (session.spectatingCharacterId == null) {
+      setSpectatorTarget(session, candidates[0]);
+      return;
+    }
+    if (candidates.some((candidate) => candidate.characterId === session.spectatingCharacterId)) return;
+
+    const targetedSession = session.spectatingSessionId ? sessions.get(session.spectatingSessionId) : null;
+    const targetedCharacter = characters[session.spectatingCharacterId];
+    const targetedStillVisible =
+      targetedSession &&
+      targetedCharacter &&
+      (targetedSession.state === "downed" || targetedSession.state === "won");
+    if (targetedStillVisible) return;
+
+    setSpectatorTarget(session, candidates[0]);
+  }
+
   function scoreboardSnapshot() {
-    return authenticatedSessions()
+    return sortedAuthenticatedSessionsForScoreboard()
       .map((s) => ({
         name: s.name,
         wins: s.stats.wins,
@@ -477,13 +612,7 @@ function sanitizeSystemTextSegment(raw) {
         status: statusLabel(s),
         ready: Boolean(s.ready || s.state === "countdown")
       }))
-      .sort((a, b) => {
-        if (b.wins !== a.wins) return b.wins - a.wins;
-        if (b.knockdowns !== a.knockdowns) return b.knockdowns - a.knockdowns;
-        if (b.streak !== a.streak) return b.streak - a.streak;
-        if (a.downed !== b.downed) return a.downed - b.downed;
-        return a.name.localeCompare(b.name, "sv");
-      });
+      .sort((a, b) => compareScoreboardEntries(a, b));
   }
 
   function send(ws, type, payload = {}) {
@@ -748,6 +877,16 @@ function sanitizeSystemTextSegment(raw) {
           session.returnToLobbyAt = matchEndsAt;
         }
       }
+      if (session.state === "spectating") {
+        if (!winnerSessionId) {
+          returnToLobby(session, "round_ended");
+        } else {
+          session.ready = false;
+          session.readyAt = 0;
+          session.input.attackRequested = false;
+          session.returnToLobbyAt = matchEndsAt;
+        }
+      }
       if (session.state === "countdown") {
         session.state = "lobby";
         session.readyAt = 0;
@@ -823,6 +962,7 @@ function sanitizeSystemTextSegment(raw) {
     session.eliminatedAt = 0;
     session.returnToLobbyAt = 0;
     session.eliminatedByName = null;
+    clearSpectatorTarget(session);
     if (previousState !== "lobby") {
       emitStatsEvent("session_lobby", {
         sessionId: shortSessionId(session.id),
@@ -1228,6 +1368,7 @@ function sanitizeSystemTextSegment(raw) {
     session.state = "lobby";
     session.ready = false;
     session.readyAt = 0;
+    clearSpectatorTarget(session);
     const normalizedNameKey = normalizedName.toLowerCase();
     if (lobbyCountdown && countdownReadyNames.has(normalizedNameKey)) {
       session.ready = true;
@@ -1327,8 +1468,32 @@ function sanitizeSystemTextSegment(raw) {
       return dropMessage(session, "unauthenticated") ? "abuse" : "dropped";
     }
 
+    if (msg.type === "spectate") {
+      if (session.state === "alive" || session.state === "countdown") {
+        sendToSession(sessionId, "action_error", { message: "Du spelar redan i den här rundan." });
+        return "ok";
+      }
+      if (activeMatchStartedAt <= 0) {
+        sendToSession(sessionId, "action_error", { message: "Ingen match pågår just nu." });
+        return "ok";
+      }
+      setSessionSpectating(session, at, { randomTarget: true });
+      return "ok";
+    }
+
+    if (msg.type === "spectate_cycle") {
+      if (session.state !== "spectating") return "ok";
+      const direction = Number(msg.direction) < 0 ? SPECTATOR_CYCLE_PREV : SPECTATOR_CYCLE_NEXT;
+      cycleSpectatorTarget(session, direction, at);
+      return "ok";
+    }
+
     if (msg.type === "ready" || msg.type === "play") {
       if (session.state === "alive") return "ok";
+      if (session.state === "spectating") {
+        sendToSession(sessionId, "action_error", { message: "Du åskådar just nu. Återgå till lobbyn först." });
+        return "ok";
+      }
       if (session.state === "won") {
         sendToSession(sessionId, "action_error", { message: "Du vann nyss. Återgå till lobbyn för ny runda." });
         return "ok";
@@ -1364,7 +1529,7 @@ function sanitizeSystemTextSegment(raw) {
     }
 
     if (msg.type === "leave_match") {
-      if (session.state === "alive" || session.state === "downed" || session.state === "won") {
+      if (session.state === "alive" || session.state === "downed" || session.state === "won" || session.state === "spectating") {
         releaseOwnedCharacter(sessionId);
         returnToLobby(session, "left_match");
         appendSystemChat([
@@ -1439,7 +1604,7 @@ function sanitizeSystemTextSegment(raw) {
     let matchEndedByTimeout = false;
     for (const session of sessions.values()) {
       if (!session.authenticated) continue;
-      if (session.state !== "won" && session.state !== "downed") continue;
+      if (session.state !== "won" && session.state !== "downed" && session.state !== "spectating") continue;
       const returnAt = Number(session.returnToLobbyAt || 0);
       if (!Number.isFinite(returnAt) || returnAt <= 0 || now < returnAt) continue;
       releaseOwnedCharacter(session.id);
@@ -1451,7 +1616,7 @@ function sanitizeSystemTextSegment(raw) {
     }
     if (pendingRoundReset) {
       const hasEndMatchParticipants = authenticatedSessions().some(
-        (session) => session.state === "won" || session.state === "downed"
+        (session) => session.state === "won" || session.state === "downed" || session.state === "spectating"
       );
       if (!hasEndMatchParticipants) {
         resetArenaForNextRound(now);
@@ -1508,6 +1673,9 @@ function sanitizeSystemTextSegment(raw) {
     }
     if (alivePlayers > 0 && activeMatchStartedAt === 0) activeMatchStartedAt = now;
     if (alivePlayers === 0) activeMatchStartedAt = 0;
+
+    for (const session of sessions.values()) maintainSpectatorTarget(session, now);
+
     const match = {
       inProgress: alivePlayers > 0,
       alivePlayers,
@@ -1519,6 +1687,7 @@ function sanitizeSystemTextSegment(raw) {
       nextScoreboardRefreshAt = now + 250;
     }
     const scoreboard = cachedScoreboard;
+    const spectatorCandidates = aliveSpectatorCandidates(now);
 
     const worldState = {
       worldSizeMeters: WORLD_SIZE_METERS,
@@ -1548,6 +1717,9 @@ function sanitizeSystemTextSegment(raw) {
       const session = sessions.get(sessionId);
       const playerCharacter =
         session && session.characterId != null ? characters[session.characterId] : null;
+      const spectatorTargetSession =
+        session?.spectatingSessionId != null ? sessions.get(session.spectatingSessionId) : null;
+      const spectatorTargetName = spectatorTargetSession?.name || null;
       send(ws, "world", {
         ...worldState,
         match,
@@ -1563,10 +1735,20 @@ function sanitizeSystemTextSegment(raw) {
               minPlayersToStart: MIN_PLAYERS_TO_START,
               maxPlayers: MAX_PLAYERS,
               returnToLobbyMsRemaining:
-                session.state === "won" || session.state === "downed"
+                session.state === "won" || session.state === "downed" || session.state === "spectating"
                   ? Math.max(0, (session.returnToLobbyAt || 0) - now)
                   : 0,
               eliminatedByName: session.state === "downed" ? session.eliminatedByName || null : null,
+              spectatorTargetCharacterId:
+                session.state === "spectating" ? session.spectatingCharacterId ?? null : null,
+              spectatorTargetName: session.state === "spectating" ? spectatorTargetName : null,
+              spectatorCandidates:
+                session.state === "spectating"
+                  ? spectatorCandidates.map((candidate) => ({
+                      name: candidate.name,
+                      characterId: candidate.characterId
+                    }))
+                  : [],
               attackCooldownMsRemaining: playerCharacter
                 ? Math.max(0, ATTACK_COOLDOWN_MS - (now - playerCharacter.lastAttackAt))
                 : 0
@@ -1669,6 +1851,8 @@ function sanitizeSystemTextSegment(raw) {
       ready: false,
       readyAt: 0,
       characterId: null,
+      spectatingCharacterId: null,
+      spectatingSessionId: null,
       eliminatedAt: 0,
       returnToLobbyAt: 0,
       eliminatedByName: null,

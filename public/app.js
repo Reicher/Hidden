@@ -79,6 +79,11 @@ const downedOverlayEl = document.getElementById("downedOverlay");
 const downedByTextEl = document.getElementById("downedByText");
 const downedCountdownTextEl = document.getElementById("downedCountdownText");
 const downedLobbyBtnEl = document.getElementById("downedLobbyBtn");
+const downedSpectateBtnEl = document.getElementById("downedSpectateBtn");
+const spectatorHudEl = document.getElementById("spectatorHud");
+const spectatorTargetTextEl = document.getElementById("spectatorTargetText");
+const spectatorPrevBtnEl = document.getElementById("spectatorPrevBtn");
+const spectatorNextBtnEl = document.getElementById("spectatorNextBtn");
 
 const PLAYER_NAME_KEY = "hidden_player_name";
 const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
@@ -95,7 +100,7 @@ let socketGeneration = 0;
 let connecting = false;
 let authenticated = false;
 let appMode = "connect"; // connect | lobby | playing | disconnected
-let sessionState = "auth"; // auth | lobby | countdown | alive | downed | won
+let sessionState = "auth"; // auth | lobby | countdown | alive | downed | won | spectating
 let myCharacterId = null;
 let myName = "";
 let sessionReady = false;
@@ -117,6 +122,9 @@ let downedByName = "";
 let knockdownToastText = "";
 let knockdownToastMsRemaining = 0;
 let pendingLoginName = "";
+let spectatorTargetCharacterId = null;
+let spectatorTargetName = "";
+let spectatorCandidates = [];
 
 const INPUT_SEND_INTERVAL_MS = 33;
 const INPUT_HEARTBEAT_MS = 120;
@@ -132,6 +140,10 @@ const JOYSTICK_DEADZONE = 0.16;
 const DOWNED_CAMERA_HEIGHT = 4.6;
 const DOWNED_CAMERA_POS_SMOOTH_RATE = 9;
 const KNOCKDOWN_TOAST_MS = 5000;
+const SPECTATOR_CAMERA_DISTANCE = 1.42;
+const SPECTATOR_CAMERA_HEIGHT_OFFSET = 0.28;
+const SPECTATOR_CAMERA_TARGET_HEIGHT_OFFSET = 0.12;
+const SPECTATOR_CAMERA_POS_SMOOTH_RATE = 12;
 const FORCE_MOBILE_UI = new URLSearchParams(location.search).get("mobileUi") === "1";
 const MOBILE_CONTROLS_PREFS = Object.freeze(["auto", "on", "off"]);
 const IS_TOUCH_DEVICE = (() => {
@@ -533,9 +545,14 @@ function updateReadyButton() {
     playBtnEl.textContent = "Du spelar";
     return;
   }
-  if (currentMatch.inProgress) {
+  if (sessionState === "spectating") {
     playBtnEl.disabled = true;
-    playBtnEl.textContent = "Match pågår";
+    playBtnEl.textContent = "Åskådar";
+    return;
+  }
+  if (currentMatch.inProgress) {
+    playBtnEl.disabled = false;
+    playBtnEl.textContent = "Åskåda";
     return;
   }
   if (sessionState === "countdown" && sessionReady) {
@@ -584,6 +601,9 @@ function resetSessionRuntimeState({ maxPlayers = 0, clearIdentity = false } = {}
   resetDownedState();
   resetWinState();
   resetKnockdownToast();
+  spectatorTargetCharacterId = null;
+  spectatorTargetName = "";
+  spectatorCandidates = [];
 }
 
 function updateInGameHud() {
@@ -600,10 +620,12 @@ function updateDownedOverlay() {
     downedOverlayEl,
     downedByTextEl,
     downedCountdownTextEl,
+    downedSpectateBtnEl,
     gameMenuBtnEl,
     appMode,
     sessionState,
     downedByName,
+    canSpectate: currentMatch.inProgress && activePlayersInGame > 0,
     returnToLobbyMsRemaining: winReturnToLobbyMsRemaining
   });
 }
@@ -620,6 +642,18 @@ function updateWinOverlay() {
   });
 }
 
+function updateSpectatorHud() {
+  if (!spectatorHudEl || !spectatorTargetTextEl) return;
+  const spectating = appMode === "playing" && sessionState === "spectating";
+  spectatorHudEl.classList.toggle("hidden", !spectating);
+  if (!spectating) return;
+  const targetName = spectatorTargetName ? String(spectatorTargetName) : "ingen";
+  spectatorTargetTextEl.textContent = `Åskådar ${targetName}`;
+  const canCycle = Array.isArray(spectatorCandidates) && spectatorCandidates.length > 1;
+  if (spectatorPrevBtnEl) spectatorPrevBtnEl.disabled = !canCycle;
+  if (spectatorNextBtnEl) spectatorNextBtnEl.disabled = !canCycle;
+}
+
 function updateKnockdownToast() {
   updateKnockdownToastUi({
     knockdownToastEl,
@@ -628,6 +662,17 @@ function updateKnockdownToast() {
     knockdownToastMsRemaining,
     knockdownToastText
   });
+}
+
+function requestSpectate() {
+  if (!socket || !authenticated) return;
+  socket.sendJson({ type: "spectate" });
+}
+
+function requestSpectatorCycle(direction) {
+  if (!socket || sessionState !== "spectating") return;
+  const step = Number(direction) < 0 ? -1 : 1;
+  socket.sendJson({ type: "spectate_cycle", direction: step });
 }
 
 function updateCrosshairHud(deltaSec) {
@@ -688,6 +733,7 @@ function setAppMode(mode) {
   updateInGameHud();
   updateDownedOverlay();
   updateWinOverlay();
+  updateSpectatorHud();
   updateKnockdownToast();
   syncMusicLoop();
   updateDocumentTitle();
@@ -906,6 +952,24 @@ const socketState = {
   },
   set pendingLoginName(value) {
     pendingLoginName = value;
+  },
+  get spectatorTargetCharacterId() {
+    return spectatorTargetCharacterId;
+  },
+  set spectatorTargetCharacterId(value) {
+    spectatorTargetCharacterId = value;
+  },
+  get spectatorTargetName() {
+    return spectatorTargetName;
+  },
+  set spectatorTargetName(value) {
+    spectatorTargetName = value;
+  },
+  get spectatorCandidates() {
+    return spectatorCandidates;
+  },
+  set spectatorCandidates(value) {
+    spectatorCandidates = value;
   }
 };
 
@@ -933,6 +997,7 @@ const socketMessageContext = {
     updateInGameHud,
     updateDocumentTitle,
     updateKnockdownToast,
+    updateSpectatorHud,
     resetDownedState,
     resetWinState,
     resetInputState,
@@ -1033,6 +1098,22 @@ function requestReturnToLobby() {
   setGameMenuOpen(false);
 }
 
+function updateSpectatorCamera(deltaSec) {
+  if (sessionState !== "spectating") return;
+  const target = avatarSystem.getCharacterCameraState(spectatorTargetCharacterId);
+  if (!target) return;
+
+  const desiredX = target.x - Math.sin(target.yaw) * SPECTATOR_CAMERA_DISTANCE;
+  const desiredZ = target.z - Math.cos(target.yaw) * SPECTATOR_CAMERA_DISTANCE;
+  const desiredY = target.eyeHeight + SPECTATOR_CAMERA_HEIGHT_OFFSET;
+  const posSmooth = 1 - Math.exp(-deltaSec * SPECTATOR_CAMERA_POS_SMOOTH_RATE);
+  camera.position.x += (desiredX - camera.position.x) * posSmooth;
+  camera.position.z += (desiredZ - camera.position.z) * posSmooth;
+  camera.position.y += (desiredY - camera.position.y) * posSmooth;
+
+  camera.lookAt(target.x, target.eyeHeight + SPECTATOR_CAMERA_TARGET_HEIGHT_OFFSET, target.z);
+}
+
 const savedName = localStorage.getItem(PLAYER_NAME_KEY);
 if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
 if (IS_TOUCH_DEVICE) document.body.classList.add("touch-device");
@@ -1049,6 +1130,10 @@ nameInputEl?.addEventListener("keydown", (event) => {
 });
 playBtnEl?.addEventListener("click", () => {
   if (!socket || !authenticated) return;
+  if (currentMatch.inProgress) {
+    requestSpectate();
+    return;
+  }
   if (sessionState === "alive" || sessionState === "downed" || sessionState === "won") return;
   if (sessionReady && sessionState === "countdown") return;
   const nextReady = !sessionReady;
@@ -1083,7 +1168,7 @@ chatInputEl?.addEventListener("keydown", (event) => {
 });
 gameMenuBtnEl?.addEventListener("click", () => {
   if (appMode !== "playing") return;
-  if (sessionState !== "alive") return;
+  if (sessionState !== "alive" && sessionState !== "spectating") return;
   setGameMenuOpen(!gameMenuOpen);
 });
 gameMenuCloseBtnEl?.addEventListener("click", () => {
@@ -1099,7 +1184,14 @@ gameMenuCreditsBtnEl?.addEventListener("click", () => {
 });
 gameMenuLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
 downedLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
+downedSpectateBtnEl?.addEventListener("click", requestSpectate);
 winLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
+spectatorPrevBtnEl?.addEventListener("click", () => {
+  requestSpectatorCycle(-1);
+});
+spectatorNextBtnEl?.addEventListener("click", () => {
+  requestSpectatorCycle(1);
+});
 gameMenuBackdropEl?.addEventListener("click", (event) => {
   if (event.target === gameMenuBackdropEl) setGameMenuOpen(false, { restorePointerLock: true });
 });
@@ -1152,7 +1244,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (appMode === "playing" && event.key === "Escape") {
-    if (sessionState !== "alive") return;
+    if (sessionState !== "alive" && sessionState !== "spectating") return;
     if (lobbyDialogBackdropEl && !lobbyDialogBackdropEl.classList.contains("hidden")) {
       event.preventDefault();
       closeLobbyDialog();
@@ -1183,6 +1275,9 @@ function animate() {
   const controlledCharacterId =
     appMode === "playing" && (sessionState === "alive" || sessionState === "won") ? myCharacterId : null;
   avatarSystem.animate(deltaSec, controlledCharacterId);
+  if (appMode === "playing" && sessionState === "spectating") {
+    updateSpectatorCamera(deltaSec);
+  }
   if (appMode === "playing" && sessionState === "downed") {
     const corpsePos = avatarSystem.getCharacterPosition(myCharacterId);
     if (corpsePos) {
@@ -1193,7 +1288,7 @@ function animate() {
     }
     camera.rotation.set(-Math.PI / 2 + 0.0001, 0, 0);
   }
-  if (appMode === "playing" && (sessionState === "won" || sessionState === "downed")) {
+  if (appMode === "playing" && (sessionState === "won" || sessionState === "downed" || sessionState === "spectating")) {
     winReturnToLobbyMsRemaining = Math.max(0, winReturnToLobbyMsRemaining - deltaSec * 1000);
   }
   knockdownToastMsRemaining = Math.max(0, knockdownToastMsRemaining - deltaSec * 1000);
