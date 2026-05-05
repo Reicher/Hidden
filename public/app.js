@@ -45,7 +45,6 @@ const lobbyDialogTitleEl = document.getElementById("lobbyDialogTitle");
 const lobbyDialogTextEl = document.getElementById("lobbyDialogText");
 const settingsPanelEl = document.getElementById("settingsPanel");
 const mobileControlsModeBtnEl = document.getElementById("mobileControlsModeBtn");
-const mobileControlsModeHelpEl = document.getElementById("mobileControlsModeHelp");
 const musicVolumeInputEl = document.getElementById("musicVolumeInput");
 const musicMuteBtnEl = document.getElementById("musicMuteBtn");
 const sfxVolumeInputEl = document.getElementById("sfxVolumeInput");
@@ -125,6 +124,7 @@ const CROSSHAIR_DEFAULT_COOLDOWN_MS = 1000;
 const CROSSHAIR_RING_CIRCUMFERENCE = Math.PI * 26;
 const CROSSHAIR_HIT_DISTANCE_METERS = 2.8;
 const GAME_CHAT_MAX_LINES = 5;
+const GAME_CHAT_DISABLED_IN_GAME = true;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
 const JOYSTICK_DEADZONE = 0.16;
@@ -288,7 +288,7 @@ function controlsTextForCurrentMode() {
 
 function mobileControlsLabel(pref) {
   if (pref === "on") return "På";
-  if (pref === "off") return "Av";
+  if (pref === "off") return "AV";
   return "Auto";
 }
 
@@ -325,15 +325,6 @@ function persistAudioSettings() {
 function refreshAudioSettingsUi() {
   if (mobileControlsModeBtnEl) {
     mobileControlsModeBtnEl.textContent = mobileControlsLabel(mobileControlsPreference);
-  }
-  if (mobileControlsModeHelpEl) {
-    if (mobileControlsPreference === "on") {
-      mobileControlsModeHelpEl.textContent = "På: mobilkontroller visas alltid under spel.";
-    } else if (mobileControlsPreference === "off") {
-      mobileControlsModeHelpEl.textContent = "Av: använd tangentbord/mus även på touch-enhet.";
-    } else {
-      mobileControlsModeHelpEl.textContent = "Auto: visar mobilkontroller på touch-enheter.";
-    }
   }
   if (musicVolumeInputEl) musicVolumeInputEl.value = String(audioSettings.musicVolume);
   if (sfxVolumeInputEl) sfxVolumeInputEl.value = String(audioSettings.sfxVolume);
@@ -429,13 +420,9 @@ function updateMobileControlsVisibility() {
   if (wasShown && !show) resetJoystickState();
 }
 
-function isMobileChatDisabledInGame() {
-  return true;
-}
-
 function setGameChatOpen(open, { restorePointerLock = false } = {}) {
   if (!gameChatInputRowEl) return;
-  const canOpen = Boolean(open) && !isMobileChatDisabledInGame();
+  const canOpen = Boolean(open) && !GAME_CHAT_DISABLED_IN_GAME;
   gameChatOpen = canOpen;
   gameChatInputRowEl.classList.toggle("hidden", !canOpen);
   if (canOpen) {
@@ -681,7 +668,7 @@ function setAppMode(mode) {
   if (mode !== "playing") setGameChatOpen(false);
   if (mode !== "playing") setGameMenuOpen(false);
   if (mode !== "lobby") setLobbyMenuOpen(false);
-  if (mode === "playing" && isMobileChatDisabledInGame() && gameChatOpen) setGameChatOpen(false);
+  if (mode === "playing" && GAME_CHAT_DISABLED_IN_GAME && gameChatOpen) setGameChatOpen(false);
   if (mode === "connect" || mode === "disconnected") setCountdownTextFromSession({ state: "lobby" });
   updateReadyButton();
   updateMobileControlsVisibility();

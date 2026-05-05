@@ -79,6 +79,7 @@ export function handleSocketMessage(msg, ctx) {
   }
 
   if (session) {
+    const previousAttackCooldownMsRemaining = Math.max(0, Number(state.attackCooldownMsRemaining || 0));
     state.sessionState = session.state;
     state.authenticated = Boolean(session.authenticated);
     state.myName = session.name || state.myName;
@@ -91,11 +92,13 @@ export function handleSocketMessage(msg, ctx) {
     state.downedByName = session.eliminatedByName ? String(session.eliminatedByName) : "";
     state.attackCooldownMsRemaining = Math.max(0, Number(session.attackCooldownMsRemaining || 0));
     if (state.attackCooldownMsRemaining > constants.CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS) {
-      state.attackCooldownVisualMaxMs = Math.max(
-        state.attackCooldownVisualMaxMs * 0.9,
-        state.attackCooldownMsRemaining,
-        constants.CROSSHAIR_DEFAULT_COOLDOWN_MS
-      );
+      const newCooldownStarted = state.attackCooldownMsRemaining > previousAttackCooldownMsRemaining + 16;
+      if (newCooldownStarted || state.attackCooldownMsRemaining > state.attackCooldownVisualMaxMs) {
+        state.attackCooldownVisualMaxMs = Math.max(
+          state.attackCooldownMsRemaining,
+          constants.CROSSHAIR_DEFAULT_COOLDOWN_MS
+        );
+      }
     }
     actions.updateInGameHud();
     actions.updateDocumentTitle();
