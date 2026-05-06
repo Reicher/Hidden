@@ -62,7 +62,7 @@ Three.js hanteras lokalt: `node_modules/three/build/three.module.js` är källan
 - `WORLD_LAYOUT_ID` kan sättas till `layout-50` eller `layout-30`.
 - PNG-regler:
   - transparent/vit = tom yta
-  - svart = hyllor (måste kunna delas i exakta 1x6-segment)
+  - svart = hyllor (raka 1-cell-tjocka segment, valfri längd)
   - blå nyanser = kyl
   - grön nyanser = frys
 - Regenerera layout-PNG:

@@ -228,15 +228,15 @@ const LAYOUT_PRESET_BY_ID = new Map(LAYOUT_PRESETS.map((preset) => [preset.id, p
 const loadedLayouts = new Map();
 const requestedLayoutId = envString("WORLD_LAYOUT_ID", "layout-50").toLowerCase();
 
-function cloneFixtureSet(fixtures, { width, depth, height }) {
+function cloneFixtureSet(fixtures, { width, depth, height, keepSourceDimensions = false }) {
   return Object.freeze(
     fixtures.map((fixture) =>
       freezeFixture({
         x: fixture.x,
         z: fixture.z,
-        width,
-        depth,
-        height,
+        width: keepSourceDimensions && typeof fixture.width === "number" ? fixture.width : width,
+        depth: keepSourceDimensions && typeof fixture.depth === "number" ? fixture.depth : depth,
+        height: keepSourceDimensions && typeof fixture.height === "number" ? fixture.height : height,
         yaw: fixture.yaw
       })
     )
@@ -274,7 +274,12 @@ function readLayoutById(layoutId) {
     worldWidthMeters: loaded.worldWidthMeters,
     worldHeightMeters: loaded.worldHeightMeters,
     warnings: Object.freeze(Array.isArray(loaded.warnings) ? loaded.warnings : []),
-    shelves: cloneFixtureSet(loaded.shelves, { width: SHELF_WIDTH, depth: SHELF_DEPTH, height: SHELF_HEIGHT }),
+    shelves: cloneFixtureSet(loaded.shelves, {
+      width: SHELF_WIDTH,
+      depth: SHELF_DEPTH,
+      height: SHELF_HEIGHT,
+      keepSourceDimensions: true
+    }),
     coolers: cloneFixtureSet(loaded.coolers, { width: COOLER_WIDTH, depth: COOLER_DEPTH, height: COOLER_HEIGHT }),
     freezers: cloneFixtureSet(loaded.freezers, { width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT })
   });

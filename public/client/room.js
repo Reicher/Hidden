@@ -24,56 +24,65 @@ const FLUORESCENT_COLS = 4;
 const FLUORESCENT_BLINK_INDEX = 5;
 const FLOOR_TILE_METERS = 1;
 const CEILING_TILE_METERS = 3;
+const PRODUCT_SPAWN_CHANCE = 0.8;
+const PRODUCT_WIDTH_METERS = 0.8;
+const PRODUCT_ATLAS_URL = "/assets/products.png";
+const PRODUCT_YAW_JITTER_RAD = Math.PI / 8; // +/- 22.5 deg
+const PRODUCT_SIDE_JITTER_METERS = 0.2; // +/- 20 cm along shelf length
+const PRODUCT_DEPTH_JITTER_METERS = 0.1; // +/- 10 cm toward/away from shelf front
 
 const TEXTURE_SPECS = Object.freeze({
   floor: Object.freeze({
     url: "/assets/floor.png",
     baseWidth: 64,
     baseHeight: 64,
-    fallbackColor: 0x4a505d
+    fallbackColor: 0x4a505d,
   }),
   ceiling: Object.freeze({
     url: "/assets/ceiling.png",
     baseWidth: 96,
     baseHeight: 96,
-    fallbackColor: 0x515661
+    fallbackColor: 0x515661,
   }),
   wall: Object.freeze({
     url: "/assets/wall.png",
     baseWidth: 32,
     baseHeight: 160,
-    fallbackColor: 0x6f7b8f
+    fallbackColor: 0x6f7b8f,
   }),
   shelf: Object.freeze({
     url: "/assets/shelf.png",
     baseWidth: 192,
     baseHeight: 64,
-    fallbackColor: 0x9a856b
+    fallbackColor: 0x9a856b,
   }),
   cooler: Object.freeze({
     url: "/assets/cooler.png",
     baseWidth: 32,
     baseHeight: 64,
-    fallbackColor: 0xf8fafc
+    fallbackColor: 0xf8fafc,
   }),
   freezer: Object.freeze({
     url: "/assets/freezer.png",
     baseWidth: 32,
     baseHeight: 32,
-    fallbackColor: 0xf7f9fc
-  })
+    fallbackColor: 0xf7f9fc,
+  }),
 });
 
 export function createRoomSystem({ scene, renderer }) {
   const textureLoader = new THREE.TextureLoader();
-  const textureAnisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+  const textureAnisotropy = Math.min(
+    4,
+    renderer.capabilities.getMaxAnisotropy(),
+  );
   const roomRoot = new THREE.Group();
   scene.add(roomRoot);
 
   const floorMaterial = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 0.94,
-    metalness: 0.02
+    metalness: 0.02,
   });
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), floorMaterial);
   floor.rotation.x = -Math.PI / 2;
@@ -82,25 +91,32 @@ export function createRoomSystem({ scene, renderer }) {
     color: 0xffffff,
     roughness: 0.95,
     metalness: 0.01,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
   });
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), ceilingMaterial);
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(30, 30),
+    ceilingMaterial,
+  );
   ceiling.rotation.x = Math.PI / 2;
 
   const wallBaseMaterial = new THREE.MeshBasicMaterial({ color: 0x6f7b8f });
   const wallMaterials = [];
-  const shelfSideMaterials = [];
   const coolerFrontMaterials = [];
   const freezerLidMaterials = [];
   const fluorescentUnits = [];
   let currentPlaneWidthMeters = 30;
   let currentPlaneHeightMeters = 30;
+  let productAtlasTexture = null;
+  let productAtlasAvailable = false;
+  let productVariantRows = 2;
 
   function hasImageData(texture) {
     const image = texture?.image;
     if (!image) return false;
-    if (typeof image.videoWidth === "number") return image.videoWidth > 0 && image.videoHeight > 0;
-    if (typeof image.width === "number") return image.width > 0 && image.height > 0;
+    if (typeof image.videoWidth === "number")
+      return image.videoWidth > 0 && image.videoHeight > 0;
+    if (typeof image.width === "number")
+      return image.width > 0 && image.height > 0;
     return true;
   }
 
@@ -113,7 +129,6 @@ export function createRoomSystem({ scene, renderer }) {
   }
 
   const wallRng = seededRandom(20260429);
-  const shelfRng = seededRandom(20260430);
   const floorRng = seededRandom(20260431);
   const ceilingRng = seededRandom(20260502);
   const coolerRng = seededRandom(20260503);
@@ -124,6 +139,11 @@ export function createRoomSystem({ scene, renderer }) {
   let builtWorldWidthMeters = null;
   let builtWorldHeightMeters = null;
   let builtFixturesSignature = "";
+  let lastSyncedWorldWidthMeters = DEFAULT_WORLD_WIDTH_METERS;
+  let lastSyncedWorldHeightMeters = DEFAULT_WORLD_HEIGHT_METERS;
+  let lastSyncedShelves = DEFAULT_SHELVES;
+  let lastSyncedCoolers = DEFAULT_COOLERS;
+  let lastSyncedFreezers = DEFAULT_FREEZERS;
 
   function createTextureState(spec) {
     return {
@@ -134,7 +154,7 @@ export function createRoomSystem({ scene, renderer }) {
       cellHeight: spec.baseHeight,
       variantsX: 1,
       variantsY: 1,
-      variantCount: 1
+      variantCount: 1,
     };
   }
 
@@ -154,7 +174,9 @@ export function createRoomSystem({ scene, renderer }) {
 
   function variantIndexFromSeed(seed, variantCount) {
     if (!Number.isFinite(variantCount) || variantCount < 2) return 0;
-    const normalizedSeed = Number.isFinite(seed) ? Math.abs(Math.trunc(seed)) : 0;
+    const normalizedSeed = Number.isFinite(seed)
+      ? Math.abs(Math.trunc(seed))
+      : 0;
     return normalizedSeed % variantCount;
   }
 
@@ -162,7 +184,12 @@ export function createRoomSystem({ scene, renderer }) {
     const image = state.texture?.image;
     const imageWidth = Number(image?.videoWidth ?? image?.width ?? 0);
     const imageHeight = Number(image?.videoHeight ?? image?.height ?? 0);
-    if (!Number.isFinite(imageWidth) || imageWidth < 1 || !Number.isFinite(imageHeight) || imageHeight < 1) {
+    if (
+      !Number.isFinite(imageWidth) ||
+      imageWidth < 1 ||
+      !Number.isFinite(imageHeight) ||
+      imageHeight < 1
+    ) {
       state.cellWidth = state.spec.baseWidth;
       state.cellHeight = state.spec.baseHeight;
       state.variantsX = 1;
@@ -171,8 +198,10 @@ export function createRoomSystem({ scene, renderer }) {
       return;
     }
 
-    const cellWidth = imageWidth < state.spec.baseWidth ? imageWidth : state.spec.baseWidth;
-    const cellHeight = imageHeight < state.spec.baseHeight ? imageHeight : state.spec.baseHeight;
+    const cellWidth =
+      imageWidth < state.spec.baseWidth ? imageWidth : state.spec.baseWidth;
+    const cellHeight =
+      imageHeight < state.spec.baseHeight ? imageHeight : state.spec.baseHeight;
     const variantsX = Math.max(1, Math.floor(imageWidth / cellWidth));
     const variantsY = Math.max(1, Math.floor(imageHeight / cellHeight));
     state.cellWidth = cellWidth;
@@ -196,13 +225,73 @@ export function createRoomSystem({ scene, renderer }) {
     map.anisotropy = textureAnisotropy;
     applyPixelArtSampling(map);
     map.repeat.set(1 / state.variantsX, 1 / state.variantsY);
-    map.offset.set(col / state.variantsX, 1 - (rowFromTop + 1) / state.variantsY);
+    map.offset.set(
+      col / state.variantsX,
+      1 - (rowFromTop + 1) / state.variantsY,
+    );
     if (hasImageData(map)) map.needsUpdate = true;
     return map;
   }
 
+  function getProductAspectRatio() {
+    const image = productAtlasTexture?.image;
+    const imageWidth = Number(image?.videoWidth ?? image?.width ?? 0);
+    const imageHeight = Number(image?.videoHeight ?? image?.height ?? 0);
+    if (
+      !Number.isFinite(imageWidth) ||
+      imageWidth <= 0 ||
+      !Number.isFinite(imageHeight) ||
+      imageHeight <= 0
+    )
+      return 1;
+    const rows = Math.max(1, productVariantRows);
+    const cellHeight = imageHeight / rows;
+    if (!Number.isFinite(cellHeight) || cellHeight <= 0) return 1;
+    return cellHeight / imageWidth;
+  }
+
+  function createProductMap(productRow) {
+    if (!productAtlasAvailable || !hasImageData(productAtlasTexture))
+      return null;
+    const rows = Math.max(1, productVariantRows);
+    const row = ((Math.trunc(productRow) % rows) + rows) % rows;
+    const map = productAtlasTexture.clone();
+    map.source = productAtlasTexture.source;
+    map.image = productAtlasTexture.image;
+    map.wrapS = THREE.ClampToEdgeWrapping;
+    map.wrapT = THREE.ClampToEdgeWrapping;
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.anisotropy = textureAnisotropy;
+    applyPixelArtSampling(map);
+    map.repeat.set(1, 1 / rows);
+    map.offset.set(0, 1 - (row + 1) / rows);
+    if (hasImageData(map)) map.needsUpdate = true;
+    return map;
+  }
+
+  function createProductMaterial(productRow) {
+    const material = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      alphaTest: 0.35,
+      side: THREE.DoubleSide,
+    });
+    const map = createProductMap(productRow);
+    if (map) {
+      material.map = map;
+    } else {
+      material.color.setHex(0xc88d5e);
+    }
+    return material;
+  }
+
   function createVariantTileTexture(state, variantSeed) {
-    if (!state.available || !hasImageData(state.texture) || typeof document === "undefined") return null;
+    if (
+      !state.available ||
+      !hasImageData(state.texture) ||
+      typeof document === "undefined"
+    )
+      return null;
     const image = state.texture?.image;
     if (!image) return null;
     const variantIndex = variantIndexFromSeed(variantSeed, state.variantCount);
@@ -217,7 +306,17 @@ export function createRoomSystem({ scene, renderer }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(image, sx, sy, state.cellWidth, state.cellHeight, 0, 0, state.cellWidth, state.cellHeight);
+    ctx.drawImage(
+      image,
+      sx,
+      sy,
+      state.cellWidth,
+      state.cellHeight,
+      0,
+      0,
+      state.cellWidth,
+      state.cellHeight,
+    );
 
     const map = new THREE.CanvasTexture(canvas);
     map.wrapS = THREE.ClampToEdgeWrapping;
@@ -239,12 +338,24 @@ export function createRoomSystem({ scene, renderer }) {
     return map;
   }
 
-  function createRandomizedSurfaceMap({ state, planeWidthMeters, planeHeightMeters, tileSizeMeters, rng }) {
+  function createRandomizedSurfaceMap({
+    state,
+    planeWidthMeters,
+    planeHeightMeters,
+    tileSizeMeters,
+    rng,
+  }) {
     if (!state.available || !hasImageData(state.texture)) return null;
     const image = state.texture?.image;
     if (!image || typeof document === "undefined") return null;
-    const tileCountX = Math.max(1, Math.ceil(planeWidthMeters / tileSizeMeters));
-    const tileCountY = Math.max(1, Math.ceil(planeHeightMeters / tileSizeMeters));
+    const tileCountX = Math.max(
+      1,
+      Math.ceil(planeWidthMeters / tileSizeMeters),
+    );
+    const tileCountY = Math.max(
+      1,
+      Math.ceil(planeHeightMeters / tileSizeMeters),
+    );
     const canvas = document.createElement("canvas");
     canvas.width = state.cellWidth * tileCountX;
     canvas.height = state.cellHeight * tileCountY;
@@ -255,7 +366,10 @@ export function createRoomSystem({ scene, renderer }) {
     for (let y = 0; y < tileCountY; y += 1) {
       for (let x = 0; x < tileCountX; x += 1) {
         const variantSeed = chooseVariantSeed(rng);
-        const variantIndex = variantIndexFromSeed(variantSeed, state.variantCount);
+        const variantIndex = variantIndexFromSeed(
+          variantSeed,
+          state.variantCount,
+        );
         const col = variantIndex % state.variantsX;
         const rowFromTop = Math.floor(variantIndex / state.variantsX);
         const sx = col * state.cellWidth;
@@ -269,7 +383,7 @@ export function createRoomSystem({ scene, renderer }) {
           x * state.cellWidth,
           y * state.cellHeight,
           state.cellWidth,
-          state.cellHeight
+          state.cellHeight,
         );
       }
     }
@@ -284,7 +398,13 @@ export function createRoomSystem({ scene, renderer }) {
     return map;
   }
 
-  function applyPlanarMaterialTexture({ key, material, fallbackColor, tileSizeMeters, rng }) {
+  function applyPlanarMaterialTexture({
+    key,
+    material,
+    fallbackColor,
+    tileSizeMeters,
+    rng,
+  }) {
     const state = textureStates.get(key);
     if (!state?.available) {
       replaceMaterialMap(material, null);
@@ -297,7 +417,7 @@ export function createRoomSystem({ scene, renderer }) {
       planeWidthMeters: currentPlaneWidthMeters,
       planeHeightMeters: currentPlaneHeightMeters,
       tileSizeMeters,
-      rng
+      rng,
     });
     if (nextMap) {
       material.color.setHex(0xffffff);
@@ -315,14 +435,14 @@ export function createRoomSystem({ scene, renderer }) {
       material: floorMaterial,
       fallbackColor: TEXTURE_SPECS.floor.fallbackColor,
       tileSizeMeters: FLOOR_TILE_METERS,
-      rng: floorRng
+      rng: floorRng,
     });
     applyPlanarMaterialTexture({
       key: "ceiling",
       material: ceilingMaterial,
       fallbackColor: TEXTURE_SPECS.ceiling.fallbackColor,
       tileSizeMeters: CEILING_TILE_METERS,
-      rng: ceilingRng
+      rng: ceilingRng,
     });
   }
 
@@ -370,9 +490,16 @@ export function createRoomSystem({ scene, renderer }) {
   function refreshAllTextureApplications() {
     refreshFloorAndCeilingTextures();
     applyWallMaterials();
-    applyVariantMaterials(shelfSideMaterials, "shelf", TEXTURE_SPECS.shelf.fallbackColor);
-    applyVariantMaterials(coolerFrontMaterials, "cooler", TEXTURE_SPECS.cooler.fallbackColor);
-    applyVariantMaterials(freezerLidMaterials, "freezer", TEXTURE_SPECS.freezer.fallbackColor);
+    applyVariantMaterials(
+      coolerFrontMaterials,
+      "cooler",
+      TEXTURE_SPECS.cooler.fallbackColor,
+    );
+    applyVariantMaterials(
+      freezerLidMaterials,
+      "freezer",
+      TEXTURE_SPECS.freezer.fallbackColor,
+    );
   }
 
   function onTextureLoaded(key, texture) {
@@ -406,13 +533,55 @@ export function createRoomSystem({ scene, renderer }) {
       spec.url,
       (texture) => onTextureLoaded(key, texture),
       undefined,
-      () => onTextureFailed(key)
+      () => onTextureFailed(key),
     );
   }
 
   for (const key of Object.keys(TEXTURE_SPECS)) {
     loadTextureByKey(key);
   }
+
+  textureLoader.load(
+    PRODUCT_ATLAS_URL,
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = textureAnisotropy;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      applyPixelArtSampling(texture);
+      productAtlasTexture = texture;
+      productAtlasAvailable = true;
+
+      const image = texture?.image;
+      const imageWidth = Number(image?.videoWidth ?? image?.width ?? 0);
+      const imageHeight = Number(image?.videoHeight ?? image?.height ?? 0);
+      if (
+        Number.isFinite(imageWidth) &&
+        imageWidth > 0 &&
+        Number.isFinite(imageHeight) &&
+        imageHeight > 0
+      ) {
+        const inferredRows = Math.max(1, Math.floor(imageHeight / imageWidth));
+        productVariantRows = inferredRows;
+      }
+
+      builtWorldWidthMeters = null;
+      builtWorldHeightMeters = null;
+      builtFixturesSignature = "";
+      syncFromWorld({
+        worldWidthMeters: lastSyncedWorldWidthMeters,
+        worldHeightMeters: lastSyncedWorldHeightMeters,
+        shelves: lastSyncedShelves,
+        coolers: lastSyncedCoolers,
+        freezers: lastSyncedFreezers,
+      });
+    },
+    undefined,
+    () => {
+      productAtlasTexture = null;
+      productAtlasAvailable = false;
+    },
+  );
 
   function createWallMaterial(variantSeed, wallSpanMeters) {
     const material = wallBaseMaterial.clone();
@@ -423,26 +592,19 @@ export function createRoomSystem({ scene, renderer }) {
     return material;
   }
 
-  function createShelfSideMaterial(variantSeed) {
-    const material = new THREE.MeshBasicMaterial({
-      color: TEXTURE_SPECS.shelf.fallbackColor,
-      side: THREE.DoubleSide
-    });
-    material.userData.variantSeed = variantSeed;
-    shelfSideMaterials.push(material);
-    applyVariantMaterials([material], "shelf", TEXTURE_SPECS.shelf.fallbackColor);
-    return material;
-  }
-
   function createCoolerFrontMaterial(variantSeed) {
     const material = new THREE.MeshStandardMaterial({
       color: TEXTURE_SPECS.cooler.fallbackColor,
       roughness: 0.18,
-      metalness: 0.04
+      metalness: 0.04,
     });
     material.userData.variantSeed = variantSeed;
     coolerFrontMaterials.push(material);
-    applyVariantMaterials([material], "cooler", TEXTURE_SPECS.cooler.fallbackColor);
+    applyVariantMaterials(
+      [material],
+      "cooler",
+      TEXTURE_SPECS.cooler.fallbackColor,
+    );
     return material;
   }
 
@@ -450,11 +612,15 @@ export function createRoomSystem({ scene, renderer }) {
     const material = new THREE.MeshStandardMaterial({
       color: TEXTURE_SPECS.freezer.fallbackColor,
       roughness: 0.14,
-      metalness: 0.02
+      metalness: 0.02,
     });
     material.userData.variantSeed = variantSeed;
     freezerLidMaterials.push(material);
-    applyVariantMaterials([material], "freezer", TEXTURE_SPECS.freezer.fallbackColor);
+    applyVariantMaterials(
+      [material],
+      "freezer",
+      TEXTURE_SPECS.freezer.fallbackColor,
+    );
     return material;
   }
 
@@ -486,15 +652,20 @@ export function createRoomSystem({ scene, renderer }) {
       if (child !== floor && child !== ceiling) disposeObjectResources(child);
     }
     wallMaterials.length = 0;
-    shelfSideMaterials.length = 0;
     coolerFrontMaterials.length = 0;
     freezerLidMaterials.length = 0;
   }
 
   function createWall(x, z, sx, sz) {
     const wallSpanMeters = Math.max(sx, sz);
-    const material = createWallMaterial(chooseVariantSeed(wallRng), wallSpanMeters);
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, WALL_HEIGHT, sz), material);
+    const material = createWallMaterial(
+      chooseVariantSeed(wallRng),
+      wallSpanMeters,
+    );
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(sx, WALL_HEIGHT, sz),
+      material,
+    );
     mesh.position.set(x, WALL_HEIGHT * 0.5, z);
     roomRoot.add(mesh);
   }
@@ -504,37 +675,100 @@ export function createRoomSystem({ scene, renderer }) {
     const depth = typeof shelf.depth === "number" ? shelf.depth : 6.0;
     const height = typeof shelf.height === "number" ? shelf.height : 2.0;
     const yaw = typeof shelf.yaw === "number" ? shelf.yaw : 0;
-    const plain = new THREE.MeshStandardMaterial({ color: 0x8a7660, roughness: 0.9, metalness: 0.02 });
+    const panelLength = Math.max(width, depth);
+    const panelHeight = Math.max(0.2, height);
+    const panelThickness = 0.1;
+    const shelfDepth = 0.5;
+    const shelfThickness = 0.1;
+    const shelfCount = 3;
 
-    const sideA = createShelfSideMaterial(chooseVariantSeed(shelfRng));
-    const sideB = createShelfSideMaterial(chooseVariantSeed(shelfRng));
+    const plain = new THREE.MeshStandardMaterial({
+      color: 0x6f4a2d,
+      roughness: 0.92,
+      metalness: 0.02,
+    });
+
     const group = new THREE.Group();
     group.position.set(shelf.x, 0, shelf.z);
     group.rotation.y = yaw;
     group.userData.type = "shelf";
     roomRoot.add(group);
 
-    const core = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), plain);
-    core.position.set(0, height * 0.5, 0);
-    group.add(core);
+    const backPanelX = width * 0.5 - panelThickness * 0.5;
+    const backPanel = new THREE.Mesh(
+      new THREE.BoxGeometry(panelThickness, panelHeight, panelLength),
+      plain,
+    );
+    backPanel.position.set(backPanelX, panelHeight * 0.5, 0);
+    group.add(backPanel);
 
-    // Put textured panels explicitly on the long sides to avoid BoxGeometry material-index ambiguity.
-    const sideOffsetX = width * 0.5 + 0.004;
-    const longSideA = new THREE.Mesh(new THREE.PlaneGeometry(depth, height), sideA);
-    longSideA.position.set(sideOffsetX, height * 0.5, 0);
-    longSideA.rotation.y = Math.PI / 2;
-    group.add(longSideA);
+    const shelfMinY = panelHeight * 0.2;
+    const shelfMaxY = panelHeight * 0.8;
+    const shelfYs = [];
+    for (let i = 0; i < shelfCount; i += 1) {
+      const t = shelfCount > 1 ? i / (shelfCount - 1) : 0;
+      const shelfY = shelfMinY + (shelfMaxY - shelfMinY) * t;
+      shelfYs.push(shelfY);
+      const shelfBoard = new THREE.Mesh(
+        new THREE.BoxGeometry(shelfDepth, shelfThickness, panelLength),
+        plain,
+      );
+      shelfBoard.position.set(
+        backPanelX - panelThickness * 0.5 - shelfDepth * 0.5,
+        shelfY,
+        0,
+      );
+      group.add(shelfBoard);
+    }
 
-    const longSideB = new THREE.Mesh(new THREE.PlaneGeometry(depth, height), sideB);
-    longSideB.position.set(-sideOffsetX, height * 0.5, 0);
-    longSideB.rotation.y = -Math.PI / 2;
-    group.add(longSideB);
+    if (!productAtlasAvailable || productVariantRows < 1) return;
+    const meterCount = Math.max(1, Math.floor(panelLength));
+    const centerX = backPanelX - panelThickness * 0.5 - shelfDepth * 0.5;
+    const zStart = -panelLength * 0.5;
+    const productAspect = getProductAspectRatio();
+    const naturalProductHeight = PRODUCT_WIDTH_METERS * productAspect;
+    for (let meter = 0; meter < meterCount; meter += 1) {
+      const zCenter = zStart + meter + 0.5;
+      for (let level = 0; level < shelfYs.length; level += 1) {
+        if (Math.random() > PRODUCT_SPAWN_CHANCE) continue;
+        const currentTopY = shelfYs[level] + shelfThickness * 0.5;
+        const nextBottomY =
+          level < shelfYs.length - 1
+            ? shelfYs[level + 1] - shelfThickness * 0.5 - 0.02
+            : panelHeight - 0.02;
+        const availableHeight = Math.max(0, nextBottomY - currentTopY);
+        const productHeight = Math.min(naturalProductHeight, availableHeight);
+        if (!Number.isFinite(productHeight) || productHeight < 0.06) continue;
+
+        const productRow = Math.floor(Math.random() * productVariantRows);
+        const productMaterial = createProductMaterial(productRow);
+        const product = new THREE.Mesh(
+          new THREE.PlaneGeometry(PRODUCT_WIDTH_METERS, productHeight),
+          productMaterial,
+        );
+        const sideJitter = (Math.random() * 2 - 1) * PRODUCT_SIDE_JITTER_METERS;
+        const depthJitter =
+          (Math.random() * 2 - 1) * PRODUCT_DEPTH_JITTER_METERS;
+        const yawJitter = (Math.random() * 2 - 1) * PRODUCT_YAW_JITTER_RAD;
+        product.position.set(
+          centerX + depthJitter,
+          currentTopY + productHeight * 0.5,
+          zCenter + sideJitter,
+        );
+        product.rotation.y = -Math.PI / 2 + yawJitter;
+        product.userData.type = "product";
+        group.add(product);
+      }
+    }
   }
 
   function createCooler(cooler) {
-    const width = typeof cooler.width === "number" ? cooler.width : COOLER_WIDTH;
-    const depth = typeof cooler.depth === "number" ? cooler.depth : COOLER_DEPTH;
-    const height = typeof cooler.height === "number" ? cooler.height : COOLER_HEIGHT;
+    const width =
+      typeof cooler.width === "number" ? cooler.width : COOLER_WIDTH;
+    const depth =
+      typeof cooler.depth === "number" ? cooler.depth : COOLER_DEPTH;
+    const height =
+      typeof cooler.height === "number" ? cooler.height : COOLER_HEIGHT;
     const yaw = typeof cooler.yaw === "number" ? cooler.yaw : 0;
 
     const group = new THREE.Group();
@@ -544,21 +778,40 @@ export function createRoomSystem({ scene, renderer }) {
     group.userData.frontLocalAxis = "+Z";
     group.userData.frontFacingYaw = yaw;
 
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xecf0f4, roughness: 0.28, metalness: 0.08 });
-    const frontMaterial = createCoolerFrontMaterial(chooseVariantSeed(coolerRng));
-    const trimMaterial = new THREE.MeshStandardMaterial({ color: 0xd4dbe4, roughness: 0.34, metalness: 0.22 });
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+      color: 0xecf0f4,
+      roughness: 0.28,
+      metalness: 0.08,
+    });
+    const frontMaterial = createCoolerFrontMaterial(
+      chooseVariantSeed(coolerRng),
+    );
+    const trimMaterial = new THREE.MeshStandardMaterial({
+      color: 0xd4dbe4,
+      roughness: 0.34,
+      metalness: 0.22,
+    });
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), bodyMaterial);
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(width, height, depth),
+      bodyMaterial,
+    );
     body.position.y = height * 0.5;
     body.userData.frontLocalAxis = "+Z";
     group.add(body);
 
-    const frontPanel = new THREE.Mesh(new THREE.PlaneGeometry(width * 0.86, height * 0.92), frontMaterial);
+    const frontPanel = new THREE.Mesh(
+      new THREE.PlaneGeometry(width * 0.86, height * 0.92),
+      frontMaterial,
+    );
     frontPanel.position.set(0, height * 0.5, depth * 0.5 + 0.004);
     frontPanel.userData.frontLocalAxis = "+Z";
     group.add(frontPanel);
 
-    const handle = new THREE.Mesh(new THREE.BoxGeometry(width * 0.04, height * 0.54, 0.02), trimMaterial);
+    const handle = new THREE.Mesh(
+      new THREE.BoxGeometry(width * 0.04, height * 0.54, 0.02),
+      trimMaterial,
+    );
     handle.position.set(width * 0.34, height * 0.5, depth * 0.5 + 0.018);
     handle.userData.frontLocalAxis = "+Z";
     group.add(handle);
@@ -578,23 +831,41 @@ export function createRoomSystem({ scene, renderer }) {
     group.userData.type = "freezer";
     group.userData.opening = "top";
 
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xe9edf2, roughness: 0.42, metalness: 0.06 });
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe9edf2,
+      roughness: 0.42,
+      metalness: 0.06,
+    });
     const lidMaterial = createFreezerLidMaterial(chooseVariantSeed(freezerRng));
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), bodyMaterial);
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(width, height, depth),
+      bodyMaterial,
+    );
     body.position.y = height * 0.5;
     group.add(body);
 
     const lidThickness = 0.05;
     const lidInset = 0.02;
     const lidBase = new THREE.Mesh(
-      new THREE.BoxGeometry(width - lidInset * 2, lidThickness, depth - lidInset * 2),
-      new THREE.MeshStandardMaterial({ color: 0xf7f9fc, roughness: 0.22, metalness: 0.02 })
+      new THREE.BoxGeometry(
+        width - lidInset * 2,
+        lidThickness,
+        depth - lidInset * 2,
+      ),
+      new THREE.MeshStandardMaterial({
+        color: 0xf7f9fc,
+        roughness: 0.22,
+        metalness: 0.02,
+      }),
     );
     lidBase.position.set(0, height + lidThickness * 0.5 + 0.002, 0);
     group.add(lidBase);
 
-    const lidTop = new THREE.Mesh(new THREE.PlaneGeometry(width - lidInset * 2, depth - lidInset * 2), lidMaterial);
+    const lidTop = new THREE.Mesh(
+      new THREE.PlaneGeometry(width - lidInset * 2, depth - lidInset * 2),
+      lidMaterial,
+    );
     lidTop.rotation.x = -Math.PI / 2;
     lidTop.position.set(0, height + lidThickness + 0.003, 0);
     group.add(lidTop);
@@ -611,9 +882,14 @@ export function createRoomSystem({ scene, renderer }) {
     const maxX = halfWorldWidth - edgeMarginX;
     const minZ = -halfWorldHeight + edgeMarginZ;
     const maxZ = halfWorldHeight - edgeMarginZ;
-    const xStep = FLUORESCENT_COLS > 1 ? (maxX - minX) / (FLUORESCENT_COLS - 1) : 0;
-    const zStep = FLUORESCENT_ROWS > 1 ? (maxZ - minZ) / (FLUORESCENT_ROWS - 1) : 0;
-    const tubeLength = Math.max(3.2, Math.min(5.4, Math.min(halfWorldWidth, halfWorldHeight) * 0.28));
+    const xStep =
+      FLUORESCENT_COLS > 1 ? (maxX - minX) / (FLUORESCENT_COLS - 1) : 0;
+    const zStep =
+      FLUORESCENT_ROWS > 1 ? (maxZ - minZ) / (FLUORESCENT_ROWS - 1) : 0;
+    const tubeLength = Math.max(
+      3.2,
+      Math.min(5.4, Math.min(halfWorldWidth, halfWorldHeight) * 0.28),
+    );
     const lightDistance = Math.max(halfWorldWidth, halfWorldHeight) * 1.06;
 
     for (let row = 0; row < FLUORESCENT_ROWS; row += 1) {
@@ -629,7 +905,11 @@ export function createRoomSystem({ scene, renderer }) {
 
         const housing = new THREE.Mesh(
           new THREE.BoxGeometry(tubeLength, 0.14, 0.34),
-          new THREE.MeshStandardMaterial({ color: 0x9ca7b6, roughness: 0.4, metalness: 0.24 })
+          new THREE.MeshStandardMaterial({
+            color: 0x9ca7b6,
+            roughness: 0.4,
+            metalness: 0.24,
+          }),
         );
         fixture.add(housing);
 
@@ -638,9 +918,12 @@ export function createRoomSystem({ scene, renderer }) {
           roughness: 0.2,
           metalness: 0.02,
           emissive: 0xdbeeff,
-          emissiveIntensity: 1.35
+          emissiveIntensity: 1.35,
         });
-        const diffuser = new THREE.Mesh(new THREE.BoxGeometry(tubeLength * 0.9, 0.06, 0.2), diffuserMaterial);
+        const diffuser = new THREE.Mesh(
+          new THREE.BoxGeometry(tubeLength * 0.9, 0.06, 0.2),
+          diffuserMaterial,
+        );
         diffuser.position.y = -0.06;
         fixture.add(diffuser);
 
@@ -656,7 +939,7 @@ export function createRoomSystem({ scene, renderer }) {
           baseIntensity: 1.4,
           baseEmissiveIntensity: 1.35,
           blinkCooldownSec: 0.9 + blinkRng() * 1.8,
-          blinkRemainingSec: 0
+          blinkRemainingSec: 0,
         });
       }
     }
@@ -674,16 +957,18 @@ export function createRoomSystem({ scene, renderer }) {
 
       const shouldBlinkNow =
         unit.blinkRemainingSec > 0 ||
-        (unit.blinkCooldownSec <= 0 && (() => {
-          unit.blinkRemainingSec = 0.05 + blinkRng() * 0.07;
-          unit.blinkCooldownSec = 0.8 + blinkRng() * 1.9;
-          return true;
-        })());
+        (unit.blinkCooldownSec <= 0 &&
+          (() => {
+            unit.blinkRemainingSec = 0.05 + blinkRng() * 0.07;
+            unit.blinkCooldownSec = 0.8 + blinkRng() * 1.9;
+            return true;
+          })());
 
       if (shouldBlinkNow) {
         const pulse = 0.22 + blinkRng() * 0.18;
         unit.light.intensity = unit.baseIntensity * pulse;
-        unit.diffuserMaterial.emissiveIntensity = unit.baseEmissiveIntensity * pulse;
+        unit.diffuserMaterial.emissiveIntensity =
+          unit.baseEmissiveIntensity * pulse;
       } else {
         unit.light.intensity = unit.baseIntensity;
         unit.diffuserMaterial.emissiveIntensity = unit.baseEmissiveIntensity;
@@ -691,7 +976,13 @@ export function createRoomSystem({ scene, renderer }) {
     }
   }
 
-  function buildRoomGeometry(worldWidthMeters, worldHeightMeters, shelves, coolers, freezers) {
+  function buildRoomGeometry(
+    worldWidthMeters,
+    worldHeightMeters,
+    shelves,
+    coolers,
+    freezers,
+  ) {
     const halfWorldWidth = worldWidthMeters * 0.5;
     const halfWorldHeight = worldHeightMeters * 0.5;
     const wallThickness = 1;
@@ -742,18 +1033,34 @@ export function createRoomSystem({ scene, renderer }) {
         typeof fixture.x === "number" &&
         Number.isFinite(fixture.x) &&
         typeof fixture.z === "number" &&
-        Number.isFinite(fixture.z)
+        Number.isFinite(fixture.z),
     );
     return valid.length > 0 ? valid : fallback;
   }
 
   function fixtureSignature(fixtures) {
     return fixtures
-      .map((fixture) => [fixture.x, fixture.z, fixture.width, fixture.depth, fixture.height, fixture.yaw].join(","))
+      .map((fixture) =>
+        [
+          fixture.x,
+          fixture.z,
+          fixture.width,
+          fixture.depth,
+          fixture.height,
+          fixture.yaw,
+        ].join(","),
+      )
       .join("|");
   }
 
-  function syncFromWorld({ worldSizeMeters, worldWidthMeters, worldHeightMeters, shelves, coolers, freezers }) {
+  function syncFromWorld({
+    worldSizeMeters,
+    worldWidthMeters,
+    worldHeightMeters,
+    shelves,
+    coolers,
+    freezers,
+  }) {
     const legacyWorldSize =
       typeof worldSizeMeters === "number" && Number.isFinite(worldSizeMeters)
         ? worldSizeMeters
@@ -763,16 +1070,22 @@ export function createRoomSystem({ scene, renderer }) {
         ? worldWidthMeters
         : legacyWorldSize;
     const normalizedWorldHeight =
-      typeof worldHeightMeters === "number" && Number.isFinite(worldHeightMeters)
+      typeof worldHeightMeters === "number" &&
+      Number.isFinite(worldHeightMeters)
         ? worldHeightMeters
         : legacyWorldSize;
     const normalizedShelves = normalizeFixtures(shelves, DEFAULT_SHELVES);
     const normalizedCoolers = normalizeFixtures(coolers, DEFAULT_COOLERS);
     const normalizedFreezers = normalizeFixtures(freezers, DEFAULT_FREEZERS);
+    lastSyncedWorldWidthMeters = normalizedWorldWidth;
+    lastSyncedWorldHeightMeters = normalizedWorldHeight;
+    lastSyncedShelves = normalizedShelves;
+    lastSyncedCoolers = normalizedCoolers;
+    lastSyncedFreezers = normalizedFreezers;
     const nextSignature = [
       fixtureSignature(normalizedShelves),
       fixtureSignature(normalizedCoolers),
-      fixtureSignature(normalizedFreezers)
+      fixtureSignature(normalizedFreezers),
     ].join("||");
     const shouldRebuild =
       builtWorldWidthMeters !== normalizedWorldWidth ||
@@ -780,7 +1093,13 @@ export function createRoomSystem({ scene, renderer }) {
       builtFixturesSignature !== nextSignature;
     if (!shouldRebuild) return;
 
-    buildRoomGeometry(normalizedWorldWidth, normalizedWorldHeight, normalizedShelves, normalizedCoolers, normalizedFreezers);
+    buildRoomGeometry(
+      normalizedWorldWidth,
+      normalizedWorldHeight,
+      normalizedShelves,
+      normalizedCoolers,
+      normalizedFreezers,
+    );
     builtWorldWidthMeters = normalizedWorldWidth;
     builtWorldHeightMeters = normalizedWorldHeight;
     builtFixturesSignature = nextSignature;
@@ -792,7 +1111,7 @@ export function createRoomSystem({ scene, renderer }) {
     worldHeightMeters: DEFAULT_WORLD_HEIGHT_METERS,
     shelves: DEFAULT_SHELVES,
     coolers: DEFAULT_COOLERS,
-    freezers: DEFAULT_FREEZERS
+    freezers: DEFAULT_FREEZERS,
   });
 
   return { syncFromWorld, update: updateFluorescents };
