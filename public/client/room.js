@@ -27,7 +27,7 @@ const CEILING_TILE_METERS = 3;
 const PRODUCT_SPAWN_CHANCE = 0.8;
 const PRODUCT_WIDTH_METERS = 0.8;
 const PRODUCT_ATLAS_URL = "/assets/products.png";
-const PRODUCT_YAW_JITTER_RAD = Math.PI / 8; // +/- 22.5 deg
+const PRODUCT_YAW_JITTER_RAD = Math.PI / 9; // +/- 20 deg
 const PRODUCT_SIDE_JITTER_METERS = 0.2; // +/- 20 cm along shelf length
 const PRODUCT_DEPTH_JITTER_METERS = 0.1; // +/- 10 cm toward/away from shelf front
 
@@ -108,7 +108,7 @@ export function createRoomSystem({ scene, renderer }) {
   let currentPlaneHeightMeters = 30;
   let productAtlasTexture = null;
   let productAtlasAvailable = false;
-  let productVariantRows = 2;
+  let productVariantCount = 2;
 
   function hasImageData(texture) {
     const image = texture?.image;
@@ -244,17 +244,17 @@ export function createRoomSystem({ scene, renderer }) {
       imageHeight <= 0
     )
       return 1;
-    const rows = Math.max(1, productVariantRows);
-    const cellHeight = imageHeight / rows;
-    if (!Number.isFinite(cellHeight) || cellHeight <= 0) return 1;
-    return cellHeight / imageWidth;
+    const variants = Math.max(1, productVariantCount);
+    const cellWidth = imageWidth / variants;
+    if (!Number.isFinite(cellWidth) || cellWidth <= 0) return 1;
+    return imageHeight / cellWidth;
   }
 
-  function createProductMap(productRow) {
+  function createProductMap(productIndex) {
     if (!productAtlasAvailable || !hasImageData(productAtlasTexture))
       return null;
-    const rows = Math.max(1, productVariantRows);
-    const row = ((Math.trunc(productRow) % rows) + rows) % rows;
+    const variants = Math.max(1, productVariantCount);
+    const col = ((Math.trunc(productIndex) % variants) + variants) % variants;
     const map = productAtlasTexture.clone();
     map.source = productAtlasTexture.source;
     map.image = productAtlasTexture.image;
@@ -263,20 +263,20 @@ export function createRoomSystem({ scene, renderer }) {
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = textureAnisotropy;
     applyPixelArtSampling(map);
-    map.repeat.set(1, 1 / rows);
-    map.offset.set(0, 1 - (row + 1) / rows);
+    map.repeat.set(1 / variants, 1);
+    map.offset.set(col / variants, 0);
     if (hasImageData(map)) map.needsUpdate = true;
     return map;
   }
 
-  function createProductMaterial(productRow) {
+  function createProductMaterial(productIndex) {
     const material = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
       alphaTest: 0.35,
       side: THREE.DoubleSide,
     });
-    const map = createProductMap(productRow);
+    const map = createProductMap(productIndex);
     if (map) {
       material.map = map;
     } else {
@@ -561,8 +561,8 @@ export function createRoomSystem({ scene, renderer }) {
         Number.isFinite(imageHeight) &&
         imageHeight > 0
       ) {
-        const inferredRows = Math.max(1, Math.floor(imageHeight / imageWidth));
-        productVariantRows = inferredRows;
+        const inferredVariants = Math.max(1, Math.floor(imageWidth / imageHeight));
+        productVariantCount = inferredVariants;
       }
 
       builtWorldWidthMeters = null;
@@ -721,7 +721,7 @@ export function createRoomSystem({ scene, renderer }) {
       group.add(shelfBoard);
     }
 
-    if (!productAtlasAvailable || productVariantRows < 1) return;
+    if (!productAtlasAvailable || productVariantCount < 1) return;
     const meterCount = Math.max(1, Math.floor(panelLength));
     const centerX = backPanelX - panelThickness * 0.5 - shelfDepth * 0.5;
     const zStart = -panelLength * 0.5;
@@ -740,8 +740,8 @@ export function createRoomSystem({ scene, renderer }) {
         const productHeight = Math.min(naturalProductHeight, availableHeight);
         if (!Number.isFinite(productHeight) || productHeight < 0.06) continue;
 
-        const productRow = Math.floor(Math.random() * productVariantRows);
-        const productMaterial = createProductMaterial(productRow);
+        const productIndex = Math.floor(Math.random() * productVariantCount);
+        const productMaterial = createProductMaterial(productIndex);
         const product = new THREE.Mesh(
           new THREE.PlaneGeometry(PRODUCT_WIDTH_METERS, productHeight),
           productMaterial,
