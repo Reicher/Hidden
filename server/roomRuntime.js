@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { WebSocketServer } from "ws";
 import {
   WORLD_SIZE_METERS,
   WORLD_WIDTH_METERS,
@@ -36,17 +35,14 @@ import {
   FREEZERS
 } from "./config.js";
 import { normalizeAngle, canAttack, markAttack, collectVictimIds } from "./runtime/combat.js";
-import { rawSizeBytes, rawToText } from "./runtime/net.js";
-import { obstacleHalfExtents } from "./runtime/physics.js";
 import { createMovementSystem } from "./runtime/ai.js";
-import {
-  createSpectatorSystem,
-  SPECTATOR_CYCLE_NEXT,
-  SPECTATOR_CYCLE_PREV
-} from "./runtime/spectator.js";
-import { createSession } from "./runtime/session.js";
+import { createSpectatorSystem } from "./runtime/spectator.js";
 import { createRoomLogger, createInvariantChecker } from "./runtime/logger.js";
 import { createCharacterSystem } from "./runtime/characters.js";
+import { createClientMessageProcessor } from "./runtime/clientMessages.js";
+import { createRoomTickLoop } from "./runtime/tickLoop.js";
+import { createRoomWsLifecycle } from "./runtime/wsLifecycle.js";
+import { createMatchFlow } from "./runtime/matchFlow.js";
 
 const NAME_MIN_LEN = 2;
 const NAME_MAX_LEN = 20;
@@ -63,8 +59,6 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   const sessions = new Map();
   const sockets = new Map();
   const chatHistory = [];
-  let cachedScoreboard = [];
-  let nextScoreboardRefreshAt = 0;
   let lobbyCountdown = null;
   let supermajorityReadyTimeout = null;
   let pendingRoundReset = false;
@@ -73,6 +67,23 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   let activeMatchStartedAt = 0;
   const roomTag = isPrivate ? `privat:${roomCode}` : "publik";
   let closed = false;
+  const perfStartedAt = Date.now();
+  const TICK_DURATION_HISTORY_LIMIT = 1200;
+  const tickDurationHistoryMs = [];
+  const perfStats = {
+    tick: {
+      totalTicks: 0,
+      totalDurationMs: 0,
+      maxDurationMs: 0,
+      overBudgetTicks: 0
+    },
+    network: {
+      inMessages: 0,
+      inBytes: 0,
+      outMessages: 0,
+      outBytes: 0
+    }
+  };
 
   function rand(min, max) {
     return min + Math.random() * (max - min);
@@ -105,6 +116,87 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
 
   function shortSessionId(sessionId) {
     return sessionId ? String(sessionId).slice(0, 8) : "-";
+  }
+
+  function sortedNumeric(values) {
+    return values.slice().sort((a, b) => a - b);
+  }
+
+  function percentile(values, ratio) {
+    if (!Array.isArray(values) || values.length === 0) return 0;
+    const sorted = sortedNumeric(values);
+    const index = Math.min(sorted.length - 1, Math.max(0, Math.floor(ratio * (sorted.length - 1))));
+    return sorted[index];
+  }
+
+  function avg(values) {
+    if (!Array.isArray(values) || values.length === 0) return 0;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  }
+
+  function round(value, digits = 2) {
+    const factor = 10 ** digits;
+    return Math.round(value * factor) / factor;
+  }
+
+  function recordInboundBytes(bytes) {
+    const value = Number(bytes);
+    perfStats.network.inMessages += 1;
+    perfStats.network.inBytes += Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+  }
+
+  function recordOutboundBytes(bytes) {
+    const value = Number(bytes);
+    perfStats.network.outMessages += 1;
+    perfStats.network.outBytes += Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+  }
+
+  function recordTickDuration(durationMs) {
+    const duration = Math.max(0, Number(durationMs) || 0);
+    perfStats.tick.totalTicks += 1;
+    perfStats.tick.totalDurationMs += duration;
+    perfStats.tick.maxDurationMs = Math.max(perfStats.tick.maxDurationMs, duration);
+    if (duration > TICK_MS) perfStats.tick.overBudgetTicks += 1;
+    tickDurationHistoryMs.push(duration);
+    if (tickDurationHistoryMs.length > TICK_DURATION_HISTORY_LIMIT) {
+      tickDurationHistoryMs.splice(0, tickDurationHistoryMs.length - TICK_DURATION_HISTORY_LIMIT);
+    }
+  }
+
+  function perfSnapshot() {
+    const now = Date.now();
+    const elapsedSec = Math.max(0.001, (now - perfStartedAt) / 1000);
+    const tickSamples = tickDurationHistoryMs.slice();
+    const tickTotal = perfStats.tick.totalTicks;
+    const avgTickMs = tickTotal > 0 ? perfStats.tick.totalDurationMs / tickTotal : 0;
+    const overBudgetRatio = tickTotal > 0 ? perfStats.tick.overBudgetTicks / tickTotal : 0;
+
+    return {
+      collectedAt: now,
+      runtimeSec: round(elapsedSec, 2),
+      network: {
+        inMessages: perfStats.network.inMessages,
+        outMessages: perfStats.network.outMessages,
+        inBytes: perfStats.network.inBytes,
+        outBytes: perfStats.network.outBytes,
+        inBytesPerSec: round(perfStats.network.inBytes / elapsedSec, 2),
+        outBytesPerSec: round(perfStats.network.outBytes / elapsedSec, 2),
+        inMessagesPerSec: round(perfStats.network.inMessages / elapsedSec, 2),
+        outMessagesPerSec: round(perfStats.network.outMessages / elapsedSec, 2)
+      },
+      tick: {
+        totalTicks: tickTotal,
+        avgDurationMs: round(avgTickMs, 3),
+        maxDurationMs: round(perfStats.tick.maxDurationMs, 3),
+        overBudgetTicks: perfStats.tick.overBudgetTicks,
+        overBudgetRatio: round(overBudgetRatio, 4),
+        windowSamples: tickSamples.length,
+        windowAvgMs: round(avg(tickSamples), 3),
+        p50Ms: round(percentile(tickSamples, 0.5), 3),
+        p95Ms: round(percentile(tickSamples, 0.95), 3),
+        p99Ms: round(percentile(tickSamples, 0.99), 3)
+      }
+    };
   }
 
   function authenticatedSessions() {
@@ -170,7 +262,7 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
     }
   }
 
-  const { logInfo, logWarn, logEvent } = createRoomLogger(roomTag, stateSummary);
+  const { logWarn, logEvent } = createRoomLogger(roomTag, stateSummary);
   const { checkInvariants } = createInvariantChecker({
     characters,
     sessions,
@@ -301,7 +393,9 @@ function sanitizeSystemTextSegment(raw) {
 
   function send(ws, type, payload = {}) {
     if (ws.readyState !== ws.OPEN) return;
-    ws.send(JSON.stringify({ type, ...payload }));
+    const body = JSON.stringify({ type, ...payload });
+    ws.send(body);
+    recordOutboundBytes(Buffer.byteLength(body, "utf8"));
   }
 
   function sendToSession(sessionId, type, payload = {}) {
@@ -351,281 +445,63 @@ function sanitizeSystemTextSegment(raw) {
     return entry;
   }
 
-  function countdownMsRemaining(now = Date.now()) {
-    if (!lobbyCountdown) return 0;
-    return Math.max(0, lobbyCountdown.endsAt - now);
-  }
-
-  function toCountdownState(session, endsAt) {
-    if (!session?.authenticated || !session.ready) return;
-    if (session.state === "alive") return;
-    if (!assignCharacterForCountdown(session, Date.now())) return;
-    session.state = "countdown";
-    session.readyAt = endsAt;
-    session.input.attackRequested = false;
-    if (session.name) countdownReadyNames.add(String(session.name).toLowerCase());
-    sendToSession(session.id, "countdown", {
-      seconds: Math.max(1, Math.ceil((endsAt - Date.now()) / 1000))
-    });
-  }
-
-  function cancelLobbyCountdown() {
-    if (!lobbyCountdown) return;
-    for (const session of sessions.values()) {
-      if (!session.authenticated) continue;
-      if (session.state !== "countdown") continue;
-      if (session.characterId != null) {
-        releaseOwnedCharacter(session.id);
-        session.characterId = null;
+  const {
+    countdownMsRemaining,
+    toCountdownState,
+    cancelLobbyCountdown,
+    maybeStartLobbyCountdown,
+    finalizeLobbyCountdown,
+    endCurrentMatch,
+    assignCharacterForCountdown,
+    returnToLobby
+  } = createMatchFlow({
+    sessions,
+    characters,
+    constants: {
+      ROUND_COUNTDOWN_SECONDS,
+      SUPERMAJORITY_READY_TIMEOUT_SECONDS,
+      SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS,
+      MATCH_END_RETURN_TO_LOBBY_MS,
+      MIN_PLAYERS_TO_START
+    },
+    state: {
+      getLobbyCountdown: () => lobbyCountdown,
+      setLobbyCountdown: (value) => {
+        lobbyCountdown = value;
+      },
+      getSupermajorityReadyTimeout: () => supermajorityReadyTimeout,
+      setSupermajorityReadyTimeout: (value) => {
+        supermajorityReadyTimeout = value;
+      },
+      getPendingRoundReset: () => pendingRoundReset,
+      setPendingRoundReset: (value) => {
+        pendingRoundReset = Boolean(value);
+      },
+      getActiveMatchStartedAt: () => activeMatchStartedAt,
+      setActiveMatchStartedAt: (value) => {
+        activeMatchStartedAt = Number(value) || 0;
       }
-      session.state = "lobby";
-      session.readyAt = 0;
-    }
-    lobbyCountdown = null;
-    countdownReadyNames.clear();
-    countdownReconnectGraceByName.clear();
-    appendSystemChat([{ type: "text", text: "Nedräkning avbruten" }]);
-  }
-
-  function cancelSupermajorityReadyTimeout() {
-    supermajorityReadyTimeout = null;
-  }
-
-  function startSupermajorityReadyTimeout(now) {
-    supermajorityReadyTimeout = {
-      endsAt: now + SUPERMAJORITY_READY_TIMEOUT_SECONDS * 1000,
-      nextAnnounceSecond: SUPERMAJORITY_READY_TIMEOUT_SECONDS - SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS
-    };
-    appendSystemChat([
-      {
-        type: "text",
-        text: `2/3 spelare redo. Matchstart om ${SUPERMAJORITY_READY_TIMEOUT_SECONDS} sekunder om inte alla blir redo tidigare.`
-      }
-    ]);
-  }
-
-  function announceSupermajorityReadyTimeout(now) {
-    if (!supermajorityReadyTimeout) return;
-    while (
-      supermajorityReadyTimeout.nextAnnounceSecond > 0 &&
-      now >= supermajorityReadyTimeout.endsAt - supermajorityReadyTimeout.nextAnnounceSecond * 1000
-    ) {
-      const seconds = supermajorityReadyTimeout.nextAnnounceSecond;
-      appendSystemChat([
-        {
-          type: "text",
-          text: `2/3 spelare redo. Matchstart om ${seconds} sekunder om inte alla blir redo tidigare.`
-        }
-      ]);
-      supermajorityReadyTimeout.nextAnnounceSecond -= SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS;
-    }
-  }
-
-  function startLobbyCountdown(now, seconds = ROUND_COUNTDOWN_SECONDS) {
-    const endsAt = now + seconds * 1000;
-    cancelSupermajorityReadyTimeout();
-    countdownReadyNames.clear();
-    pruneCountdownReconnectGrace(now);
-    lobbyCountdown = {
-      endsAt,
-      lastAnnouncedSecond: null
-    };
-    for (const session of sessions.values()) {
-      if (!session.authenticated) continue;
-      if (session.state !== "lobby" || !session.ready) continue;
-      toCountdownState(session, endsAt);
-    }
-    logEvent("countdown_start", {
-      seconds,
-      players: countdownPlayerCount()
-    });
-    emitStatsEvent("countdown_start", {
-      seconds,
-      players: countdownPlayerCount()
-    });
-    appendSystemChat([{ type: "text", text: "Nedräkning startad" }]);
-  }
-
-  function maybeStartLobbyCountdown(now) {
-    if (lobbyCountdown) return;
-    if (activeMatchStartedAt > 0) return;
-    if (pendingRoundReset) return;
-    const lobbyPlayers = authenticatedSessions().filter((session) => session.state === "lobby");
-    if (lobbyPlayers.length < MIN_PLAYERS_TO_START) {
-      cancelSupermajorityReadyTimeout();
-      return;
-    }
-    const readyCount = lobbyPlayers.reduce((count, session) => count + (session.ready ? 1 : 0), 0);
-    if (readyCount >= lobbyPlayers.length) {
-      startLobbyCountdown(now);
-      return;
-    }
-    const readyNeededForSupermajority = Math.ceil((lobbyPlayers.length * 2) / 3);
-    if (readyCount < readyNeededForSupermajority) {
-      cancelSupermajorityReadyTimeout();
-      return;
-    }
-    if (!supermajorityReadyTimeout) {
-      startSupermajorityReadyTimeout(now);
-      return;
-    }
-    announceSupermajorityReadyTimeout(now);
-    if (now >= supermajorityReadyTimeout.endsAt) {
-      startLobbyCountdown(now);
-    }
-  }
-
-  function finalizeLobbyCountdown(now) {
-    if (!lobbyCountdown) return;
-    const participants = authenticatedSessions().filter((session) => session.state === "countdown" && session.ready);
-    lobbyCountdown = null;
-    countdownReadyNames.clear();
-    pruneCountdownReconnectGrace(now);
-    for (const session of participants) markCountdownReconnectGrace(session.name, now);
-    appendSystemChat([{ type: "text", text: "Spel startat" }]);
-    for (const session of participants) {
-      if (session.characterId == null && !assignCharacterForCountdown(session, now)) continue;
-      session.state = "alive";
-      session.ready = false;
-      session.readyAt = now;
-      session.input.attackRequested = false;
-      emitStatsEvent("session_alive", {
-        sessionId: shortSessionId(session.id),
-        name: session.name
-      });
-    }
-  }
-
-  function endCurrentMatch(now, winnerSession = null) {
-    const winnerSessionId = winnerSession?.id || null;
-    if (winnerSession?.authenticated && winnerSession.name) {
-      winnerSession.stats.wins += 1;
-      appendSystemChat([
-        { type: "player", name: winnerSession.name },
-        { type: "text", text: " vann matchen!" }
-      ]);
-      appendSystemChat([
-        { type: "text", text: `Spelet avslutas om ${Math.ceil(MATCH_END_RETURN_TO_LOBBY_MS / 1000)} sekunder` }
-      ]);
-    }
-    const matchEndsAt = winnerSessionId ? now + MATCH_END_RETURN_TO_LOBBY_MS : 0;
-
-    for (const session of sessions.values()) {
-      if (!session.authenticated) continue;
-      if (winnerSessionId && session.id === winnerSessionId && session.state === "alive" && session.characterId != null) {
-        session.state = "won";
-        session.ready = false;
-        session.readyAt = 0;
-        session.input.attackRequested = false;
-        session.returnToLobbyAt = matchEndsAt;
-        session.eliminatedByName = null;
-        continue;
-      }
-      if (session.state === "alive") returnToLobby(session, "round_ended");
-      if (session.state === "downed") {
-        if (!winnerSessionId) {
-          returnToLobby(session, "round_ended");
-        } else {
-          session.ready = false;
-          session.readyAt = 0;
-          session.input.attackRequested = false;
-          session.returnToLobbyAt = matchEndsAt;
-        }
-      }
-      if (session.state === "spectating") {
-        if (!winnerSessionId) {
-          returnToLobby(session, "round_ended");
-        } else {
-          session.ready = false;
-          session.readyAt = 0;
-          session.input.attackRequested = false;
-          session.returnToLobbyAt = matchEndsAt;
-        }
-      }
-      if (session.state === "countdown") {
-        session.state = "lobby";
-        session.readyAt = 0;
-      }
-      session.ready = false;
-    }
-
-    lobbyCountdown = null;
-    cancelSupermajorityReadyTimeout();
-    countdownReadyNames.clear();
-    countdownReconnectGraceByName.clear();
-    activeMatchStartedAt = 0;
-    pendingRoundReset = Boolean(winnerSessionId);
-    if (!pendingRoundReset) resetArenaForNextRound(now);
-  }
-
-  function assignCharacterForCountdown(session, now) {
-    if (!session || !session.authenticated) return false;
-    if (session.characterId != null) {
-      const owned = characters[session.characterId];
-      if (owned?.ownerSessionId === session.id && owned?.controllerType === "PLAYER") {
-        session.input.yaw = owned.yaw;
-        session.input.pitch = owned.pitch;
-        sendToSession(session.id, "possess", { characterId: owned.id });
-        return true;
-      }
-      session.characterId = null;
-    }
-
-    const standingAvailable = characters.find(
-      (c) => c.controllerType === "AI" && c.ownerSessionId == null && !isCharacterDowned(c, now)
-    );
-    const available =
-      standingAvailable || characters.find((c) => c.controllerType === "AI" && c.ownerSessionId == null);
-    if (!available) {
-      session.ready = false;
-      session.state = "lobby";
-      session.readyAt = 0;
-      sendToSession(session.id, "action_error", { message: "Ingen ledig karaktär just nu." });
-      return false;
-    }
-    clearDownedState(available);
-
-    available.controllerType = "PLAYER";
-    available.ownerSessionId = session.id;
-    available.everPlayerControlled = true;
-    session.characterId = available.id;
-    session.readyAt = now;
-    session.input.yaw = available.yaw;
-    session.input.pitch = available.pitch;
-    session.input.attackRequested = false;
-
-    logEvent("session_possess", {
-      sessionId: shortSessionId(session.id),
-      name: session.name,
-      characterId: available.id,
-      x: Number(available.x.toFixed(2)),
-      z: Number(available.z.toFixed(2)),
-      yaw: Number(available.yaw.toFixed(2))
-    });
-    sendToSession(session.id, "possess", { characterId: available.id });
-    return true;
-  }
-
-  function returnToLobby(session, reason = "return_to_lobby") {
-    if (!session) return;
-    const previousState = session.state;
-    session.state = "lobby";
-    session.ready = false;
-    session.characterId = null;
-    session.readyAt = 0;
-    session.input.attackRequested = false;
-    session.eliminatedAt = 0;
-    session.returnToLobbyAt = 0;
-    session.eliminatedByName = null;
-    clearSpectatorTarget(session);
-    if (previousState !== "lobby") {
-      emitStatsEvent("session_lobby", {
-        sessionId: shortSessionId(session.id),
-        name: session.name,
-        reason
-      });
-    }
-  }
+    },
+    countdownReadyNames,
+    countdownReconnectGraceByName,
+    authenticatedSessions,
+    activePlayerCount,
+    countdownPlayerCount,
+    normalizePlayerName,
+    shortSessionId,
+    sendToSession,
+    appendSystemChat,
+    logEvent,
+    emitStatsEvent,
+    pruneCountdownReconnectGrace,
+    markCountdownReconnectGrace,
+    hasCountdownReconnectGrace,
+    releaseOwnedCharacter,
+    clearSpectatorTarget,
+    isCharacterDowned,
+    clearDownedState,
+    resetArenaForNextRound
+  });
 
   function handleCharacterEliminated(charId, attackerId, now) {
     const c = characters[charId];
@@ -736,273 +612,57 @@ function sanitizeSystemTextSegment(raw) {
     clampPitch
   });
 
-  function dropMessage(session, reason) {
-    session.net.droppedMessages += 1;
-    session.net.lastDropReason = reason;
-    const now = Date.now();
-    if (now - session.net.dropWindowStartAt >= SPAM_DROP_WINDOW_MS) {
-      session.net.dropWindowStartAt = now;
-      session.net.dropWindowCount = 0;
-    }
-    session.net.dropWindowCount += 1;
-    if (session.net.droppedMessages === 1 || session.net.droppedMessages % 10 === 0) {
-      logEvent("message_drop", {
-        sessionId: shortSessionId(session.id),
-        reason,
-        droppedTotal: session.net.droppedMessages,
-        droppedInWindow: session.net.dropWindowCount
-      });
-    }
-    return session.net.dropWindowCount > SPAM_MAX_DROPS_PER_WINDOW;
-  }
-
   function isOriginAllowed(origin) {
     if (!origin || String(origin).trim() === "") return ALLOW_MISSING_ORIGIN;
     return ALLOWED_ORIGINS.has(String(origin).trim());
   }
 
-  function processLogin(sessionId, name) {
-    const session = sessions.get(sessionId);
-    if (!session) return "ignored";
-    if (session.authenticated) {
-      sendToSession(sessionId, "login_error", { message: "Du är redan inloggad." });
-      return "ok";
-    }
-
-    const normalizedName = normalizePlayerName(name);
-    if (normalizedName.length < NAME_MIN_LEN) {
-      sendToSession(sessionId, "login_error", { message: `Namnet måste vara minst ${NAME_MIN_LEN} tecken.` });
-      return "ok";
-    }
-
-    if (authenticatedCount() >= MAX_PLAYERS) {
-      sendToSession(sessionId, "login_error", {
-        message: "Rummet är fullt.",
-        reason: "room_full",
-        roomCode: roomCode || null,
-        isPrivate
-      });
-      return "ok";
-    }
-
-    if (findAuthenticatedByName(normalizedName)) {
-      sendToSession(sessionId, "login_error", { message: "Namnet är upptaget." });
-      return "ok";
-    }
-
-    const loginAt = Date.now();
-    pruneCountdownReconnectGrace(loginAt);
-
-    session.authenticated = true;
-    session.name = normalizedName;
-    session.state = "lobby";
-    session.ready = false;
-    session.readyAt = 0;
-    clearSpectatorTarget(session);
-    const normalizedNameKey = normalizedName.toLowerCase();
-    if (lobbyCountdown && countdownReadyNames.has(normalizedNameKey)) {
-      session.ready = true;
-      toCountdownState(session, lobbyCountdown.endsAt);
-    } else {
-      const activePlayers = activePlayerCount();
-      if (
-        !lobbyCountdown &&
-        !pendingRoundReset &&
-        activePlayers > 0 &&
-        hasCountdownReconnectGrace(normalizedName, loginAt)
-      ) {
-        if (assignCharacterForCountdown(session, loginAt)) {
-          session.state = "alive";
-          session.ready = false;
-          session.readyAt = loginAt;
-          session.input.attackRequested = false;
-          appendSystemChat([
-            { type: "player", name: normalizedName },
-            { type: "text", text: " återanslöt till pågående runda" }
-          ]);
-        }
-      }
-    }
-    countdownReconnectGraceByName.delete(normalizedNameKey);
-
-    logEvent("session_login", {
-      sessionId: shortSessionId(sessionId),
-      name: normalizedName
-    });
-    emitStatsEvent("session_login", {
-      sessionId: shortSessionId(sessionId),
-      name: normalizedName
-    });
-
-    sendToSession(sessionId, "login_ok", {
-      name: normalizedName,
+  const { processClientMessage } = createClientMessageProcessor({
+    sessions,
+    roomCode,
+    isPrivate,
+    constants: {
+      NAME_MIN_LEN,
+      MAX_PLAYERS,
+      MAX_MESSAGE_BYTES,
+      INPUT_UPDATE_MIN_MS,
+      ATTACK_MESSAGE_MIN_MS,
+      MESSAGE_WINDOW_MS,
+      MAX_MESSAGES_PER_WINDOW,
+      SPAM_DROP_WINDOW_MS,
+      SPAM_MAX_DROPS_PER_WINDOW,
       chatHistory,
-      maxPlayers: MAX_PLAYERS,
-      roomCode: roomCode || null,
-      isPrivate
-    });
-    appendSystemChat([
-      { type: "player", name: normalizedName },
-      { type: "text", text: " joinade spelet" }
-    ]);
-    return "ok";
-  }
-
-  function processChat(sessionId, textRaw) {
-    const session = sessions.get(sessionId);
-    if (!session || !session.authenticated) return "ignored";
-    if (session.state === "alive") return "ok";
-    const text = normalizeChatText(textRaw);
-    if (!text) return "ok";
-
-    const entry = appendChat({ name: session.name, text });
-    logEvent("chat", {
-      sessionId: shortSessionId(sessionId),
-      name: session.name,
-      text
-    });
-    broadcast("chat", { entry });
-    return "ok";
-  }
-
-  function processClientMessage(sessionId, raw) {
-    const session = sessions.get(sessionId);
-    if (!session) return "ignored";
-    session.net.lastActivityAt = Date.now();
-
-    if (rawSizeBytes(raw) > MAX_MESSAGE_BYTES) {
-      return dropMessage(session, "size") ? "abuse" : "dropped";
-    }
-
-    let msg;
-    try {
-      msg = JSON.parse(rawToText(raw));
-    } catch {
-      return dropMessage(session, "json") ? "abuse" : "dropped";
-    }
-
-    const at = Date.now();
-    if (at - session.net.windowStartAt >= MESSAGE_WINDOW_MS) {
-      session.net.windowStartAt = at;
-      session.net.windowCount = 0;
-    }
-    session.net.windowCount += 1;
-    if (session.net.windowCount > MAX_MESSAGES_PER_WINDOW) {
-      return dropMessage(session, "rate_window") ? "abuse" : "dropped";
-    }
-
-    if (msg.type === "login") return processLogin(sessionId, msg.name);
-    if (msg.type === "chat") return processChat(sessionId, msg.text);
-
-    if (!session.authenticated) {
-      return dropMessage(session, "unauthenticated") ? "abuse" : "dropped";
-    }
-
-    if (msg.type === "spectate") {
-      if (session.state === "alive" || session.state === "countdown") {
-        sendToSession(sessionId, "action_error", { message: "Du spelar redan i den här rundan." });
-        return "ok";
-      }
-      if (activeMatchStartedAt <= 0) {
-        sendToSession(sessionId, "action_error", { message: "Ingen match pågår just nu." });
-        return "ok";
-      }
-      setSessionSpectating(session, at, { randomTarget: true });
-      return "ok";
-    }
-
-    if (msg.type === "spectate_cycle") {
-      if (session.state !== "spectating") return "ok";
-      const direction = Number(msg.direction) < 0 ? SPECTATOR_CYCLE_PREV : SPECTATOR_CYCLE_NEXT;
-      spectator.cycleSpectatorTarget(session, direction, at);
-      return "ok";
-    }
-
-    if (msg.type === "ready" || msg.type === "play") {
-      if (session.state === "alive") return "ok";
-      if (session.state === "spectating") {
-        sendToSession(sessionId, "action_error", { message: "Du åskådar just nu. Återgå till lobbyn först." });
-        return "ok";
-      }
-      if (session.state === "won") {
-        sendToSession(sessionId, "action_error", { message: "Du vann nyss. Återgå till lobbyn för ny runda." });
-        return "ok";
-      }
-      if (session.state === "downed") {
-        sendToSession(sessionId, "action_error", { message: "Du är nedslagen. Återgå till lobbyn med knappen." });
-        return "ok";
-      }
-      if (pendingRoundReset) {
-        sendToSession(sessionId, "action_error", { message: "Vänta tills vinnaren återgår till lobbyn." });
-        return "ok";
-      }
-      if (activeMatchStartedAt > 0) {
-        sendToSession(sessionId, "action_error", { message: "Match pågår. Vänta tills rundan är slut." });
-        return "ok";
-      }
-      const wantsReady = msg.type === "play" ? true : msg.ready !== false;
-      if (wantsReady) {
-        if (!session.ready) {
-          session.ready = true;
-          if (lobbyCountdown) toCountdownState(session, lobbyCountdown.endsAt);
-          maybeStartLobbyCountdown(at);
-        }
-      } else if (session.ready) {
-        if (session.state === "countdown") {
-          sendToSession(sessionId, "action_error", { message: "Nedräkning pågår. Du kan inte ångra ready nu." });
-          return "ok";
-        }
-        session.ready = false;
-        maybeStartLobbyCountdown(at);
-      }
-      return "ok";
-    }
-
-    if (msg.type === "leave_match") {
-      if (session.state === "alive" || session.state === "downed" || session.state === "won" || session.state === "spectating") {
-        releaseOwnedCharacter(sessionId);
-        returnToLobby(session, "left_match");
-        appendSystemChat([
-          { type: "player", name: session.name },
-          { type: "text", text: " lämnade matchen" }
-        ]);
-      }
-      return "ok";
-    }
-
-    if (msg.type === "input") {
-      if (at - session.net.lastInputAt < INPUT_UPDATE_MIN_MS) {
-        // Frequent input updates are benign; ignore extras instead of counting them as abuse.
-        return "ok";
-      }
-      session.net.lastInputAt = at;
-
-      const input = msg.input || {};
-      session.input.forward = Boolean(input.forward);
-      session.input.backward = Boolean(input.backward);
-      session.input.left = Boolean(input.left);
-      session.input.right = Boolean(input.right);
-      session.input.sprint = Boolean(input.sprint);
-      if (typeof input.yaw === "number" && Number.isFinite(input.yaw)) {
-        session.input.yaw = normalizeAngle(input.yaw);
-      }
-      if (typeof input.pitch === "number" && Number.isFinite(input.pitch)) {
-        session.input.pitch = clampPitch(input.pitch);
-      }
-      return "ok";
-    }
-
-    if (msg.type === "attack") {
-      if (at - session.net.lastAttackRequestAt < ATTACK_MESSAGE_MIN_MS) {
-        return dropMessage(session, "rate_attack") ? "abuse" : "dropped";
-      }
-      session.net.lastAttackRequestAt = at;
-      session.input.attackRequested = session.state === "alive" && session.characterId != null;
-      return "ok";
-    }
-
-    return dropMessage(session, "unknown_type") ? "abuse" : "dropped";
-  }
+      appendChat,
+      broadcast
+    },
+    normalizePlayerName,
+    normalizeChatText,
+    authenticatedCount,
+    activePlayerCount,
+    findAuthenticatedByName,
+    pruneCountdownReconnectGrace,
+    hasCountdownReconnectGrace,
+    countdownReadyNames,
+    countdownReconnectGraceByName,
+    getLobbyCountdown: () => lobbyCountdown,
+    getPendingRoundReset: () => pendingRoundReset,
+    getActiveMatchStartedAt: () => activeMatchStartedAt,
+    assignCharacterForCountdown,
+    clearSpectatorTarget,
+    toCountdownState,
+    maybeStartLobbyCountdown,
+    setSessionSpectating,
+    cycleSpectatorTarget,
+    returnToLobby,
+    releaseOwnedCharacter,
+    sendToSession,
+    appendSystemChat,
+    shortSessionId,
+    emitStatsEvent,
+    logEvent,
+    clampPitch,
+    normalizeAngle
+  });
 
   function disconnectIdleSessions(now) {
     for (const [sessionId, session] of sessions.entries()) {
@@ -1022,195 +682,95 @@ function sanitizeSystemTextSegment(raw) {
     }
   }
 
-  let lastTickAt = Date.now();
-  const tickInterval = setInterval(() => {
-    const now = Date.now();
-    const dt = Math.min(0.1, (now - lastTickAt) / 1000);
-    lastTickAt = now;
-    checkInvariants(now);
-    pruneCountdownReconnectGrace(now);
-    disconnectIdleSessions(now);
-
-    let matchEndedByTimeout = false;
-    for (const session of sessions.values()) {
-      if (!session.authenticated) continue;
-      if (session.state !== "won" && session.state !== "downed" && session.state !== "spectating") continue;
-      const returnAt = Number(session.returnToLobbyAt || 0);
-      if (!Number.isFinite(returnAt) || returnAt <= 0 || now < returnAt) continue;
-      releaseOwnedCharacter(session.id);
-      returnToLobby(session, "match_end_timeout");
-      matchEndedByTimeout = true;
+  const { tickInterval } = createRoomTickLoop({
+    constants: {
+      TICK_MS,
+      WORLD_SIZE_METERS,
+      WORLD_WIDTH_METERS,
+      WORLD_HEIGHT_METERS,
+      SHELVES,
+      COOLERS,
+      FREEZERS,
+      ATTACK_COOLDOWN_MS,
+      ATTACK_FLASH_MS,
+      NPC_DOWNED_RESPAWN_MS,
+      MIN_PLAYERS_TO_START,
+      MAX_PLAYERS
+    },
+    sessions,
+    sockets,
+    characters,
+    movement,
+    checkInvariants,
+    pruneCountdownReconnectGrace,
+    disconnectIdleSessions,
+    releaseOwnedCharacter,
+    returnToLobby,
+    appendSystemChat,
+    authenticatedSessions,
+    resetArenaForNextRound,
+    getPendingRoundReset: () => pendingRoundReset,
+    setPendingRoundReset: (value) => {
+      pendingRoundReset = Boolean(value);
+    },
+    getLobbyCountdown: () => lobbyCountdown,
+    countdownPlayerCount,
+    cancelLobbyCountdown,
+    finalizeLobbyCountdown,
+    maybeStartLobbyCountdown,
+    isCharacterDowned,
+    handleAttack,
+    activePlayerCount,
+    endCurrentMatch,
+    getActiveMatchStartedAt: () => activeMatchStartedAt,
+    setActiveMatchStartedAt: (value) => {
+      activeMatchStartedAt = Number(value) || 0;
+    },
+    maintainSpectatorTarget,
+    aliveSpectatorCandidates,
+    scoreboardSnapshot,
+    countdownMsRemaining,
+    send,
+    onTick: ({ durationMs }) => {
+      recordTickDuration(durationMs);
     }
-    if (matchEndedByTimeout) {
-      appendSystemChat([{ type: "text", text: "Spelet avslutat" }]);
-    }
-    if (pendingRoundReset) {
-      const hasEndMatchParticipants = authenticatedSessions().some(
-        (session) => session.state === "won" || session.state === "downed" || session.state === "spectating"
-      );
-      if (!hasEndMatchParticipants) {
-        resetArenaForNextRound(now);
-        pendingRoundReset = false;
-      }
-    }
+  });
 
-    if (lobbyCountdown) {
-      if (countdownPlayerCount() < MIN_PLAYERS_TO_START) {
-        cancelLobbyCountdown();
-      } else {
-        if (now >= lobbyCountdown.endsAt) finalizeLobbyCountdown(now);
-      }
-    } else {
-      maybeStartLobbyCountdown(now);
-    }
-
-    for (const c of characters) {
-      if (isCharacterDowned(c, now)) {
-        continue;
-      }
-
-      if (c.controllerType === "AI") {
-        movement.updateAI(c, dt, now);
-        continue;
-      }
-
-      const ownerSession = c.ownerSessionId ? sessions.get(c.ownerSessionId) : null;
-      if (!ownerSession || (ownerSession.state !== "alive" && ownerSession.state !== "countdown" && ownerSession.state !== "won")) {
-        c.controllerType = "AI";
-        c.ownerSessionId = null;
-        continue;
-      }
-
-      if (ownerSession.state === "alive" || ownerSession.state === "won") movement.updatePlayer(c, ownerSession, dt);
-
-      if (ownerSession.state === "alive" && ownerSession.input.attackRequested) {
-        handleAttack(c.id, now);
-        ownerSession.input.attackRequested = false;
-      }
-    }
-
-    if (sockets.size === 0) return;
-
-    let alivePlayers = activePlayerCount();
-    if (activeMatchStartedAt > 0 && alivePlayers <= 1) {
-      let winnerSession = null;
-      if (alivePlayers === 1) {
-        winnerSession =
-          authenticatedSessions().find((session) => session.state === "alive" && session.characterId != null) || null;
-      }
-      endCurrentMatch(now, winnerSession);
-      alivePlayers = activePlayerCount();
-    }
-    if (alivePlayers > 0 && activeMatchStartedAt === 0) activeMatchStartedAt = now;
-    if (alivePlayers === 0) activeMatchStartedAt = 0;
-
-    for (const session of sessions.values()) maintainSpectatorTarget(session, now);
-
-    const match = {
-      inProgress: alivePlayers > 0,
-      alivePlayers,
-      startedAt: activeMatchStartedAt || null,
-      elapsedMs: activeMatchStartedAt ? now - activeMatchStartedAt : 0
-    };
-    if (now >= nextScoreboardRefreshAt) {
-      cachedScoreboard = scoreboardSnapshot();
-      nextScoreboardRefreshAt = now + 250;
-    }
-    const scoreboard = cachedScoreboard;
-    const spectatorCandidates = aliveSpectatorCandidates(now);
-
-    const worldState = {
-      worldSizeMeters: WORLD_SIZE_METERS,
-      worldWidthMeters: WORLD_WIDTH_METERS,
-      worldHeightMeters: WORLD_HEIGHT_METERS,
-      shelves: SHELVES,
-      coolers: COOLERS,
-      freezers: FREEZERS,
-      scoreboard,
-      characters: characters.map((c) => ({
-        id: c.id,
-        x: Number(c.x.toFixed(3)),
-        z: Number(c.z.toFixed(3)),
-        yaw: Number(c.yaw.toFixed(3)),
-        pitch: Number((c.pitch || 0).toFixed(3)),
-        controllerType: c.controllerType,
-        cooldownMsRemaining: Math.max(0, ATTACK_COOLDOWN_MS - (now - c.lastAttackAt)),
-        attackFlashMsRemaining: Math.max(0, ATTACK_FLASH_MS - (now - c.lastAttackAt)),
-        downedMsRemaining: Math.max(0, c.downedUntil - now),
-        downedDurationMs: NPC_DOWNED_RESPAWN_MS,
-        fallAwayX: Number((c.fallAwayX || 0).toFixed(3)),
-        fallAwayZ: Number((c.fallAwayZ || 1).toFixed(3))
-      }))
-    };
-
-    for (const [sessionId, ws] of sockets.entries()) {
-      const session = sessions.get(sessionId);
-      const playerCharacter =
-        session && session.characterId != null ? characters[session.characterId] : null;
-      const spectatorTargetSession =
-        session?.spectatingSessionId != null ? sessions.get(session.spectatingSessionId) : null;
-      const spectatorTargetName = spectatorTargetSession?.name || null;
-      send(ws, "world", {
-        ...worldState,
-        match,
-        session: session
-          ? {
-              state: session.state,
-              authenticated: session.authenticated,
-              name: session.name,
-              characterId: session.characterId,
-              ready: Boolean(session.ready || session.state === "countdown"),
-              countdownMsRemaining: countdownMsRemaining(now),
-              activePlayers: alivePlayers,
-              minPlayersToStart: MIN_PLAYERS_TO_START,
-              maxPlayers: MAX_PLAYERS,
-              returnToLobbyMsRemaining:
-                session.state === "won" || session.state === "downed" || session.state === "spectating"
-                  ? Math.max(0, (session.returnToLobbyAt || 0) - now)
-                  : 0,
-              eliminatedByName: session.state === "downed" ? session.eliminatedByName || null : null,
-              spectatorTargetCharacterId:
-                session.state === "spectating" ? session.spectatingCharacterId ?? null : null,
-              spectatorTargetName: session.state === "spectating" ? spectatorTargetName : null,
-              spectatorCandidates:
-                session.state === "spectating"
-                  ? spectatorCandidates.map((candidate) => ({
-                      name: candidate.name,
-                      characterId: candidate.characterId
-                    }))
-                  : [],
-              attackCooldownMsRemaining: playerCharacter
-                ? Math.max(0, ATTACK_COOLDOWN_MS - (now - playerCharacter.lastAttackAt))
-                : 0
-            }
-          : null
-      });
-    }
-  }, TICK_MS);
-
-  const wss = new WebSocketServer({ noServer: true });
-  const heartbeatInterval = setInterval(() => {
-    for (const ws of wss.clients) {
-      if (ws.readyState !== ws.OPEN) continue;
-      if (ws.isAlive === false) {
-        const staleSessionId = ws.sessionId || null;
-        logEvent("heartbeat_timeout", {
-          sessionId: shortSessionId(staleSessionId)
-        });
-        ws.terminate();
-        continue;
-      }
-      ws.isAlive = false;
-      ws.ping();
-    }
-  }, HEARTBEAT_INTERVAL_MS);
+  const { wss, heartbeatInterval } = createRoomWsLifecycle({
+    roomMeta: {
+      roomId,
+      roomCode,
+      isPrivate
+    },
+    constants: {
+      HEARTBEAT_INTERVAL_MS,
+      MIN_PLAYERS_TO_START,
+      MAX_PLAYERS
+    },
+    sessions,
+    sockets,
+    processClientMessage,
+    getLobbyCountdown: () => lobbyCountdown,
+    countdownReadyNames,
+    markCountdownReconnectGrace,
+    appendSystemChat,
+    releaseOwnedCharacter,
+    countdownPlayerCount,
+    cancelLobbyCountdown,
+    maybeStartLobbyCountdown,
+    send,
+    shortSessionId,
+    logEvent,
+    logWarn,
+    emitStatsEvent,
+    onInboundMessage: ({ bytes }) => {
+      recordInboundBytes(bytes);
+    },
+    onRoomEmpty
+  });
 
   tickInterval.unref?.();
   heartbeatInterval.unref?.();
-
-  wss.on("error", (err) => {
-    console.error(`[ws-server-error] ${err?.message || err}`);
-  });
 
   logEvent("runtime_started", {
     worldSizeMeters: WORLD_SIZE_METERS,
@@ -1220,117 +780,6 @@ function sanitizeSystemTextSegment(raw) {
     totalCharacters: TOTAL_CHARACTERS
   });
   emitStatsEvent("runtime_started");
-
-  wss.on("connection", (ws, req) => {
-    const sessionId = randomUUID();
-    const now = Date.now();
-    ws.isAlive = true;
-    ws.sessionId = sessionId;
-    let cleanedUp = false;
-
-    const cleanupSession = (reason, details = {}) => {
-      if (cleanedUp) return;
-      cleanedUp = true;
-
-      const closingSession = sessions.get(sessionId);
-      if (closingSession?.characterId != null) {
-        releaseOwnedCharacter(sessionId);
-      }
-      if (lobbyCountdown && closingSession?.state === "countdown" && closingSession?.name) {
-        countdownReadyNames.add(String(closingSession.name).toLowerCase());
-        markCountdownReconnectGrace(closingSession.name);
-      }
-
-      if (closingSession?.authenticated && closingSession.name) {
-        appendSystemChat([
-          { type: "player", name: closingSession.name },
-          { type: "text", text: " lämnade spelet" }
-        ]);
-      }
-
-      sessions.delete(sessionId);
-      sockets.delete(sessionId);
-      if (lobbyCountdown) {
-        if (countdownPlayerCount() < MIN_PLAYERS_TO_START) {
-          cancelLobbyCountdown();
-        }
-      } else {
-        maybeStartLobbyCountdown(Date.now());
-      }
-      logEvent("session_disconnected", {
-        sessionId: shortSessionId(sessionId),
-        name: closingSession?.name || null,
-        reason,
-        ...details
-      });
-      emitStatsEvent("session_disconnected", {
-        sessionId: shortSessionId(sessionId),
-        name: closingSession?.name || null,
-        reason
-      });
-      if (isPrivate && sessions.size === 0 && typeof onRoomEmpty === "function") {
-        onRoomEmpty({ roomId, roomCode });
-      }
-    };
-
-    const session = createSession(sessionId, now);
-
-    sessions.set(sessionId, session);
-    sockets.set(sessionId, ws);
-    logEvent("session_connected", {
-      sessionId: shortSessionId(sessionId),
-      origin: req.headers.origin || "<missing>",
-      ip: req.socket?.remoteAddress || null,
-      userAgent: req.headers["user-agent"] || null
-    });
-    emitStatsEvent("session_connected", {
-      sessionId: shortSessionId(sessionId)
-    });
-    send(ws, "welcome", {
-      sessionId,
-      maxPlayers: MAX_PLAYERS,
-      roomCode: roomCode || null,
-      isPrivate
-    });
-
-    ws.on("pong", () => {
-      ws.isAlive = true;
-    });
-
-    ws.on("message", (raw) => {
-      const result = processClientMessage(sessionId, raw);
-      if (result === "abuse") {
-        const activeSession = sessions.get(sessionId);
-        const reason = activeSession?.net.lastDropReason || "unknown";
-        const dropped = activeSession?.net.droppedMessages ?? 0;
-        logWarn(
-          "ratelimit",
-          `abuse-kick sid=${shortSessionId(sessionId)} origin=${req?.headers?.origin || "-"} reason=${reason} dropped=${dropped}`
-        );
-        cleanupSession("abuse_kick", { dropReason: reason, droppedMessages: dropped });
-        try {
-          ws.close(1008, "rate limit");
-        } catch {
-          ws.terminate();
-        }
-      }
-    });
-
-    ws.on("error", (err) => {
-      console.error(`[ws-client-error:${sessionId}] ${err?.message || err}`);
-      cleanupSession("socket_error", { error: err?.message || String(err) });
-      try {
-        ws.terminate();
-      } catch {
-        // no-op
-      }
-    });
-
-    ws.on("close", (code, closeReasonBuffer) => {
-      const closeReason = closeReasonBuffer && closeReasonBuffer.length > 0 ? closeReasonBuffer.toString() : "";
-      cleanupSession("socket_close", { code, closeReason });
-    });
-  });
 
   function handleUpgrade(req, socket, head) {
     const origin = req.headers.origin;
@@ -1374,6 +823,7 @@ function sanitizeSystemTextSegment(raw) {
       roomCode: roomCode || null,
       isPrivate,
       current: debugStateSnapshot(),
+      perf: perfSnapshot(),
       authenticatedNames: authenticatedSessions()
         .map((session) => session.name)
         .filter(Boolean)

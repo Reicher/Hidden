@@ -18,7 +18,9 @@
     "test:private-rooms": "node tests/private-rooms.js",
     "test:rate-limit": "node tests/rate-limit.js",
     "test:hardening": "node tests/hardening.js",
-    "test:all": "npm run test:combat && npm run test:debug-stats && npm run test:smoke && npm run test:reconnect-countdown-edge && npm run test:supermajority-ready && npm run test:private-rooms && npm run test:browser && npm run test:heartbeat && npm run test:rate-limit && npm run test:hardening"
+    "test:perf": "node tests/perf-baseline.js",
+    "test:perf:quick": "PERF_BOT_COUNT=3 PERF_MEASURE_MS=4000 PERF_SAMPLE_INTERVAL_MS=1000 PERF_MIN_FPS=12 PERF_MAX_FRAME_P95_MS=120 PERF_MAX_RTT_P95_MS=400 PERF_MAX_TICK_P95_MS=35 PERF_MAX_TICK_OVER_BUDGET_RATIO=0.5 PERF_MAX_PROCESS_CPU_HOST_SHARE=90 node tests/perf-baseline.js",
+    "test:all": "npm run test:combat && npm run test:debug-stats && npm run test:smoke && npm run test:reconnect-countdown-edge && npm run test:supermajority-ready && npm run test:private-rooms && npm run test:browser && npm run test:heartbeat && npm run test:rate-limit && npm run test:hardening && npm run test:perf"
   },
   "dependencies": {
     "pngjs": "^7.0.0",

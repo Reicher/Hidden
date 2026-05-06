@@ -122,11 +122,16 @@ npm run test:all
   - `npm run test:supermajority-ready`
   - `npm run test:private-rooms`
   - `npm run test:browser`
+  - `npm run test:perf`
+  - `npm run test:perf:quick`
   - `npm run test:combat`
   - `npm run test:debug-stats`
   - `npm run test:heartbeat`
   - `npm run test:rate-limit`
   - `npm run test:hardening`
+
+Perf-testet (`test:perf`) kör en browser-klient + bottar, mäter FPS/RTT/WebSocket-throughput på klienten samt tick/cpu på servern och skriver rapport till `logs/perf-baseline.json`.
+`test:perf:quick` är en snabb lokal katastrof-check med kortare mätfönster och mer toleranta trösklar.
 
 Om browser-test saknar Chromium:
 

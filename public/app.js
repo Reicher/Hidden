@@ -13,11 +13,22 @@ import {
 import { GAME_CREDITS_TEXT } from "./client/about.js";
 import { createInputController } from "./client/inputControls.js";
 import { handleSocketMessage } from "./client/socketMessages.js";
+import { createSocketConnectionController } from "./client/socketConnection.js";
+import { createSocketState, createSocketMessageContext } from "./client/socketContext.js";
+import { bindAppEventHandlers } from "./client/appBindings.js";
 import { normalizeAngle, hashString, colorForName } from "./client/utils.js";
 import { renderScoreboard as renderScoreboardFn } from "./client/scoreboard.js";
 import {
+  MOBILE_CONTROLS_PREFS,
+  wsScheme,
+  activeRoomCodeFromPath,
+  activeRoomPath,
+  randomPrivateRoomCode,
+  normalizeMobileControlsPreference,
+  mobileControlsLabel
+} from "./client/appHelpers.js";
+import {
   clampVolume,
-  normalizeAudioSettings,
   loadAudioSettings,
   persistAudioSettings
 } from "./client/audioSettings.js";
@@ -41,16 +52,12 @@ import {
 
 const PLAYER_NAME_KEY = "hidden_player_name";
 const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
-const RESERVED_PATH_CODES = new Set(["debug"]);
 
 const sceneSystem = createSceneSystem(canvas);
 const { renderer, scene, camera, resize } = sceneSystem;
 const roomSystem = createRoomSystem({ scene, renderer });
 const avatarSystem = createAvatarSystem({ scene, camera });
 
-let socket = null;
-let socketGeneration = 0;
-let connecting = false;
 let authenticated = false;
 let appMode = "connect"; // connect | lobby | playing | disconnected
 let sessionState = "auth"; // auth | lobby | countdown | alive | downed | won | spectating
@@ -78,6 +85,7 @@ let pendingLoginName = "";
 let spectatorTargetCharacterId = null;
 let spectatorTargetName = "";
 let spectatorCandidates = [];
+let socketConnection = null;
 
 const INPUT_SEND_INTERVAL_MS = 33;
 const INPUT_HEARTBEAT_MS = 120;
@@ -98,7 +106,6 @@ const SPECTATOR_CAMERA_HEIGHT_OFFSET = 0.28;
 const SPECTATOR_CAMERA_TARGET_HEIGHT_OFFSET = 0.12;
 const SPECTATOR_CAMERA_POS_SMOOTH_RATE = 12;
 const FORCE_MOBILE_UI = new URLSearchParams(location.search).get("mobileUi") === "1";
-const MOBILE_CONTROLS_PREFS = Object.freeze(["auto", "on", "off"]);
 const IS_TOUCH_DEVICE = (() => {
   const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
   const hoverNone = window.matchMedia && window.matchMedia("(hover: none)").matches;
@@ -151,7 +158,7 @@ const inputController = createInputController({
   lookTouchSensitivityY: LOOK_TOUCH_SENSITIVITY_Y,
   joystickDeadzone: JOYSTICK_DEADZONE,
   clampPitch,
-  getSocket: () => socket,
+  getSocket: () => socketConnection?.getSocket() || null,
   getAppMode: () => appMode,
   getSessionState: () => sessionState,
   getGameMenuOpen: () => gameMenuOpen,
@@ -159,41 +166,6 @@ const inputController = createInputController({
   isGameChatFocused,
   requestPointerLock: requestPointerLockSafe
 });
-
-function wsScheme() {
-  return location.protocol === "https:" ? "wss" : "ws";
-}
-
-function activeRoomCodeFromPath() {
-  const segments = location.pathname
-    .split("/")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (segments.length !== 1) return null;
-  try {
-    const roomCode = decodeURIComponent(segments[0]);
-    if (!roomCode) return null;
-    if (RESERVED_PATH_CODES.has(roomCode.toLowerCase())) return null;
-    return roomCode;
-  } catch {
-    return null;
-  }
-}
-
-function activeRoomPath() {
-  const code = activeRoomCodeFromPath();
-  if (!code) return "/";
-  return `/${encodeURIComponent(code)}`;
-}
-
-function randomPrivateRoomCode() {
-  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  let out = "";
-  for (const value of bytes) out += alphabet[value % alphabet.length];
-  return out;
-}
 
 function setRoomInfo() {
   if (!roomInfoEl) return;
@@ -215,11 +187,6 @@ function setConnectError(text) {
   connectErrorEl.textContent = text || "";
 }
 
-function normalizeMobileControlsPreference(value) {
-  if (value === "on" || value === "off" || value === "auto") return value;
-  return "auto";
-}
-
 function persistMobileControlsPreference(value) {
   const normalized = normalizeMobileControlsPreference(value);
   mobileControlsPreference = normalized;
@@ -236,12 +203,6 @@ function controlsTextForCurrentMode() {
   return `${GAMEPLAY_SUMMARY_TEXT}\n${
     mobileControlsEnabledByPreference() ? MOBILE_CONTROLS_TEXT : DESKTOP_CONTROLS_TEXT
   }`;
-}
-
-function mobileControlsLabel(pref) {
-  if (pref === "on") return "På";
-  if (pref === "off") return "AV";
-  return "Auto";
 }
 
 function refreshAudioSettingsUi() {
@@ -283,6 +244,7 @@ function requestPointerLockSafe(targetEl = canvas) {
 
 function updateConnectButton() {
   if (!connectBtnEl) return;
+  const connecting = socketConnection?.isConnecting?.() || false;
   connectBtnEl.disabled = connecting;
   connectBtnEl.textContent = connecting ? "Ansluter..." : "Anslut";
 }
@@ -581,14 +543,16 @@ function updateKnockdownToast() {
 }
 
 function requestSpectate() {
-  if (!socket || !authenticated) return;
-  socket.sendJson({ type: "spectate" });
+  const activeSocket = socketConnection?.getSocket();
+  if (!activeSocket || !authenticated) return;
+  activeSocket.sendJson({ type: "spectate" });
 }
 
 function requestSpectatorCycle(direction) {
-  if (!socket || sessionState !== "spectating") return;
+  const activeSocket = socketConnection?.getSocket();
+  if (!activeSocket || sessionState !== "spectating") return;
   const step = Number(direction) < 0 ? -1 : 1;
-  socket.sendJson({ type: "spectate_cycle", direction: step });
+  activeSocket.sendJson({ type: "spectate_cycle", direction: step });
 }
 
 function updateCrosshairHud(deltaSec) {
@@ -713,131 +677,46 @@ function resetInputState() {
   inputController.resetInputState();
 }
 
-const socketState = {
-  get authenticated() {
-    return authenticated;
+const socketState = createSocketState({
+  authenticated: { get: () => authenticated, set: (value) => { authenticated = value; } },
+  myName: { get: () => myName, set: (value) => { myName = value; } },
+  sessionState: { get: () => sessionState, set: (value) => { sessionState = value; } },
+  sessionReady: { get: () => sessionReady, set: (value) => { sessionReady = value; } },
+  myCharacterId: { get: () => myCharacterId, set: (value) => { myCharacterId = value; } },
+  activePlayersInGame: { get: () => activePlayersInGame, set: (value) => { activePlayersInGame = value; } },
+  attackCooldownMsRemaining: {
+    get: () => attackCooldownMsRemaining,
+    set: (value) => { attackCooldownMsRemaining = value; }
   },
-  set authenticated(value) {
-    authenticated = value;
+  attackCooldownVisualMaxMs: {
+    get: () => attackCooldownVisualMaxMs,
+    set: (value) => { attackCooldownVisualMaxMs = value; }
   },
-  get myName() {
-    return myName;
+  forceYawSyncOnNextWorld: { get: () => forceYawSyncOnNextWorld, set: (value) => { forceYawSyncOnNextWorld = value; } },
+  currentMatch: { get: () => currentMatch, set: (value) => { currentMatch = value; } },
+  lobbyMinPlayersToStart: { get: () => lobbyMinPlayersToStart, set: (value) => { lobbyMinPlayersToStart = value; } },
+  lobbyMaxPlayers: { get: () => lobbyMaxPlayers, set: (value) => { lobbyMaxPlayers = value; } },
+  winReturnToLobbyMsRemaining: {
+    get: () => winReturnToLobbyMsRemaining,
+    set: (value) => { winReturnToLobbyMsRemaining = value; }
   },
-  set myName(value) {
-    myName = value;
+  downedByName: { get: () => downedByName, set: (value) => { downedByName = value; } },
+  knockdownToastText: { get: () => knockdownToastText, set: (value) => { knockdownToastText = value; } },
+  knockdownToastMsRemaining: {
+    get: () => knockdownToastMsRemaining,
+    set: (value) => { knockdownToastMsRemaining = value; }
   },
-  get sessionState() {
-    return sessionState;
+  pendingLoginName: { get: () => pendingLoginName, set: (value) => { pendingLoginName = value; } },
+  spectatorTargetCharacterId: {
+    get: () => spectatorTargetCharacterId,
+    set: (value) => { spectatorTargetCharacterId = value; }
   },
-  set sessionState(value) {
-    sessionState = value;
-  },
-  get sessionReady() {
-    return sessionReady;
-  },
-  set sessionReady(value) {
-    sessionReady = value;
-  },
-  get myCharacterId() {
-    return myCharacterId;
-  },
-  set myCharacterId(value) {
-    myCharacterId = value;
-  },
-  get activePlayersInGame() {
-    return activePlayersInGame;
-  },
-  set activePlayersInGame(value) {
-    activePlayersInGame = value;
-  },
-  get attackCooldownMsRemaining() {
-    return attackCooldownMsRemaining;
-  },
-  set attackCooldownMsRemaining(value) {
-    attackCooldownMsRemaining = value;
-  },
-  get attackCooldownVisualMaxMs() {
-    return attackCooldownVisualMaxMs;
-  },
-  set attackCooldownVisualMaxMs(value) {
-    attackCooldownVisualMaxMs = value;
-  },
-  get forceYawSyncOnNextWorld() {
-    return forceYawSyncOnNextWorld;
-  },
-  set forceYawSyncOnNextWorld(value) {
-    forceYawSyncOnNextWorld = value;
-  },
-  get currentMatch() {
-    return currentMatch;
-  },
-  set currentMatch(value) {
-    currentMatch = value;
-  },
-  get lobbyMinPlayersToStart() {
-    return lobbyMinPlayersToStart;
-  },
-  set lobbyMinPlayersToStart(value) {
-    lobbyMinPlayersToStart = value;
-  },
-  get lobbyMaxPlayers() {
-    return lobbyMaxPlayers;
-  },
-  set lobbyMaxPlayers(value) {
-    lobbyMaxPlayers = value;
-  },
-  get winReturnToLobbyMsRemaining() {
-    return winReturnToLobbyMsRemaining;
-  },
-  set winReturnToLobbyMsRemaining(value) {
-    winReturnToLobbyMsRemaining = value;
-  },
-  get downedByName() {
-    return downedByName;
-  },
-  set downedByName(value) {
-    downedByName = value;
-  },
-  get knockdownToastText() {
-    return knockdownToastText;
-  },
-  set knockdownToastText(value) {
-    knockdownToastText = value;
-  },
-  get knockdownToastMsRemaining() {
-    return knockdownToastMsRemaining;
-  },
-  set knockdownToastMsRemaining(value) {
-    knockdownToastMsRemaining = value;
-  },
-  get pendingLoginName() {
-    return pendingLoginName;
-  },
-  set pendingLoginName(value) {
-    pendingLoginName = value;
-  },
-  get spectatorTargetCharacterId() {
-    return spectatorTargetCharacterId;
-  },
-  set spectatorTargetCharacterId(value) {
-    spectatorTargetCharacterId = value;
-  },
-  get spectatorTargetName() {
-    return spectatorTargetName;
-  },
-  set spectatorTargetName(value) {
-    spectatorTargetName = value;
-  },
-  get spectatorCandidates() {
-    return spectatorCandidates;
-  },
-  set spectatorCandidates(value) {
-    spectatorCandidates = value;
-  }
-};
+  spectatorTargetName: { get: () => spectatorTargetName, set: (value) => { spectatorTargetName = value; } },
+  spectatorCandidates: { get: () => spectatorCandidates, set: (value) => { spectatorCandidates = value; } }
+});
 
-const socketMessageContext = {
-  state: socketState,
+const socketMessageContext = createSocketMessageContext({
+  socketState,
   constants: {
     DEFAULT_MATCH_STATE,
     CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS,
@@ -873,86 +752,49 @@ const socketMessageContext = {
       viewYaw = value;
     }
   }
-};
+});
 
-function attachSocket(wsUrl, loginName) {
-  const generation = ++socketGeneration;
-
-  if (socket) {
-    try {
-      socket.close(1000, "reconnect");
-    } catch {
-      // no-op
-    }
-    socket = null;
+socketConnection = createSocketConnectionController({
+  createGameSocket,
+  handleSocketMessage,
+  getSocketMessageContext: () => socketMessageContext,
+  setPendingLoginName: (name) => {
+    pendingLoginName = name;
+  },
+  setConnectError,
+  setPrivateRoomButtonVisible,
+  setAppMode,
+  resetSessionRuntimeState,
+  updateDocumentTitle,
+  resetInputState,
+  onConnectingChanged: () => {
+    updateConnectButton();
   }
-
-  socket = createGameSocket({
-    url: wsUrl,
-    onOpen: () => {
-      if (generation !== socketGeneration) return;
-      connecting = false;
-      updateConnectButton();
-      socket?.sendJson({ type: "login", name: loginName });
-    },
-    onMessage: (msg) => {
-      if (generation !== socketGeneration) return;
-      socketState.pendingLoginName = loginName;
-      handleSocketMessage(msg, socketMessageContext);
-    },
-    onClose: () => {
-      if (generation !== socketGeneration) return;
-      connecting = false;
-      resetSessionRuntimeState({ clearIdentity: true });
-      updateConnectButton();
-      setAppMode("disconnected");
-      setConnectError("Anslutningen bröts.");
-      setPrivateRoomButtonVisible(false);
-      updateDocumentTitle();
-    },
-    onError: () => {
-      if (generation !== socketGeneration) return;
-      connecting = false;
-      resetSessionRuntimeState({ maxPlayers: 0 });
-      updateConnectButton();
-      setConnectError("Kunde inte ansluta till servern.");
-      setAppMode("connect");
-      setPrivateRoomButtonVisible(false);
-      updateDocumentTitle();
-    }
-  });
-}
+});
 
 function connectAndLogin() {
-  if (connecting) return;
   if (!nameInputEl) return;
-  const rawName = String(nameInputEl.value ?? "").trim();
-
-  if (rawName.length < 2) {
-    setConnectError("Namn måste vara minst 2 tecken.");
-    return;
-  }
-
+  const rawName = String(nameInputEl.value ?? "");
+  const trimmedName = rawName.trim();
   const wsUrl = `${wsScheme()}://${location.host}${activeRoomPath()}`;
 
-  localStorage.setItem(PLAYER_NAME_KEY, rawName);
-  pendingLoginName = rawName;
-
-  connecting = true;
-  resetSessionRuntimeState({ clearIdentity: true });
-  updateConnectButton();
-  setConnectError("");
-  setPrivateRoomButtonVisible(false);
-  resetInputState();
-  setAppMode("connect");
-  attachSocket(wsUrl, rawName);
+  const started = socketConnection?.connectAndLogin({
+    rawName: trimmedName,
+    wsUrl,
+    minNameLength: 2,
+    onValidationError: () => {
+      setConnectError("Namn måste vara minst 2 tecken.");
+    }
+  });
+  if (started) localStorage.setItem(PLAYER_NAME_KEY, trimmedName);
 }
 
 function sendChatFromInput(inputEl) {
   if (!inputEl) return;
   const text = String(inputEl.value ?? "").trim();
-  if (!text || !socket) return;
-  socket.sendJson({ type: "chat", text });
+  const activeSocket = socketConnection?.getSocket();
+  if (!text || !activeSocket) return;
+  activeSocket.sendJson({ type: "chat", text });
   inputEl.value = "";
 }
 
@@ -966,8 +808,9 @@ function sendInGameChat() {
 }
 
 function requestReturnToLobby() {
-  if (!socket || !authenticated) return;
-  socket.sendJson({ type: "leave_match" });
+  const activeSocket = socketConnection?.getSocket();
+  if (!activeSocket || !authenticated) return;
+  activeSocket.sendJson({ type: "leave_match" });
   setGameMenuOpen(false);
 }
 
@@ -992,185 +835,91 @@ if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
 if (IS_TOUCH_DEVICE) document.body.classList.add("touch-device");
 refreshAudioSettingsUi();
 inputController.bind();
-
-connectBtnEl?.addEventListener("click", connectAndLogin);
-createPrivateRoomBtnEl?.addEventListener("click", () => {
-  const code = randomPrivateRoomCode();
-  location.assign(`/${encodeURIComponent(code)}`);
-});
-nameInputEl?.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") connectAndLogin();
-});
-playBtnEl?.addEventListener("click", () => {
-  if (!socket || !authenticated) return;
-  if (currentMatch.inProgress) {
-    requestSpectate();
-    return;
-  }
-  if (sessionState === "alive" || sessionState === "downed" || sessionState === "won") return;
-  if (sessionReady && sessionState === "countdown") return;
-  const nextReady = !sessionReady;
-  socket.sendJson({ type: "ready", ready: nextReady });
-  sessionReady = nextReady;
-  updateReadyButton();
-});
-lobbySettingsBtnEl?.addEventListener("click", () => {
-  if (appMode !== "lobby") return;
-  setLobbyMenuOpen(!lobbyMenuOpen);
-});
-lobbyMenuSettingsBtnEl?.addEventListener("click", () => {
-  setLobbyMenuOpen(false);
-  openLobbyDialog("Inställningar", "", { showSettings: true });
-});
-lobbyMenuCreditsBtnEl?.addEventListener("click", () => {
-  setLobbyMenuOpen(false);
-  openLobbyDialog("Om spelet", GAME_CREDITS_TEXT);
-});
-lobbyMenuCloseBtnEl?.addEventListener("click", () => {
-  setLobbyMenuOpen(false);
-});
-lobbyMenuBackdropEl?.addEventListener("click", (event) => {
-  if (event.target === lobbyMenuBackdropEl) setLobbyMenuOpen(false);
-});
-
-chatSendBtnEl?.addEventListener("click", sendLobbyChat);
-chatInputEl?.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter") return;
-  event.preventDefault();
-  sendLobbyChat();
-});
-gameChatInputEl?.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    sendInGameChat();
-    return;
-  }
-  if (event.key === "Escape") {
-    event.preventDefault();
-    setGameChatOpen(false, { restorePointerLock: true });
-  }
-});
-gameMenuBtnEl?.addEventListener("click", () => {
-  if (appMode !== "playing") return;
-  if (sessionState !== "alive" && sessionState !== "spectating") return;
-  setGameMenuOpen(!gameMenuOpen);
-});
-gameMenuCloseBtnEl?.addEventListener("click", () => {
-  setGameMenuOpen(false, { restorePointerLock: true });
-});
-gameMenuSettingsBtnEl?.addEventListener("click", () => {
-  setGameMenuOpen(false);
-  openLobbyDialog("Inställningar", "", { showSettings: true });
-});
-gameMenuCreditsBtnEl?.addEventListener("click", () => {
-  setGameMenuOpen(false);
-  openLobbyDialog("Om spelet", GAME_CREDITS_TEXT);
-});
-gameMenuLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
-downedLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
-downedChatBtnEl?.addEventListener("click", () => {
-  setGameChatOpen(!gameChatOpen);
-});
-downedSpectateBtnEl?.addEventListener("click", requestSpectate);
-winLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
-spectatorPrevBtnEl?.addEventListener("click", () => {
-  requestSpectatorCycle(-1);
-});
-spectatorNextBtnEl?.addEventListener("click", () => {
-  requestSpectatorCycle(1);
-});
-spectatorLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
-spectatorChatBtnEl?.addEventListener("click", () => {
-  setGameChatOpen(!gameChatOpen);
-});
-gameMenuBackdropEl?.addEventListener("click", (event) => {
-  if (event.target === gameMenuBackdropEl) setGameMenuOpen(false, { restorePointerLock: true });
-});
-lobbyDialogCloseBtnEl?.addEventListener("click", closeLobbyDialog);
-lobbyDialogBackdropEl?.addEventListener("click", (event) => {
-  if (event.target === lobbyDialogBackdropEl) closeLobbyDialog();
-});
-musicVolumeInputEl?.addEventListener("input", () => {
-  audioSettings.musicVolume = clampVolume(musicVolumeInputEl.value);
-  persistAudioSettings(audioSettings);
-  refreshAudioSettingsUi();
-});
-musicMuteBtnEl?.addEventListener("click", () => {
-  audioSettings.musicMuted = !audioSettings.musicMuted;
-  persistAudioSettings(audioSettings);
-  refreshAudioSettingsUi();
-});
-sfxVolumeInputEl?.addEventListener("input", () => {
-  audioSettings.sfxVolume = clampVolume(sfxVolumeInputEl.value);
-  persistAudioSettings(audioSettings);
-  refreshAudioSettingsUi();
-});
-sfxMuteBtnEl?.addEventListener("click", () => {
-  audioSettings.sfxMuted = !audioSettings.sfxMuted;
-  persistAudioSettings(audioSettings);
-  refreshAudioSettingsUi();
-});
-mobileControlsModeBtnEl?.addEventListener("click", () => {
-  const idx = MOBILE_CONTROLS_PREFS.indexOf(mobileControlsPreference);
-  const next = MOBILE_CONTROLS_PREFS[(idx + 1) % MOBILE_CONTROLS_PREFS.length];
-  persistMobileControlsPreference(next);
-  refreshAudioSettingsUi();
-  if (countdownControlsTextEl) countdownControlsTextEl.textContent = controlsTextForCurrentMode();
-  updateMobileControlsVisibility();
-});
-
-window.addEventListener("resize", () => {
-  resize();
-});
-
-function isTextInputTarget(target) {
-  if (!target) return false;
-  if (target instanceof HTMLInputElement) return true;
-  if (target instanceof HTMLTextAreaElement) return true;
-  return Boolean(target.isContentEditable);
-}
-
-window.addEventListener("keydown", (event) => {
-  if (
-    !IS_TOUCH_DEVICE &&
-    appMode === "playing" &&
-    event.code === GAME_CHAT_OPEN_SHORTCUT &&
-    !event.ctrlKey &&
-    !event.altKey &&
-    !event.metaKey &&
-    !event.repeat &&
-    !isTextInputTarget(event.target) &&
-    canOpenInGameChat()
-  ) {
-    event.preventDefault();
-    setGameChatOpen(true);
-    return;
-  }
-  if (appMode === "lobby" && event.key === "Escape") {
-    if (!lobbyMenuOpen && lobbyDialogBackdropEl?.classList.contains("hidden")) return;
-    event.preventDefault();
-    if (lobbyMenuOpen) {
-      setLobbyMenuOpen(false);
-      return;
-    }
-    closeLobbyDialog();
-    return;
-  }
-  if (appMode === "playing" && event.key === "Escape") {
-    if (gameChatOpen) {
-      event.preventDefault();
-      setGameChatOpen(false, { restorePointerLock: true });
-      return;
-    }
-    if (sessionState !== "alive" && sessionState !== "spectating") return;
-    if (lobbyDialogBackdropEl && !lobbyDialogBackdropEl.classList.contains("hidden")) {
-      event.preventDefault();
-      closeLobbyDialog();
-      requestPointerLockSafe(canvas);
-      return;
-    }
-    event.preventDefault();
-    setGameMenuOpen(!gameMenuOpen, { restorePointerLock: true });
+bindAppEventHandlers({
+  elements: {
+    canvas,
+    connectBtnEl,
+    createPrivateRoomBtnEl,
+    nameInputEl,
+    playBtnEl,
+    lobbySettingsBtnEl,
+    lobbyMenuBackdropEl,
+    lobbyMenuSettingsBtnEl,
+    lobbyMenuCreditsBtnEl,
+    lobbyMenuCloseBtnEl,
+    chatSendBtnEl,
+    chatInputEl,
+    gameChatInputEl,
+    gameMenuBtnEl,
+    gameMenuBackdropEl,
+    gameMenuSettingsBtnEl,
+    gameMenuCreditsBtnEl,
+    gameMenuCloseBtnEl,
+    gameMenuLobbyBtnEl,
+    downedLobbyBtnEl,
+    downedChatBtnEl,
+    downedSpectateBtnEl,
+    winLobbyBtnEl,
+    spectatorPrevBtnEl,
+    spectatorNextBtnEl,
+    spectatorLobbyBtnEl,
+    spectatorChatBtnEl,
+    lobbyDialogBackdropEl,
+    lobbyDialogCloseBtnEl,
+    musicVolumeInputEl,
+    musicMuteBtnEl,
+    sfxVolumeInputEl,
+    sfxMuteBtnEl,
+    mobileControlsModeBtnEl,
+    countdownControlsTextEl
+  },
+  constants: {
+    GAME_CREDITS_TEXT,
+    MOBILE_CONTROLS_PREFS,
+    GAME_CHAT_OPEN_SHORTCUT,
+    IS_TOUCH_DEVICE
+  },
+  deps: {
+    randomPrivateRoomCode,
+    clampVolume,
+    persistAudioSettings
+  },
+  actions: {
+    connectAndLogin,
+    requestSpectate,
+    requestSpectatorCycle,
+    sendLobbyChat,
+    sendInGameChat,
+    requestReturnToLobby,
+    setLobbyMenuOpen,
+    openLobbyDialog,
+    setGameChatOpen,
+    setGameMenuOpen,
+    closeLobbyDialog,
+    refreshAudioSettingsUi,
+    persistMobileControlsPreference,
+    controlsTextForCurrentMode,
+    updateMobileControlsVisibility,
+    requestPointerLockSafe,
+    updateReadyButton,
+    resize,
+    getActiveSocket: () => socketConnection?.getSocket() || null
+  },
+  state: {
+    getAuthenticated: () => authenticated,
+    getCurrentMatch: () => currentMatch,
+    getSessionState: () => sessionState,
+    getSessionReady: () => sessionReady,
+    setSessionReady: (value) => {
+      sessionReady = Boolean(value);
+    },
+    getAppMode: () => appMode,
+    getLobbyMenuOpen: () => lobbyMenuOpen,
+    getGameChatOpen: () => gameChatOpen,
+    getGameMenuOpen: () => gameMenuOpen,
+    canOpenInGameChat,
+    getAudioSettings: () => audioSettings,
+    getMobileControlsPreference: () => mobileControlsPreference
   }
 });
 
