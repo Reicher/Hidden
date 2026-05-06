@@ -42,6 +42,9 @@ export function bindAppEventHandlers({
     spectatorChatBtnEl,
     lobbyDialogBackdropEl,
     lobbyDialogCloseBtnEl,
+    lookSensitivityInputEl,
+    lookSensitivityValueEl,
+    lookSmoothingToggleBtnEl,
     musicVolumeInputEl,
     musicMuteBtnEl,
     sfxVolumeInputEl,
@@ -60,7 +63,8 @@ export function bindAppEventHandlers({
   const {
     randomPrivateRoomCode,
     clampVolume,
-    persistAudioSettings
+    persistAudioSettings,
+    persistLookSettings
   } = deps;
 
   const {
@@ -77,6 +81,7 @@ export function bindAppEventHandlers({
     closeLobbyDialog,
     refreshAudioSettingsUi,
     persistMobileControlsPreference,
+    setLookSettings,
     controlsTextForCurrentMode,
     updateMobileControlsVisibility,
     requestPointerLockSafe,
@@ -217,7 +222,24 @@ export function bindAppEventHandlers({
     if (countdownControlsTextEl) countdownControlsTextEl.textContent = controlsTextForCurrentMode();
     updateMobileControlsVisibility();
   });
-
+  lookSensitivityInputEl?.addEventListener("input", () => {
+    const lookSettings = state.getLookSettings();
+    const nextValue = Number(lookSensitivityInputEl.value);
+    const next = { ...lookSettings, sensitivity: Number.isFinite(nextValue) ? nextValue : lookSettings.sensitivity };
+    if (typeof setLookSettings === "function") setLookSettings(next);
+    if (lookSensitivityValueEl) {
+      const liveValue = Number(lookSensitivityInputEl.value);
+      lookSensitivityValueEl.textContent = `${Number.isFinite(liveValue) ? Math.round(liveValue) : next.sensitivity}%`;
+    }
+    persistLookSettings(next);
+  });
+  lookSmoothingToggleBtnEl?.addEventListener("click", () => {
+    const lookSettings = state.getLookSettings();
+    const next = { ...lookSettings, smoothingEnabled: !lookSettings.smoothingEnabled };
+    setLookSettings(next);
+    refreshAudioSettingsUi();
+    persistLookSettings(next);
+  });
   window.addEventListener("resize", () => {
     resize();
   });

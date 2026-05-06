@@ -71,6 +71,9 @@ export const gameChatInputEl         = document.getElementById("gameChatInput");
 
 // ─── Settings panel ───────────────────────────────────────────────────────────
 export const mobileControlsModeBtnEl = document.getElementById("mobileControlsModeBtn");
+export const lookSensitivityInputEl  = document.getElementById("lookSensitivityInput");
+export const lookSensitivityValueEl  = document.getElementById("lookSensitivityValue");
+export const lookSmoothingToggleBtnEl = document.getElementById("lookSmoothingToggleBtn");
 export const musicVolumeInputEl      = document.getElementById("musicVolumeInput");
 export const musicMuteBtnEl          = document.getElementById("musicMuteBtn");
 export const sfxVolumeInputEl        = document.getElementById("sfxVolumeInput");

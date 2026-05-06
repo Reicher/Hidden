@@ -463,6 +463,13 @@ button:disabled {
   line-height: 1.4;
 }
 
+#settingsTrackpadHelp {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .settingsOptionRow,
 .settingsAudioRow {
   display: grid;
@@ -495,6 +502,13 @@ button:disabled {
   display: block;
   margin: 0;
   accent-color: var(--accent-cool);
+}
+
+.settingsRangeValue {
+  justify-self: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 720px) {

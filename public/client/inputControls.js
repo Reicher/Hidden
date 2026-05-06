@@ -10,6 +10,7 @@ export function createInputController({
   inputHeartbeatMs,
   lookTouchSensitivityX,
   lookTouchSensitivityY,
+  getLookSensitivityMultiplier,
   joystickDeadzone,
   clampPitch,
   getSocket,
@@ -241,8 +242,9 @@ export function createInputController({
       mobileLookLastX = event.clientX;
       mobileLookLastY = event.clientY;
 
-      yaw -= dx * lookTouchSensitivityX;
-      pitch = clampPitch(pitch - dy * lookTouchSensitivityY);
+      const sensitivity = Math.max(0.1, Number(getLookSensitivityMultiplier?.() ?? 1));
+      yaw -= dx * lookTouchSensitivityX * sensitivity;
+      pitch = clampPitch(pitch - dy * lookTouchSensitivityY * sensitivity);
       input.yaw = yaw;
       input.pitch = pitch;
       inputDirty = true;
@@ -329,8 +331,9 @@ export function createInputController({
   function handleMouseMove(event) {
     if (!canUseMovementInput()) return;
     if (document.pointerLockElement !== canvas) return;
-    yaw -= event.movementX * 0.0022;
-    pitch = clampPitch(pitch - event.movementY * 0.002);
+    const sensitivity = Math.max(0.1, Number(getLookSensitivityMultiplier?.() ?? 1));
+    yaw -= event.movementX * 0.0022 * sensitivity;
+    pitch = clampPitch(pitch - event.movementY * 0.002 * sensitivity);
     input.yaw = yaw;
     input.pitch = pitch;
     inputDirty = true;

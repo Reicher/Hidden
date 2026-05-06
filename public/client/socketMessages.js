@@ -136,7 +136,6 @@ export function handleSocketMessage(msg, ctx) {
   ) {
     actions.setConnectError("");
     actions.setAppMode("playing");
-    if (enteredAlive) actions.requestPointerLockSafe();
   } else {
     actions.setAppMode("lobby");
   }

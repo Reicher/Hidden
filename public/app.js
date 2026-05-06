@@ -33,6 +33,12 @@ import {
   persistAudioSettings
 } from "./client/audioSettings.js";
 import {
+  loadLookSettings,
+  persistLookSettings,
+  lookSensitivityMultiplier,
+  lookSmoothingRate
+} from "./client/lookSettings.js";
+import {
   canvas, screenRootEl,
   connectViewEl, connectErrorEl, roomInfoEl, nameInputEl, connectBtnEl, createPrivateRoomBtnEl,
   lobbyViewEl, scoreBodyEl, chatMessagesEl, chatInputEl, chatSendBtnEl, playBtnEl,
@@ -43,7 +49,8 @@ import {
   gameHudEl, crosshairHudEl, crosshairCooldownArcEl, aliveOthersTextEl, knockdownToastEl,
   gameMenuBtnEl, gameMenuBackdropEl, gameMenuSettingsBtnEl, gameMenuCreditsBtnEl, gameMenuCloseBtnEl, gameMenuLobbyBtnEl,
   gameChatNoticeEl, gameChatBoxEl, gameChatMessagesEl, gameChatInputRowEl, gameChatInputEl,
-  mobileControlsModeBtnEl, musicVolumeInputEl, musicMuteBtnEl, sfxVolumeInputEl, sfxMuteBtnEl,
+  mobileControlsModeBtnEl, lookSensitivityInputEl, lookSensitivityValueEl, lookSmoothingToggleBtnEl,
+  musicVolumeInputEl, musicMuteBtnEl, sfxVolumeInputEl, sfxMuteBtnEl,
   mobileControlsEl, mobileJoystickBaseEl, mobileJoystickKnobEl, mobileLookPadEl, mobileSprintBtnEl, mobileAttackBtnEl,
   downedOverlayEl, downedByTextEl, downedCountdownTextEl, downedLobbyBtnEl, downedChatBtnEl, downedSpectateBtnEl,
   winOverlayEl, winTitleEl, winCountdownTextEl, winLobbyBtnEl,
@@ -120,6 +127,7 @@ let viewYaw = 0;
 let lastFrameAt = performance.now();
 let mobileControlsPreference = normalizeMobileControlsPreference(localStorage.getItem(MOBILE_CONTROLS_PREF_KEY));
 let audioSettings = loadAudioSettings();
+let lookSettings = loadLookSettings();
 const musicLoopEl = new Audio("/assets/music.wav");
 musicLoopEl.loop = true;
 musicLoopEl.preload = "auto";
@@ -156,6 +164,11 @@ const inputController = createInputController({
   inputHeartbeatMs: INPUT_HEARTBEAT_MS,
   lookTouchSensitivityX: LOOK_TOUCH_SENSITIVITY_X,
   lookTouchSensitivityY: LOOK_TOUCH_SENSITIVITY_Y,
+  getLookSensitivityMultiplier: () => {
+    const liveValue = Number(lookSensitivityInputEl?.value);
+    if (Number.isFinite(liveValue)) return Math.max(0.1, liveValue / 100);
+    return lookSensitivityMultiplier(lookSettings);
+  },
   joystickDeadzone: JOYSTICK_DEADZONE,
   clampPitch,
   getSocket: () => socketConnection?.getSocket() || null,
@@ -208,6 +221,11 @@ function controlsTextForCurrentMode() {
 function refreshAudioSettingsUi() {
   if (mobileControlsModeBtnEl) {
     mobileControlsModeBtnEl.textContent = mobileControlsLabel(mobileControlsPreference);
+  }
+  if (lookSensitivityInputEl) lookSensitivityInputEl.value = String(lookSettings.sensitivity);
+  if (lookSensitivityValueEl) lookSensitivityValueEl.textContent = `${lookSettings.sensitivity}%`;
+  if (lookSmoothingToggleBtnEl) {
+    lookSmoothingToggleBtnEl.textContent = lookSettings.smoothingEnabled ? "På" : "Av";
   }
   if (musicVolumeInputEl) musicVolumeInputEl.value = String(audioSettings.musicVolume);
   if (sfxVolumeInputEl) sfxVolumeInputEl.value = String(audioSettings.sfxVolume);
@@ -866,6 +884,9 @@ bindAppEventHandlers({
     spectatorChatBtnEl,
     lobbyDialogBackdropEl,
     lobbyDialogCloseBtnEl,
+    lookSensitivityInputEl,
+    lookSensitivityValueEl,
+    lookSmoothingToggleBtnEl,
     musicVolumeInputEl,
     musicMuteBtnEl,
     sfxVolumeInputEl,
@@ -882,7 +903,8 @@ bindAppEventHandlers({
   deps: {
     randomPrivateRoomCode,
     clampVolume,
-    persistAudioSettings
+    persistAudioSettings,
+    persistLookSettings
   },
   actions: {
     connectAndLogin,
@@ -898,6 +920,9 @@ bindAppEventHandlers({
     closeLobbyDialog,
     refreshAudioSettingsUi,
     persistMobileControlsPreference,
+    setLookSettings: (next) => {
+      lookSettings = next;
+    },
     controlsTextForCurrentMode,
     updateMobileControlsVisibility,
     requestPointerLockSafe,
@@ -919,6 +944,7 @@ bindAppEventHandlers({
     getGameMenuOpen: () => gameMenuOpen,
     canOpenInGameChat,
     getAudioSettings: () => audioSettings,
+    getLookSettings: () => lookSettings,
     getMobileControlsPreference: () => mobileControlsPreference
   }
 });
@@ -931,7 +957,8 @@ function animate() {
   const yaw = inputController.getYaw();
   const pitch = inputController.getPitch();
 
-  const viewSmooth = 1 - Math.exp(-deltaSec * 30);
+  const smoothingRate = lookSmoothingRate(lookSettings);
+  const viewSmooth = smoothingRate > 0 ? 1 - Math.exp(-deltaSec * smoothingRate) : 1;
   const yawDelta = normalizeAngle(yaw - viewYaw);
   viewYaw = normalizeAngle(viewYaw + yawDelta * viewSmooth);
   viewPitch += (pitch - viewPitch) * viewSmooth;

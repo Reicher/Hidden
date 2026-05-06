@@ -2,8 +2,6 @@ import * as THREE from "/vendor/three.module.js";
 
 export function createSceneSystem(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-  renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setClearColor(0x1f2530);
 
@@ -25,11 +23,21 @@ export function createSceneSystem(canvas) {
   const ambient = new THREE.AmbientLight(0xffffff, 0.3);
   scene.add(ambient);
 
+  function resolveCanvasSize() {
+    const width = Math.max(1, Math.floor(canvas.clientWidth || window.innerWidth || 1));
+    const height = Math.max(1, Math.floor(canvas.clientHeight || window.innerHeight || 1));
+    return { width, height };
+  }
+
   function resize() {
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const { width, height } = resolveCanvasSize();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.setSize(width, height, false);
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
   }
+
+  resize();
 
   return { THREE, renderer, scene, camera, resize };
 }
