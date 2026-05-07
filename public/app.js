@@ -50,7 +50,8 @@ import {
   debugOverlayEl, debugFpsTextEl, debugFrameTimeTextEl, debugPingTextEl, knockdownToastEl,
   gameMenuBtnEl, gameMenuBackdropEl, gameMenuSettingsBtnEl, gameMenuCreditsBtnEl, gameMenuCloseBtnEl, gameMenuLobbyBtnEl,
   gameChatNoticeEl, gameChatBoxEl, gameChatMessagesEl, gameChatInputRowEl, gameChatInputEl,
-  mobileControlsModeBtnEl, lookSensitivityInputEl, lookSensitivityValueEl, lookSmoothingToggleBtnEl,
+  mobileControlsModeBtnEl, fullscreenModeCheckboxEl, settingsFullscreenHelpEl,
+  lookSensitivityInputEl, lookSensitivityValueEl, lookSmoothingToggleBtnEl,
   musicVolumeInputEl, musicMuteBtnEl, sfxVolumeInputEl, sfxMuteBtnEl,
   mobileControlsEl, mobileJoystickBaseEl, mobileJoystickKnobEl, mobileLookPadEl, mobileSprintBtnEl, mobileAttackBtnEl,
   downedOverlayEl, downedByTextEl, downedCountdownTextEl, downedLobbyBtnEl, downedChatBtnEl, downedSpectateBtnEl,
@@ -243,10 +244,81 @@ function controlsTextForCurrentMode() {
   }`;
 }
 
+function getFullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+function isFullscreenSupported() {
+  return Boolean(
+    document.fullscreenEnabled ||
+    document.webkitFullscreenEnabled ||
+    typeof document.documentElement?.requestFullscreen === "function" ||
+    typeof document.documentElement?.webkitRequestFullscreen === "function"
+  );
+}
+
+function isFullscreenActive() {
+  return Boolean(getFullscreenElement());
+}
+
+function setFullscreenHelpText() {
+  if (!settingsFullscreenHelpEl) return;
+  if (isFullscreenSupported()) {
+    settingsFullscreenHelpEl.textContent = isFullscreenActive()
+      ? "Fullscreen är aktivt. Avmarkera rutan för att lämna."
+      : "Markera rutan för att gå in i fullscreen.";
+    return;
+  }
+  settingsFullscreenHelpEl.textContent = IS_TOUCH_DEVICE
+    ? "Fullscreen stöds inte här (vanligt på iPhone/iPad Safari)."
+    : "Fullscreen stöds inte i den här webbläsaren.";
+}
+
+async function setFullscreenEnabled(enabled) {
+  const wantsFullscreen = Boolean(enabled);
+  if (!isFullscreenSupported()) {
+    refreshAudioSettingsUi();
+    return false;
+  }
+  try {
+    if (wantsFullscreen && !isFullscreenActive()) {
+      const targetEl = document.documentElement;
+      if (typeof targetEl?.requestFullscreen === "function") {
+        const maybePromise = targetEl.requestFullscreen();
+        if (maybePromise && typeof maybePromise.catch === "function") {
+          await maybePromise.catch(() => {});
+        }
+      } else if (typeof targetEl?.webkitRequestFullscreen === "function") {
+        targetEl.webkitRequestFullscreen();
+      }
+    } else if (!wantsFullscreen && isFullscreenActive()) {
+      if (typeof document.exitFullscreen === "function") {
+        const maybePromise = document.exitFullscreen();
+        if (maybePromise && typeof maybePromise.catch === "function") {
+          await maybePromise.catch(() => {});
+        }
+      } else if (typeof document.webkitExitFullscreen === "function") {
+        document.webkitExitFullscreen();
+      }
+    }
+  } catch {
+    // ignore fullscreen API failures; UI will resync from actual fullscreen state
+  }
+  const applied = wantsFullscreen ? isFullscreenActive() : !isFullscreenActive();
+  refreshAudioSettingsUi();
+  return applied;
+}
+
 function refreshAudioSettingsUi() {
   if (mobileControlsModeBtnEl) {
     mobileControlsModeBtnEl.textContent = mobileControlsLabel(mobileControlsPreference);
   }
+  if (fullscreenModeCheckboxEl) {
+    const supported = isFullscreenSupported();
+    fullscreenModeCheckboxEl.disabled = !supported;
+    fullscreenModeCheckboxEl.checked = supported && isFullscreenActive();
+  }
+  setFullscreenHelpText();
   if (lookSensitivityInputEl) lookSensitivityInputEl.value = String(lookSettings.sensitivity);
   if (lookSensitivityValueEl) lookSensitivityValueEl.textContent = `${lookSettings.sensitivity}%`;
   if (lookSmoothingToggleBtnEl) {
@@ -945,6 +1017,8 @@ function updateSpectatorCamera(deltaSec) {
 const savedName = localStorage.getItem(PLAYER_NAME_KEY);
 if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
 if (IS_TOUCH_DEVICE) document.body.classList.add("touch-device");
+document.addEventListener("fullscreenchange", refreshAudioSettingsUi);
+document.addEventListener("webkitfullscreenchange", refreshAudioSettingsUi);
 refreshAudioSettingsUi();
 inputController.bind();
 bindAppEventHandlers({
@@ -986,6 +1060,7 @@ bindAppEventHandlers({
     sfxVolumeInputEl,
     sfxMuteBtnEl,
     mobileControlsModeBtnEl,
+    fullscreenModeCheckboxEl,
     countdownControlsTextEl
   },
   constants: {
@@ -1017,6 +1092,7 @@ bindAppEventHandlers({
     closeLobbyDialog,
     refreshAudioSettingsUi,
     persistMobileControlsPreference,
+    setFullscreenEnabled,
     setLookSettings: (next) => {
       lookSettings = next;
     },

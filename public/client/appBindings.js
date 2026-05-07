@@ -50,6 +50,7 @@ export function bindAppEventHandlers({
     sfxVolumeInputEl,
     sfxMuteBtnEl,
     mobileControlsModeBtnEl,
+    fullscreenModeCheckboxEl,
     countdownControlsTextEl
   } = elements;
 
@@ -87,6 +88,7 @@ export function bindAppEventHandlers({
     setLookSettings,
     controlsTextForCurrentMode,
     updateMobileControlsVisibility,
+    setFullscreenEnabled,
     requestPointerLockSafe,
     toggleDebugOverlay,
     canUseDebugOverlay,
@@ -257,6 +259,19 @@ export function bindAppEventHandlers({
     refreshAudioSettingsUi();
     if (countdownControlsTextEl) countdownControlsTextEl.textContent = controlsTextForCurrentMode();
     updateMobileControlsVisibility();
+  });
+  fullscreenModeCheckboxEl?.addEventListener("change", () => {
+    const nextEnabled = Boolean(fullscreenModeCheckboxEl.checked);
+    const maybePromise = setFullscreenEnabled?.(nextEnabled);
+    if (maybePromise && typeof maybePromise.then === "function") {
+      maybePromise.then((applied) => {
+        if (applied === false) refreshAudioSettingsUi();
+      }).catch(() => {
+        refreshAudioSettingsUi();
+      });
+      return;
+    }
+    refreshAudioSettingsUi();
   });
   lookSensitivityInputEl?.addEventListener("input", () => {
     const lookSettings = state.getLookSettings();

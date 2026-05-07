@@ -75,6 +75,8 @@ export const gameChatInputEl         = document.getElementById("gameChatInput");
 
 // ─── Settings panel ───────────────────────────────────────────────────────────
 export const mobileControlsModeBtnEl = document.getElementById("mobileControlsModeBtn");
+export const fullscreenModeCheckboxEl = document.getElementById("fullscreenModeCheckbox");
+export const settingsFullscreenHelpEl = document.getElementById("settingsFullscreenHelp");
 export const lookSensitivityInputEl  = document.getElementById("lookSensitivityInput");
 export const lookSensitivityValueEl  = document.getElementById("lookSensitivityValue");
 export const lookSmoothingToggleBtnEl = document.getElementById("lookSmoothingToggleBtn");

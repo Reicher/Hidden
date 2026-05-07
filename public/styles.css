@@ -463,7 +463,8 @@ button:disabled {
   line-height: 1.4;
 }
 
-#settingsTrackpadHelp {
+#settingsTrackpadHelp,
+#settingsFullscreenHelp {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
@@ -495,6 +496,15 @@ button:disabled {
   grid-column: 3;
 }
 
+.settingsOptionRow input[type="checkbox"] {
+  grid-column: 3;
+  justify-self: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent-cool);
+}
+
 .settingsAudioRow input[type="range"] {
   width: calc(100% - 20px);
   min-width: 0;
@@ -522,6 +532,10 @@ button:disabled {
   }
   .settingsOptionRow button {
     grid-column: 2;
+  }
+  .settingsOptionRow input[type="checkbox"] {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 
