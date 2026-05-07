@@ -108,6 +108,7 @@ const DEBUG_OVERLAY_TOGGLE_SHORTCUT = "KeyP";
 const DEBUG_OVERLAY_REFRESH_MS = 120;
 const DEBUG_PING_INTERVAL_MS = 1200;
 const DEBUG_OVERLAY_TOUCH_HOLD_MS = 900;
+const DEBUG_OVERLAY_UNLOCK_TOUCH_HOLD_MS = 2600;
 const DEBUG_FPS_SAMPLE_WINDOW_MS = 1000;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
@@ -310,6 +311,7 @@ function openLobbyDialog(title, text, { showSettings = false } = {}) {
   if (showSettings) refreshAudioSettingsUi();
   lobbyDialogBackdropEl.classList.remove("hidden");
   updateScreenRootPointerEvents();
+  updateMobileControlsVisibility();
   if (showSettings && musicVolumeInputEl) {
     musicVolumeInputEl.focus();
   } else {
@@ -323,6 +325,7 @@ function closeLobbyDialog() {
   if (settingsPanelEl) settingsPanelEl.classList.add("hidden");
   lobbyDialogTextEl?.classList.remove("hidden");
   updateScreenRootPointerEvents();
+  updateMobileControlsVisibility();
   if (appMode === "playing" && (sessionState === "alive" || sessionState === "won")) {
     requestPointerLockSafe(canvas);
   }
@@ -340,12 +343,15 @@ function canOpenInGameChat() {
 function updateMobileControlsVisibility() {
   if (!mobileControlsEl) return;
   const wasShown = !mobileControlsEl.classList.contains("hidden");
+  const lobbyDialogOpen =
+    appMode === "playing" && lobbyDialogBackdropEl && !lobbyDialogBackdropEl.classList.contains("hidden");
   const show =
     mobileControlsEnabledByPreference() &&
     appMode === "playing" &&
     (sessionState === "alive" || sessionState === "won") &&
     !gameChatOpen &&
-    !gameMenuOpen;
+    !gameMenuOpen &&
+    !lobbyDialogOpen;
   mobileControlsEl.classList.toggle("hidden", !show);
   document.body.classList.toggle("mobile-controls-enabled", show);
   if (wasShown && !show) resetJoystickState();
@@ -567,6 +573,13 @@ function toggleDebugOverlay() {
 
 function canUseDebugOverlay() {
   return Boolean(debugOverlayAllowed);
+}
+
+function enableDebugOverlayForDevice() {
+  if (debugOverlayAllowed) return false;
+  debugOverlayAllowed = true;
+  localStorage.setItem(DEBUG_OVERLAY_ALLOWED_KEY, "1");
+  return true;
 }
 
 function sendDebugPing(nowMs = performance.now()) {
@@ -981,6 +994,7 @@ bindAppEventHandlers({
     GAME_CHAT_OPEN_SHORTCUT,
     DEBUG_OVERLAY_TOGGLE_SHORTCUT,
     DEBUG_OVERLAY_TOUCH_HOLD_MS,
+    DEBUG_OVERLAY_UNLOCK_TOUCH_HOLD_MS,
     IS_TOUCH_DEVICE
   },
   deps: {
@@ -1011,6 +1025,7 @@ bindAppEventHandlers({
     requestPointerLockSafe,
     toggleDebugOverlay,
     canUseDebugOverlay,
+    enableDebugOverlayForDevice,
     updateReadyButton,
     resize,
     getActiveSocket: () => socketConnection?.getSocket() || null

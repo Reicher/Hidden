@@ -59,6 +59,7 @@ export function bindAppEventHandlers({
     GAME_CHAT_OPEN_SHORTCUT,
     DEBUG_OVERLAY_TOGGLE_SHORTCUT,
     DEBUG_OVERLAY_TOUCH_HOLD_MS,
+    DEBUG_OVERLAY_UNLOCK_TOUCH_HOLD_MS,
     IS_TOUCH_DEVICE
   } = constants;
 
@@ -89,6 +90,7 @@ export function bindAppEventHandlers({
     requestPointerLockSafe,
     toggleDebugOverlay,
     canUseDebugOverlay,
+    enableDebugOverlayForDevice,
     updateReadyButton,
     resize,
     getActiveSocket
@@ -175,14 +177,16 @@ export function bindAppEventHandlers({
   gameMenuBtnEl?.addEventListener("pointerdown", (event) => {
     if (!IS_TOUCH_DEVICE) return;
     if (event.pointerType && event.pointerType !== "touch") return;
-    if (!canUseDebugOverlay?.()) return;
     if (state.getAppMode() !== "playing") return;
+    const unlockMode = !canUseDebugOverlay?.();
+    const holdMs = unlockMode ? DEBUG_OVERLAY_UNLOCK_TOUCH_HOLD_MS : DEBUG_OVERLAY_TOUCH_HOLD_MS;
     clearDebugLongPressTimer();
     debugLongPressTimer = setTimeout(() => {
       debugLongPressTimer = null;
       suppressNextGameMenuClick = true;
+      if (!canUseDebugOverlay?.()) enableDebugOverlayForDevice?.();
       toggleDebugOverlay?.();
-    }, DEBUG_OVERLAY_TOUCH_HOLD_MS);
+    }, holdMs);
   });
   gameMenuBtnEl?.addEventListener("pointerup", clearDebugLongPressTimer);
   gameMenuBtnEl?.addEventListener("pointercancel", clearDebugLongPressTimer);
