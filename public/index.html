@@ -12,16 +12,25 @@
 
     <div id="screenRoot">
       <section id="connectView" class="view">
-        <div class="card">
-          <h1>Hidden</h1>
-          <p id="roomInfo" class="room-info"></p>
-          <label for="nameInput">Namn</label>
-          <input id="nameInput" type="text" placeholder="Ditt namn" maxlength="20" autocomplete="off" />
-          <button id="connectBtn" type="button">Anslut</button>
-          <div id="connectError" class="error" aria-live="polite"></div>
-          <button id="createPrivateRoomBtn" class="hidden" type="button">Skapa privat rum</button>
+        <div id="connectLayout" class="connect-layout">
+          <div class="card">
+            <h1>Hidden</h1>
+            <p id="roomInfo" class="room-info"></p>
+            <label for="nameInput">Namn</label>
+            <input id="nameInput" type="text" placeholder="Ditt namn" maxlength="20" autocomplete="off" />
+            <button id="connectBtn" type="button">Anslut</button>
+            <div id="connectError" class="error" aria-live="polite"></div>
+            <button id="createPrivateRoomBtn" class="hidden" type="button">Skapa privat rum</button>
+          </div>
+          <aside id="newsCard" class="news-card" aria-live="polite">
+            <h2>Nyheter</h2>
+            <p id="newsVersion" class="news-meta">Laddar nyheter...</p>
+            <p id="newsPublishedAt" class="news-meta hidden"></p>
+            <p id="newsNotes" class="news-notes">Hämtar senaste versionsnyheter.</p>
+          </aside>
         </div>
       </section>
+      <div id="releaseTag" class="release-tag" aria-live="polite">release: -</div>
 
       <section id="lobbyView" class="view hidden">
         <div id="lobbyMatchStatus" aria-live="polite">
