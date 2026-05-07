@@ -1,5 +1,7 @@
 import { normalizeAngle } from "./combat.js";
 
+const SHELF_COLLISION_THICKNESS = 0.62;
+
 /**
  * Compute the half-extents of an obstacle, swapping width/depth for
  * quarter-turn yaw rotations.
@@ -8,8 +10,11 @@ import { normalizeAngle } from "./combat.js";
  * @returns {{ halfW: number, halfD: number }}
  */
 export function obstacleHalfExtents(obstacle) {
-  const width = typeof obstacle.width === "number" ? obstacle.width : 1;
+  let width = typeof obstacle.width === "number" ? obstacle.width : 1;
   const depth = typeof obstacle.depth === "number" ? obstacle.depth : 1;
+  if (obstacle?.kind === "shelf") {
+    width = Math.min(width, SHELF_COLLISION_THICKNESS);
+  }
   const yaw = typeof obstacle.yaw === "number" ? obstacle.yaw : 0;
   const quarterTurns = Math.round(yaw / (Math.PI / 2));
   const isSwapped = Math.abs(quarterTurns) % 2 === 1;

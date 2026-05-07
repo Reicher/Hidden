@@ -22,6 +22,36 @@ function testVictimCollection() {
   assert.deepEqual(victims, [1], `expected only front target, got ${JSON.stringify(victims)}`);
 }
 
+function testNearestVictimWinsInsideCone() {
+  const attacker = character(0, 0, 0, 0);
+  const near = character(1, 0, -1.2, 0);
+  const far = character(2, 0, -2.4, 0);
+
+  const victims = collectVictimIds({
+    characters: [attacker, near, far],
+    attackerId: 0,
+    attackRange: 3,
+    attackHalfAngle: Math.PI / 4
+  });
+
+  assert.deepEqual(victims, [1], `expected nearest target only, got ${JSON.stringify(victims)}`);
+}
+
+function testNarrowConeRejectsOffsetTargets() {
+  const attacker = character(0, 0, 0, 0);
+  const centered = character(1, 0, -2, 0);
+  const slightlyOffset = character(2, 0.45, -2, 0);
+
+  const victims = collectVictimIds({
+    characters: [attacker, centered, slightlyOffset],
+    attackerId: 0,
+    attackRange: 3,
+    attackHalfAngle: Math.PI / 30
+  });
+
+  assert.deepEqual(victims, [1], `expected narrow cone to keep centered target, got ${JSON.stringify(victims)}`);
+}
+
 function testCooldown() {
   const attacker = character(0, 0, 0, 0);
   const cooldownMs = 1000;
@@ -43,5 +73,7 @@ function testCooldown() {
 }
 
 testVictimCollection();
+testNearestVictimWinsInsideCone();
+testNarrowConeRejectsOffsetTargets();
 testCooldown();
 console.log("Combat unit tests passed.");

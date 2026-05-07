@@ -14,7 +14,8 @@ export function collectVictimIds({ characters, attackerId, attackRange, attackHa
   const attacker = characters[attackerId];
   if (!attacker) return [];
 
-  const victims = [];
+  let nearestVictimId = null;
+  let nearestDistSq = Number.POSITIVE_INFINITY;
   const forwardX = -Math.sin(attacker.yaw);
   const forwardZ = -Math.cos(attacker.yaw);
   const minDot = Math.cos(attackHalfAngle);
@@ -23,12 +24,19 @@ export function collectVictimIds({ characters, attackerId, attackRange, attackHa
     if (target.id === attacker.id) continue;
     const dx = target.x - attacker.x;
     const dz = target.z - attacker.z;
-    const dist = Math.hypot(dx, dz);
-    if (dist > attackRange || dist < 0.0001) continue;
+    const distSq = dx * dx + dz * dz;
+    if (distSq < 1e-8) continue;
+    if (distSq > attackRange * attackRange) continue;
+    const dist = Math.sqrt(distSq);
 
     const dot = (dx * forwardX + dz * forwardZ) / dist;
-    if (dot >= minDot) victims.push(target.id);
+    if (dot < minDot) continue;
+
+    if (distSq < nearestDistSq) {
+      nearestDistSq = distSq;
+      nearestVictimId = target.id;
+    }
   }
 
-  return victims;
+  return nearestVictimId == null ? [] : [nearestVictimId];
 }

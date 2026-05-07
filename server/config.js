@@ -179,7 +179,7 @@ export const TURN_SPEED = 2.3;
 export const AI_DECISION_MS_MIN = 600;
 export const AI_DECISION_MS_MAX = 1800;
 export const ATTACK_RANGE = 2.8;
-export const ATTACK_HALF_ANGLE = Math.PI / 4;
+export const ATTACK_HALF_ANGLE = Math.PI / 30;
 export const ATTACK_FLASH_MS = 140;
 export const CHARACTER_RADIUS = 0.41;
 
@@ -228,10 +228,11 @@ const LAYOUT_PRESET_BY_ID = new Map(LAYOUT_PRESETS.map((preset) => [preset.id, p
 const loadedLayouts = new Map();
 const requestedLayoutId = envString("WORLD_LAYOUT_ID", "layout-50").toLowerCase();
 
-function cloneFixtureSet(fixtures, { width, depth, height, keepSourceDimensions = false }) {
+function cloneFixtureSet(fixtures, { kind, width, depth, height, keepSourceDimensions = false }) {
   return Object.freeze(
     fixtures.map((fixture) =>
       freezeFixture({
+        kind,
         x: fixture.x,
         z: fixture.z,
         width: keepSourceDimensions && typeof fixture.width === "number" ? fixture.width : width,
@@ -275,13 +276,24 @@ function readLayoutById(layoutId) {
     worldHeightMeters: loaded.worldHeightMeters,
     warnings: Object.freeze(Array.isArray(loaded.warnings) ? loaded.warnings : []),
     shelves: cloneFixtureSet(loaded.shelves, {
+      kind: "shelf",
       width: SHELF_WIDTH,
       depth: SHELF_DEPTH,
       height: SHELF_HEIGHT,
       keepSourceDimensions: true
     }),
-    coolers: cloneFixtureSet(loaded.coolers, { width: COOLER_WIDTH, depth: COOLER_DEPTH, height: COOLER_HEIGHT }),
-    freezers: cloneFixtureSet(loaded.freezers, { width: FREEZER_WIDTH, depth: FREEZER_DEPTH, height: FREEZER_HEIGHT })
+    coolers: cloneFixtureSet(loaded.coolers, {
+      kind: "cooler",
+      width: COOLER_WIDTH,
+      depth: COOLER_DEPTH,
+      height: COOLER_HEIGHT
+    }),
+    freezers: cloneFixtureSet(loaded.freezers, {
+      kind: "freezer",
+      width: FREEZER_WIDTH,
+      depth: FREEZER_DEPTH,
+      height: FREEZER_HEIGHT
+    })
   });
   if (layout.warnings.length > 0) {
     for (const warning of layout.warnings) {
