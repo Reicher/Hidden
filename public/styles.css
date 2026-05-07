@@ -993,6 +993,32 @@ button:disabled {
   pointer-events: none;
 }
 
+#mobileLandscapePrompt {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  box-sizing: border-box;
+  background: rgba(8, 12, 18, 0.82);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+  z-index: 11;
+}
+
+#mobileLandscapePromptCard {
+  width: min(360px, calc(100vw - 40px));
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: rgba(12, 16, 24, 0.94);
+  color: var(--fg-strong);
+  font-size: clamp(18px, 5vw, 24px);
+  line-height: 1.35;
+  text-align: center;
+  padding: 20px 18px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.36);
+}
+
 #mobileCombatPad button {
   pointer-events: auto;
   touch-action: none;

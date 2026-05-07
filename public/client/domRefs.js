@@ -96,6 +96,7 @@ export const mobileJoystickKnobEl    = document.getElementById("mobileJoystickKn
 export const mobileLookPadEl         = document.getElementById("mobileLookPad");
 export const mobileSprintBtnEl       = document.getElementById("mobileSprintBtn");
 export const mobileAttackBtnEl       = document.getElementById("mobileAttackBtn");
+export const mobileLandscapePromptEl = document.getElementById("mobileLandscapePrompt");
 
 // ─── Downed overlay ───────────────────────────────────────────────────────────
 export const downedOverlayEl         = document.getElementById("downedOverlay");

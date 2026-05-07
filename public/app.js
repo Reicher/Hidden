@@ -54,7 +54,7 @@ import {
   mobileControlsModeBtnEl, fullscreenModeCheckboxEl, settingsFullscreenHelpEl,
   lookSensitivityInputEl, lookSensitivityValueEl, lookSmoothingToggleBtnEl,
   musicVolumeInputEl, musicMuteBtnEl, sfxVolumeInputEl, sfxMuteBtnEl,
-  mobileControlsEl, mobileJoystickBaseEl, mobileJoystickKnobEl, mobileLookPadEl, mobileSprintBtnEl, mobileAttackBtnEl,
+  mobileControlsEl, mobileJoystickBaseEl, mobileJoystickKnobEl, mobileLookPadEl, mobileSprintBtnEl, mobileAttackBtnEl, mobileLandscapePromptEl,
   downedOverlayEl, downedByTextEl, downedCountdownTextEl, downedLobbyBtnEl, downedChatBtnEl, downedSpectateBtnEl,
   winOverlayEl, winTitleEl, winCountdownTextEl, winLobbyBtnEl,
   spectatorHudEl, spectatorTargetTextEl, spectatorPrevBtnEl, spectatorNextBtnEl, spectatorLobbyBtnEl, spectatorChatBtnEl
@@ -456,6 +456,10 @@ function canOpenInGameChat() {
 
 function updateMobileControlsVisibility() {
   if (!mobileControlsEl) return;
+  const isPortrait =
+    (window.matchMedia && window.matchMedia("(orientation: portrait)").matches) ||
+    window.innerHeight > window.innerWidth;
+  const showLandscapePrompt = IS_TOUCH_DEVICE && appMode === "playing" && isPortrait;
   const wasShown = !mobileControlsEl.classList.contains("hidden");
   const lobbyDialogOpen =
     appMode === "playing" && lobbyDialogBackdropEl && !lobbyDialogBackdropEl.classList.contains("hidden");
@@ -465,9 +469,12 @@ function updateMobileControlsVisibility() {
     (sessionState === "alive" || sessionState === "won") &&
     !gameChatOpen &&
     !gameMenuOpen &&
-    !lobbyDialogOpen;
+    !lobbyDialogOpen &&
+    !showLandscapePrompt;
   mobileControlsEl.classList.toggle("hidden", !show);
   document.body.classList.toggle("mobile-controls-enabled", show);
+  mobileLandscapePromptEl?.classList.toggle("hidden", !showLandscapePrompt);
+  if (mobileLandscapePromptEl) mobileLandscapePromptEl.setAttribute("aria-hidden", showLandscapePrompt ? "false" : "true");
   if (wasShown && !show) resetJoystickState();
 }
 

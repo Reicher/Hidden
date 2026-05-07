@@ -293,6 +293,11 @@ export function bindAppEventHandlers({
   });
   window.addEventListener("resize", () => {
     resize();
+    updateMobileControlsVisibility();
+  });
+  window.addEventListener("orientationchange", () => {
+    resize();
+    updateMobileControlsVisibility();
   });
 
   window.addEventListener("keydown", (event) => {
