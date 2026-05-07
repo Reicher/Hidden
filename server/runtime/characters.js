@@ -93,7 +93,15 @@ export function createCharacterSystem({
         desiredYaw: p.yaw,
         nextDecisionAt: Date.now() + rand(aiDecisionMsMin, aiDecisionMsMax),
         desiredPitch: rand(-0.28, 0.28),
-        nextPitchDecisionAt: Date.now() + rand(320, 980)
+        nextPitchDecisionAt: Date.now() + rand(320, 980),
+        avoidanceX: 0,
+        avoidanceZ: 0,
+        nextAvoidanceRetargetAt: 0,
+        nextInspectDecisionAt: 0,
+        inspectDownedTargetId: -1,
+        inspectDownedUntil: 0,
+        inspectDownedAngle: 0,
+        inspectDownedRadius: 1.05
       }
     };
   }
@@ -170,6 +178,14 @@ export function createCharacterSystem({
       c.ai.nextDecisionAt = now + rand(aiDecisionMsMin, aiDecisionMsMax);
       c.ai.desiredPitch = rand(-0.3, 0.3);
       c.ai.nextPitchDecisionAt = now + rand(320, 980);
+      c.ai.avoidanceX = 0;
+      c.ai.avoidanceZ = 0;
+      c.ai.nextAvoidanceRetargetAt = 0;
+      c.ai.nextInspectDecisionAt = 0;
+      c.ai.inspectDownedTargetId = -1;
+      c.ai.inspectDownedUntil = 0;
+      c.ai.inspectDownedAngle = 0;
+      c.ai.inspectDownedRadius = 1.05;
     }
   }
 

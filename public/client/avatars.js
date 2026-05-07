@@ -18,11 +18,11 @@ const HEAD_TEX_SIZE = 256;
 const FACE_U = 0.25;
 const FACE_V = 0.5;
 const EYE_U_OFFSET = 0.058;
-const EYE_RADIUS_X_PX = 12;
-const EYE_RADIUS_Y_PX = 15;
+const EYE_RADIUS_X_PX = 13;
+const EYE_RADIUS_Y_PX = 16;
 const PUPIL_RADIUS_PX = 5.2;
-const PUPIL_RANGE_X_PX = 5.8;
-const PUPIL_RANGE_Y_PX = 4.6;
+const PUPIL_RANGE_X_PX = 8.9;
+const PUPIL_RANGE_Y_PX = 6.9;
 const AVATAR_YAW_OFFSET = Math.PI;
 const MAX_LOOK_PITCH_RAD = 1.2;
 const AIM_MAX_DISTANCE = 8;
@@ -652,6 +652,8 @@ export function createAvatarSystem({ scene, camera }) {
       knockdownStars,
       gazeTargetId: null,
       gazeRetargetAt: 0,
+      inspectDownedTargetId: -1,
+      inspectDownedActive: false,
       eyeX: 0,
       eyeY: 0,
       eyeTargetX: 0,
@@ -670,6 +672,10 @@ export function createAvatarSystem({ scene, camera }) {
     avatar.seenAtTick = true;
     avatar.targetYaw = visualYaw(character.yaw, character.controllerType);
     avatar.lookPitch = THREE.MathUtils.clamp(Number(character.pitch || 0), -MAX_LOOK_PITCH_RAD, MAX_LOOK_PITCH_RAD);
+    avatar.inspectDownedTargetId = Number.isFinite(character.inspectDownedTargetId)
+      ? Number(character.inspectDownedTargetId)
+      : -1;
+    avatar.inspectDownedActive = Boolean(character.inspectDownedActive) && avatar.inspectDownedTargetId >= 0;
     avatar.attackFlashMsRemaining = character.attackFlashMsRemaining || 0;
     avatar.controllerType = character.controllerType || "AI";
     const downedMsRemaining = Math.max(0, Number(character.downedMsRemaining || 0));
@@ -750,6 +756,26 @@ export function createAvatarSystem({ scene, camera }) {
   }
 
   function updateAIEyeTarget(avatar, charactersById, nowMs) {
+    if (avatar.inspectDownedActive && avatar.inspectDownedTargetId >= 0) {
+      const target = charactersById.get(avatar.inspectDownedTargetId);
+      if (target) {
+        const dx = target.x - avatar.group.position.x;
+        const dz = target.z - avatar.group.position.z;
+        const len = Math.hypot(dx, dz);
+        if (len > 0.001) {
+          const dirX = dx / len;
+          const dirZ = dz / len;
+          const rightX = Math.cos(avatar.currentYaw);
+          const rightZ = -Math.sin(avatar.currentYaw);
+          const localX = rightX * dirX + rightZ * dirZ;
+          setAvatarEyeTarget(avatar, localX * 2.0, 0.38);
+          return;
+        }
+      }
+      setAvatarEyeTarget(avatar, 0, 0.38);
+      return;
+    }
+
     if (nowMs >= avatar.gazeRetargetAt) {
       avatar.gazeRetargetAt = nowMs + 480 + Math.random() * 1400;
       const candidates = [];
@@ -765,8 +791,8 @@ export function createAvatarSystem({ scene, camera }) {
     }
 
     if (avatar.gazeTargetId == null) {
-      const driftX = Math.sin((nowMs + avatar.id * 97) * 0.0015) * 0.42;
-      const driftY = Math.cos((nowMs + avatar.id * 67) * 0.0017) * 0.34;
+      const driftX = Math.sin((nowMs + avatar.id * 97) * 0.0015) * 0.62;
+      const driftY = Math.cos((nowMs + avatar.id * 67) * 0.0017) * 0.52;
       setAvatarEyeTarget(avatar, driftX, driftY);
       return;
     }
@@ -792,16 +818,16 @@ export function createAvatarSystem({ scene, camera }) {
     const localX = rightX * dirX + rightZ * dirZ;
 
     const targetPitchY = THREE.MathUtils.clamp(-Number(target.pitch || 0) / MAX_LOOK_PITCH_RAD, -1, 1);
-    const driftY = Math.sin((nowMs + avatar.id * 53) * 0.002) * 0.16;
-    const localY = THREE.MathUtils.clamp(targetPitchY * 0.8 + driftY, -1, 1);
-    setAvatarEyeTarget(avatar, localX * 1.6, localY);
+    const driftY = Math.sin((nowMs + avatar.id * 53) * 0.002) * 0.24;
+    const localY = THREE.MathUtils.clamp(targetPitchY * 0.88 + driftY, -1, 1);
+    setAvatarEyeTarget(avatar, localX * 2.25, localY);
   }
 
   function updatePlayerEyeTarget(avatar, nowMs) {
     const yawDrift = normalizeAngle(avatar.targetYaw - avatar.currentYaw);
-    const lookX = THREE.MathUtils.clamp(yawDrift * 4.8 + Math.sin(nowMs * 0.0018 + avatar.id * 1.3) * 0.2, -1, 1);
+    const lookX = THREE.MathUtils.clamp(yawDrift * 6.1 + Math.sin(nowMs * 0.0018 + avatar.id * 1.3) * 0.32, -1, 1);
     const pitchLookY = THREE.MathUtils.clamp(-avatar.lookPitch / MAX_LOOK_PITCH_RAD, -1, 1);
-    const lookY = THREE.MathUtils.clamp(pitchLookY * 0.9 + Math.cos(nowMs * 0.0016 + avatar.id * 1.1) * 0.08, -1, 1);
+    const lookY = THREE.MathUtils.clamp(pitchLookY * 0.95 + Math.cos(nowMs * 0.0016 + avatar.id * 1.1) * 0.15, -1, 1);
     setAvatarEyeTarget(avatar, lookX, lookY);
   }
 

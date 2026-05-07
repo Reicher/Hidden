@@ -83,7 +83,7 @@ export function createRoomTickLoop({
       if (isCharacterDowned(c, now)) continue;
 
       if (c.controllerType === "AI") {
-        movement.updateAI(c, dt, now);
+        movement.updateAI(c, dt, now, { characters, isCharacterDowned });
         continue;
       }
 
@@ -154,6 +154,13 @@ export function createRoomTickLoop({
         z: Number(c.z.toFixed(3)),
         yaw: Number(c.yaw.toFixed(3)),
         pitch: Number((c.pitch || 0).toFixed(3)),
+        inspectDownedTargetId: Number.isFinite(c.ai?.inspectDownedTargetId)
+          ? Number(c.ai.inspectDownedTargetId)
+          : -1,
+        inspectDownedActive:
+          Number.isFinite(c.ai?.inspectDownedTargetId) &&
+          c.ai.inspectDownedTargetId >= 0 &&
+          now < Number(c.ai?.inspectDownedUntil || 0),
         controllerType: c.controllerType,
         cooldownMsRemaining: Math.max(0, constants.ATTACK_COOLDOWN_MS - (now - c.lastAttackAt)),
         attackFlashMsRemaining: Math.max(0, constants.ATTACK_FLASH_MS - (now - c.lastAttackAt)),

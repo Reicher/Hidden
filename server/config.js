@@ -179,7 +179,7 @@ export const TURN_SPEED = 2.3;
 export const AI_DECISION_MS_MIN = 600;
 export const AI_DECISION_MS_MAX = 1800;
 export const ATTACK_RANGE = 2.8;
-export const ATTACK_HALF_ANGLE = Math.PI / 30;
+export const ATTACK_HALF_ANGLE = Math.PI / 18;
 export const ATTACK_FLASH_MS = 140;
 export const CHARACTER_RADIUS = 0.41;
 
