@@ -27,7 +27,7 @@ html,
 body {
   margin: 0;
   width: 100%;
-  height: 100%;
+  height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
   background: var(--bg);
@@ -49,6 +49,7 @@ body.overlay-active #game {
 #screenRoot {
   position: fixed;
   inset: 0;
+  height: 100dvh;
 }
 
 .view {
@@ -133,7 +134,7 @@ button:disabled {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 8px;
-  padding: 8px;
+  padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
   box-sizing: border-box;
   min-width: 0;
 }
@@ -426,15 +427,23 @@ button:disabled {
   place-items: center;
   background: var(--overlay);
   z-index: 6;
+  padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 #lobbyDialogCard {
-  width: min(540px, calc(100vw - 44px));
+  width: min(540px, calc(100vw - 20px));
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface-2);
   padding: 16px;
   box-sizing: border-box;
+  max-height: calc(100dvh - max(20px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 #lobbyDialogTitle {
@@ -485,6 +494,14 @@ button:disabled {
   font-size: 14px;
 }
 
+.settingsInlineHint {
+  grid-column: 2;
+  justify-self: end;
+  font-size: 11px !important;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .settingsOptionRow button,
 .settingsAudioRow button {
   width: 100%;
@@ -533,6 +550,11 @@ button:disabled {
   .settingsOptionRow button {
     grid-column: 2;
   }
+  .settingsInlineHint {
+    grid-column: 1;
+    justify-self: start;
+    white-space: normal;
+  }
   .settingsOptionRow input[type="checkbox"] {
     grid-column: 2;
     justify-self: start;
@@ -541,6 +563,9 @@ button:disabled {
 
 #lobbyDialogCloseBtn {
   min-width: 110px;
+  position: sticky;
+  bottom: 0;
+  margin-top: 2px;
 }
 
 #gameHud {
@@ -619,7 +644,7 @@ button:disabled {
 
 #aliveOthersText {
   position: absolute;
-  top: 10px;
+  top: max(10px, env(safe-area-inset-top));
   left: 12px;
   font-size: 12px;
   letter-spacing: 0.2px;
@@ -646,7 +671,7 @@ button:disabled {
 #spectatorHud {
   position: absolute;
   left: 50%;
-  top: 12px;
+  top: max(12px, env(safe-area-inset-top));
   transform: translateX(-50%);
   display: grid;
   justify-items: center;
@@ -803,7 +828,7 @@ button:disabled {
 
 #gameMenuBtn {
   position: absolute;
-  top: 10px;
+  top: max(10px, env(safe-area-inset-top));
   right: 12px;
   pointer-events: auto;
   z-index: 7;
@@ -816,6 +841,11 @@ button:disabled {
   display: grid;
   place-items: center;
   background: var(--overlay);
+  padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 #lobbyMenuBackdrop {
@@ -831,6 +861,9 @@ button:disabled {
   padding: 14px;
   display: grid;
   gap: 8px;
+  max-height: calc(100dvh - max(20px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 #lobbyMenuTitle {
@@ -858,7 +891,7 @@ button:disabled {
 #gameChatBox {
   position: absolute;
   right: 12px;
-  bottom: 12px;
+  bottom: max(12px, env(safe-area-inset-bottom));
   width: min(420px, calc(100vw - 24px));
   max-height: min(70vh, 520px);
   border: 1px solid var(--line-faint);
@@ -912,7 +945,7 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  padding: 12px;
+  padding: 12px 12px max(12px, env(safe-area-inset-bottom));
   gap: 12px;
   pointer-events: none;
 }
@@ -971,7 +1004,7 @@ button:disabled {
   pointer-events: none;
   position: absolute;
   left: 50%;
-  bottom: 4px;
+  bottom: max(4px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   width: min(42vw, 220px);
   display: grid;

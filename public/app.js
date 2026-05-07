@@ -382,9 +382,11 @@ function openLobbyDialog(title, text, { showSettings = false } = {}) {
   if (settingsPanelEl) settingsPanelEl.classList.toggle("hidden", !showSettings);
   if (showSettings) refreshAudioSettingsUi();
   lobbyDialogBackdropEl.classList.remove("hidden");
+  const dialogCardEl = document.getElementById("lobbyDialogCard");
+  if (dialogCardEl) dialogCardEl.scrollTop = 0;
   updateScreenRootPointerEvents();
   updateMobileControlsVisibility();
-  if (showSettings && musicVolumeInputEl) {
+  if (showSettings && musicVolumeInputEl && !IS_TOUCH_DEVICE) {
     musicVolumeInputEl.focus();
   } else {
     lobbyDialogCloseBtnEl.focus();
