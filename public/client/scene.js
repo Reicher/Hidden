@@ -33,6 +33,9 @@ export function createSceneSystem(canvas) {
     const { width, height } = resolveCanvasSize();
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.setSize(width, height, false);
+    renderer.setViewport(0, 0, width, height);
+    renderer.setScissor(0, 0, width, height);
+    renderer.setScissorTest(false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
   }

@@ -16,7 +16,7 @@ import { handleSocketMessage } from "./client/socketMessages.js";
 import { createSocketConnectionController } from "./client/socketConnection.js";
 import { createSocketState, createSocketMessageContext } from "./client/socketContext.js";
 import { bindAppEventHandlers } from "./client/appBindings.js";
-import { normalizeAngle, hashString, colorForName } from "./client/utils.js";
+import { normalizeAngle, colorForName } from "./client/utils.js";
 import { renderScoreboard as renderScoreboardFn } from "./client/scoreboard.js";
 import {
   MOBILE_CONTROLS_PREFS,
@@ -40,7 +40,7 @@ import {
 } from "./client/lookSettings.js";
 import {
   canvas, screenRootEl,
-  connectViewEl, connectErrorEl, roomInfoEl, nameInputEl, connectBtnEl, createPrivateRoomBtnEl, releaseTagEl,
+  connectViewEl, connectErrorEl, roomInfoEl, nameInputEl, connectBtnEl, createPrivateRoomBtnEl,
   newsCardEl, newsVersionEl, newsPublishedAtEl, newsNotesEl,
   lobbyViewEl, scoreBodyEl, chatMessagesEl, chatInputEl, chatSendBtnEl, playBtnEl,
   lobbyMatchStatusEl, lobbyMatchStatusTitleEl,
@@ -222,53 +222,6 @@ function setPrivateRoomButtonVisible(visible) {
   createPrivateRoomBtnEl.classList.toggle("hidden", !visible);
 }
 
-async function setReleaseTag() {
-  if (!releaseTagEl) return;
-  const formatDeployedAt = (value) => {
-    const raw = typeof value === "string" ? value.trim() : "";
-    if (!raw) return "";
-    const asDate = new Date(raw);
-    if (!Number.isFinite(asDate.getTime())) return raw;
-    return new Intl.DateTimeFormat("sv-SE", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    }).format(asDate);
-  };
-
-  try {
-    const jsonResponse = await fetch(`/version.json?t=${Date.now()}`, { cache: "no-store" });
-    if (jsonResponse.ok) {
-      const payload = await jsonResponse.json();
-      const version = typeof payload?.version === "string" ? payload.version.trim() : "";
-      if (version) {
-        const deployedAt = formatDeployedAt(payload?.deployedAt);
-        if (deployedAt) {
-          releaseTagEl.textContent = `release: ${version}\ndeploy: ${deployedAt}`;
-          releaseTagEl.title = `Deployad: ${deployedAt}`;
-        } else {
-          releaseTagEl.textContent = `release: ${version}`;
-          releaseTagEl.removeAttribute("title");
-        }
-        return;
-      }
-    }
-
-    const textResponse = await fetch(`/version.txt?t=${Date.now()}`, { cache: "no-store" });
-    if (!textResponse.ok) throw new Error(`http_${textResponse.status}`);
-    const versionText = (await textResponse.text()).trim();
-    if (!versionText) throw new Error("missing_version");
-    releaseTagEl.textContent = `release: ${versionText}`;
-    releaseTagEl.removeAttribute("title");
-  } catch {
-    releaseTagEl.textContent = "release: -";
-    releaseTagEl.removeAttribute("title");
-  }
-}
-
 async function setNewsCard() {
   if (!newsCardEl || !newsVersionEl || !newsPublishedAtEl || !newsNotesEl) return;
   const formatTimestamp = (value) => {
@@ -278,10 +231,8 @@ async function setNewsCard() {
     if (!Number.isFinite(asDate.getTime())) return raw;
     return new Intl.DateTimeFormat("sv-SE", {
       year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit"
+      month: "long",
+      day: "numeric"
     }).format(asDate);
   };
 
@@ -290,13 +241,12 @@ async function setNewsCard() {
     if (!response.ok) throw new Error(`http_${response.status}`);
     const payload = await response.json();
     const version = typeof payload?.version === "string" ? payload.version.trim() : "";
-    const title = typeof payload?.title === "string" ? payload.title.trim() : "";
     const publishedAt = formatTimestamp(payload?.publishedAt);
     const notes = typeof payload?.notes === "string" ? payload.notes.trim() : "";
 
-    newsVersionEl.textContent = version ? `Version ${version}${title ? ` - ${title}` : ""}` : "Senaste version";
+    newsVersionEl.textContent = version ? `Nyheter version ${version}` : "Nyheter version -";
     if (publishedAt) {
-      newsPublishedAtEl.textContent = `Publicerad: ${publishedAt}`;
+      newsPublishedAtEl.textContent = publishedAt;
       newsPublishedAtEl.classList.remove("hidden");
     } else {
       newsPublishedAtEl.textContent = "";
@@ -304,10 +254,10 @@ async function setNewsCard() {
     }
     newsNotesEl.textContent = notes || "Inga release notes hittades.";
   } catch {
-    newsVersionEl.textContent = "Nyheter kunde inte hämtas";
+    newsVersionEl.textContent = "Nyheter version -";
     newsPublishedAtEl.textContent = "";
     newsPublishedAtEl.classList.add("hidden");
-    newsNotesEl.textContent = "Kontrollera att public/news.json finns efter deploy.";
+    newsNotesEl.textContent = "Inga nyheter tillgängliga just nu.";
   }
 }
 
@@ -857,7 +807,6 @@ function setAppMode(mode) {
   const showLobby = mode === "lobby";
 
   connectViewEl?.classList.toggle("hidden", !showConnect);
-  releaseTagEl?.classList.toggle("hidden", !showConnect);
   lobbyViewEl?.classList.toggle("hidden", !showLobby);
   gameHudEl?.classList.toggle("hidden", mode !== "playing");
 
@@ -1272,14 +1221,13 @@ function animate() {
     lastDebugOverlayUpdateAt = now;
     updateDebugOverlay();
   }
-  renderer.render(scene, camera);
+  if (appMode === "playing") renderer.render(scene, camera);
 }
 
 animate();
 updateConnectButton();
 setRoomInfo();
 setPrivateRoomButtonVisible(false);
-setReleaseTag();
 setNewsCard();
 setAppMode("connect");
 updateDocumentTitle();

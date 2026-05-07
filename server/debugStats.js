@@ -186,14 +186,6 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
         if (typeof name !== "string" || !name.trim()) continue;
         room.uniqueNames.add(name.trim());
       }
-      const snapshot = loadCurrentSnapshot(row.current);
-      if (snapshot) {
-        room.current.connected = snapshot.connected;
-        room.current.authenticated = snapshot.authenticated;
-        room.current.active = snapshot.active;
-        room.current.countdown = snapshot.countdown;
-        room.current.lobby = snapshot.lobby;
-      }
     }
 
     state.names.clear();

@@ -15,7 +15,6 @@ export const roomInfoEl              = document.getElementById("roomInfo");
 export const nameInputEl             = document.getElementById("nameInput");
 export const connectBtnEl            = document.getElementById("connectBtn");
 export const createPrivateRoomBtnEl  = document.getElementById("createPrivateRoomBtn");
-export const releaseTagEl            = document.getElementById("releaseTag");
 export const newsCardEl              = document.getElementById("newsCard");
 export const newsVersionEl           = document.getElementById("newsVersion");
 export const newsPublishedAtEl       = document.getElementById("newsPublishedAt");

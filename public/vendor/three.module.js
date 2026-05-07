@@ -19253,7 +19253,7 @@ function getEncodingComponents( colorSpace ) {
 function getShaderErrors( gl, shader, type ) {
 
 	const status = gl.getShaderParameter( shader, gl.COMPILE_STATUS );
-	const errors = gl.getShaderInfoLog( shader ).trim();
+	const errors = ( gl.getShaderInfoLog( shader ) || '' ).trim();
 
 	if ( status && errors === '' ) return '';
 
@@ -20106,9 +20106,9 @@ function WebGLProgram( renderer, cacheKey, parameters, bindingStates ) {
 		// check for link errors
 		if ( renderer.debug.checkShaderErrors ) {
 
-			const programLog = gl.getProgramInfoLog( program ).trim();
-			const vertexLog = gl.getShaderInfoLog( glVertexShader ).trim();
-			const fragmentLog = gl.getShaderInfoLog( glFragmentShader ).trim();
+			const programLog = ( gl.getProgramInfoLog( program ) || '' ).trim();
+			const vertexLog = ( gl.getShaderInfoLog( glVertexShader ) || '' ).trim();
+			const fragmentLog = ( gl.getShaderInfoLog( glFragmentShader ) || '' ).trim();
 
 			let runnable = true;
 			let haveDiagnostics = true;

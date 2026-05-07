@@ -78,22 +78,6 @@ body.overlay-active #game {
   align-items: stretch;
 }
 
-.release-tag {
-  position: fixed;
-  right: 14px;
-  right: max(14px, env(safe-area-inset-right));
-  bottom: 10px;
-  bottom: max(10px, env(safe-area-inset-bottom));
-  color: var(--muted);
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  opacity: 0.9;
-  pointer-events: none;
-  text-align: right;
-  white-space: pre-line;
-  z-index: 40;
-}
-
 .card {
   width: 100%;
   display: grid;
@@ -115,15 +99,17 @@ body.overlay-active #game {
   overflow: auto;
 }
 
-.news-card h2 {
-  margin: 0 0 10px;
-  font-size: 18px;
-}
-
 .news-meta {
   margin: 0 0 8px;
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+#newsPublishedAt {
   color: var(--muted);
   font-size: 12px;
+  font-weight: 500;
 }
 
 .news-notes {
@@ -1108,11 +1094,14 @@ body.touch-device #gameChatNotice {
   display: none;
 }
 
-@media (max-width: 900px), (max-height: 740px) {
+@media (max-width: 900px) {
   .connect-layout {
     width: min(520px, calc(100vw - 20px));
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+@media (max-width: 900px), (max-height: 740px) {
 
   .card {
     width: 100%;

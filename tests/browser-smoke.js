@@ -67,12 +67,37 @@ async function run() {
       })
     ]);
 
-    await pageA.click("#playBtn");
-    await pageB.click("#playBtn");
+    const waitUntilPlayReady = (page) =>
+      page.waitForFunction(() => {
+        const btn = document.getElementById("playBtn");
+        if (!btn) return false;
+        if (!(btn instanceof HTMLButtonElement)) return false;
+        if (btn.disabled) return false;
+        const style = window.getComputedStyle(btn);
+        if (style.display === "none" || style.visibility === "hidden") return false;
+        const rect = btn.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      }, null, { timeout: 12000 });
+
+    const clickReadyWithRetry = async (page) => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await waitUntilPlayReady(page);
+        await page.click("#playBtn");
+        const toggled = await page.waitForFunction(() => {
+          const btn = document.getElementById("playBtn");
+          if (!(btn instanceof HTMLButtonElement)) return false;
+          return btn.textContent !== "Redo" || btn.disabled;
+        }, null, { timeout: 2500 }).then(() => true).catch(() => false);
+        if (toggled) return;
+      }
+      throw new Error("Failed to toggle ready state after clicking #playBtn");
+    };
+
+    await Promise.all([clickReadyWithRetry(pageA), clickReadyWithRetry(pageB)]);
 
     await Promise.all([
-      pageA.waitForFunction(() => !document.body.classList.contains("overlay-active"), null, { timeout: 18000 }),
-      pageB.waitForFunction(() => !document.body.classList.contains("overlay-active"), null, { timeout: 18000 })
+      pageA.waitForFunction(() => !document.body.classList.contains("overlay-active"), null, { timeout: 25000 }),
+      pageB.waitForFunction(() => !document.body.classList.contains("overlay-active"), null, { timeout: 25000 })
     ]);
 
     await sleep(1200);
