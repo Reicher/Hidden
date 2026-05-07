@@ -46,7 +46,8 @@ import {
   lobbySettingsBtnEl, lobbyMenuBackdropEl, lobbyMenuSettingsBtnEl, lobbyMenuCreditsBtnEl, lobbyMenuCloseBtnEl,
   lobbyDialogBackdropEl, lobbyDialogTitleEl, lobbyDialogTextEl, lobbyDialogCloseBtnEl, settingsPanelEl,
   countdownOverlayEl, countdownTextEl, countdownCharacterCanvasEl, countdownCharacterMetaEl, countdownControlsTextEl,
-  gameHudEl, crosshairHudEl, crosshairCooldownArcEl, aliveOthersTextEl, knockdownToastEl,
+  gameHudEl, crosshairHudEl, crosshairCooldownArcEl, aliveOthersTextEl,
+  debugOverlayEl, debugFpsTextEl, debugFrameTimeTextEl, debugPingTextEl, knockdownToastEl,
   gameMenuBtnEl, gameMenuBackdropEl, gameMenuSettingsBtnEl, gameMenuCreditsBtnEl, gameMenuCloseBtnEl, gameMenuLobbyBtnEl,
   gameChatNoticeEl, gameChatBoxEl, gameChatMessagesEl, gameChatInputRowEl, gameChatInputEl,
   mobileControlsModeBtnEl, lookSensitivityInputEl, lookSensitivityValueEl, lookSmoothingToggleBtnEl,
@@ -59,6 +60,7 @@ import {
 
 const PLAYER_NAME_KEY = "hidden_player_name";
 const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
+const DEBUG_OVERLAY_ALLOWED_KEY = "hidden_debug_overlay_allowed";
 
 const sceneSystem = createSceneSystem(canvas);
 const { renderer, scene, camera, resize } = sceneSystem;
@@ -102,6 +104,11 @@ const CROSSHAIR_RING_CIRCUMFERENCE = Math.PI * 26;
 const CROSSHAIR_HIT_DISTANCE_METERS = 2.8;
 const GAME_CHAT_MAX_LINES = 5;
 const GAME_CHAT_OPEN_SHORTCUT = "KeyC";
+const DEBUG_OVERLAY_TOGGLE_SHORTCUT = "KeyP";
+const DEBUG_OVERLAY_REFRESH_MS = 120;
+const DEBUG_PING_INTERVAL_MS = 1200;
+const DEBUG_OVERLAY_TOUCH_HOLD_MS = 900;
+const DEBUG_FPS_SAMPLE_WINDOW_MS = 1000;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
 const JOYSTICK_DEADZONE = 0.16;
@@ -113,6 +120,7 @@ const SPECTATOR_CAMERA_HEIGHT_OFFSET = 0.28;
 const SPECTATOR_CAMERA_TARGET_HEIGHT_OFFSET = 0.12;
 const SPECTATOR_CAMERA_POS_SMOOTH_RATE = 12;
 const FORCE_MOBILE_UI = new URLSearchParams(location.search).get("mobileUi") === "1";
+const DEBUG_OVERLAY_QUERY_PARAM = new URLSearchParams(location.search).get("debugOverlay");
 const IS_TOUCH_DEVICE = (() => {
   const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
   const hoverNone = window.matchMedia && window.matchMedia("(hover: none)").matches;
@@ -121,6 +129,15 @@ const IS_TOUCH_DEVICE = (() => {
   const mobileUa = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
   return coarsePointer || hoverNone || touchApi || touchPoints || mobileUa || FORCE_MOBILE_UI;
 })();
+let debugOverlayAllowed = !IS_TOUCH_DEVICE || localStorage.getItem(DEBUG_OVERLAY_ALLOWED_KEY) === "1";
+if (DEBUG_OVERLAY_QUERY_PARAM === "1") {
+  debugOverlayAllowed = true;
+  localStorage.setItem(DEBUG_OVERLAY_ALLOWED_KEY, "1");
+}
+if (DEBUG_OVERLAY_QUERY_PARAM === "0") {
+  debugOverlayAllowed = false;
+  localStorage.removeItem(DEBUG_OVERLAY_ALLOWED_KEY);
+}
 
 let viewPitch = 0;
 let viewYaw = 0;
@@ -128,6 +145,13 @@ let lastFrameAt = performance.now();
 let mobileControlsPreference = normalizeMobileControlsPreference(localStorage.getItem(MOBILE_CONTROLS_PREF_KEY));
 let audioSettings = loadAudioSettings();
 let lookSettings = loadLookSettings();
+let debugOverlayOpen = false;
+let debugFps = 0;
+let debugPingMs = null;
+let lastDebugOverlayUpdateAt = 0;
+let lastDebugPingSentAt = 0;
+let debugFpsSampleFrames = 0;
+let debugFpsSampleMs = 0;
 const musicLoopEl = new Audio("/assets/music.wav");
 musicLoopEl.loop = true;
 musicLoopEl.preload = "auto";
@@ -494,9 +518,16 @@ function resetSessionRuntimeState({ maxPlayers = 0, clearIdentity = false } = {}
   resetDownedState();
   resetWinState();
   resetKnockdownToast();
+  debugFps = 0;
+  debugPingMs = null;
+  lastDebugOverlayUpdateAt = 0;
+  lastDebugPingSentAt = 0;
+  debugFpsSampleFrames = 0;
+  debugFpsSampleMs = 0;
   spectatorTargetCharacterId = null;
   spectatorTargetName = "";
   spectatorCandidates = [];
+  updateDebugOverlay();
 }
 
 function updateInGameHud() {
@@ -507,6 +538,53 @@ function updateInGameHud() {
     sessionState
   });
   if (gameChatOpen && gameChatNoticeEl) gameChatNoticeEl.textContent = "Chatt";
+}
+
+function updateDebugOverlay() {
+  if (!debugOverlayEl) return;
+  const visible = appMode === "playing" && debugOverlayAllowed && debugOverlayOpen;
+  debugOverlayEl.classList.toggle("hidden", !visible);
+  if (!visible) return;
+
+  const fpsRounded = Math.max(0, Math.round(debugFps));
+  const frameMs = debugFps > 0 ? 1000 / debugFps : null;
+  const pingRounded = Number.isFinite(debugPingMs) ? Math.max(0, Math.round(debugPingMs)) : null;
+
+  if (debugFpsTextEl) debugFpsTextEl.textContent = `FPS: ${fpsRounded > 0 ? fpsRounded : "--"}`;
+  if (debugFrameTimeTextEl) debugFrameTimeTextEl.textContent = `Frame: ${frameMs != null ? frameMs.toFixed(1) : "--"} ms`;
+  if (debugPingTextEl) debugPingTextEl.textContent = `Ping: ${pingRounded != null ? pingRounded : "--"} ms`;
+}
+
+function setDebugOverlayOpen(open) {
+  debugOverlayOpen = Boolean(open) && appMode === "playing" && debugOverlayAllowed;
+  updateDebugOverlay();
+}
+
+function toggleDebugOverlay() {
+  if (appMode !== "playing" || !debugOverlayAllowed) return;
+  setDebugOverlayOpen(!debugOverlayOpen);
+}
+
+function canUseDebugOverlay() {
+  return Boolean(debugOverlayAllowed);
+}
+
+function sendDebugPing(nowMs = performance.now()) {
+  if (appMode !== "playing" || !debugOverlayOpen) return;
+  if (nowMs - lastDebugPingSentAt < DEBUG_PING_INTERVAL_MS) return;
+  const activeSocket = socketConnection?.getSocket();
+  if (!activeSocket || !authenticated) return;
+  if (!activeSocket.sendJson({ type: "ping", clientSentAt: nowMs })) return;
+  lastDebugPingSentAt = nowMs;
+}
+
+function handleDebugPong(msg) {
+  const clientSentAt = Number(msg?.clientSentAt);
+  if (!Number.isFinite(clientSentAt)) return;
+  const rttMs = performance.now() - clientSentAt;
+  if (!Number.isFinite(rttMs) || rttMs < 0) return;
+  debugPingMs = debugPingMs == null ? rttMs : debugPingMs + (rttMs - debugPingMs) * 0.35;
+  if (debugOverlayOpen && appMode === "playing") updateDebugOverlay();
 }
 
 function updateDownedOverlay() {
@@ -617,6 +695,7 @@ function setAppMode(mode) {
     myCharacterId = null;
     attackCooldownMsRemaining = 0;
     attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
+    setDebugOverlayOpen(false);
     resetInputState();
   }
 
@@ -633,6 +712,7 @@ function setAppMode(mode) {
   updateWinOverlay();
   updateSpectatorHud();
   updateKnockdownToast();
+  updateDebugOverlay();
   syncMusicLoop();
   updateDocumentTitle();
 }
@@ -759,6 +839,7 @@ const socketMessageContext = createSocketMessageContext({
     updateDocumentTitle,
     updateKnockdownToast,
     updateSpectatorHud,
+    handleDebugPong,
     resetDownedState,
     resetWinState,
     resetInputState,
@@ -898,6 +979,8 @@ bindAppEventHandlers({
     GAME_CREDITS_TEXT,
     MOBILE_CONTROLS_PREFS,
     GAME_CHAT_OPEN_SHORTCUT,
+    DEBUG_OVERLAY_TOGGLE_SHORTCUT,
+    DEBUG_OVERLAY_TOUCH_HOLD_MS,
     IS_TOUCH_DEVICE
   },
   deps: {
@@ -926,6 +1009,8 @@ bindAppEventHandlers({
     controlsTextForCurrentMode,
     updateMobileControlsVisibility,
     requestPointerLockSafe,
+    toggleDebugOverlay,
+    canUseDebugOverlay,
     updateReadyButton,
     resize,
     getActiveSocket: () => socketConnection?.getSocket() || null
@@ -954,6 +1039,15 @@ function animate() {
   const now = performance.now();
   const deltaSec = Math.min(0.05, (now - lastFrameAt) / 1000);
   lastFrameAt = now;
+  const frameMs = Math.max(0, deltaSec * 1000);
+  debugFpsSampleFrames += 1;
+  debugFpsSampleMs += frameMs;
+  if (debugFpsSampleMs >= DEBUG_FPS_SAMPLE_WINDOW_MS) {
+    debugFps = debugFpsSampleMs > 0 ? (debugFpsSampleFrames * 1000) / debugFpsSampleMs : 0;
+    debugFpsSampleFrames = 0;
+    debugFpsSampleMs = 0;
+  }
+  sendDebugPing(now);
   const yaw = inputController.getYaw();
   const pitch = inputController.getPitch();
 
@@ -990,6 +1084,10 @@ function animate() {
   updateWinOverlay();
   updateKnockdownToast();
   updateCrosshairHud(deltaSec);
+  if (debugOverlayOpen && appMode === "playing" && now - lastDebugOverlayUpdateAt >= DEBUG_OVERLAY_REFRESH_MS) {
+    lastDebugOverlayUpdateAt = now;
+    updateDebugOverlay();
+  }
   renderer.render(scene, camera);
 }
 

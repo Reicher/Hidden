@@ -54,6 +54,11 @@ export function handleSocketMessage(msg, ctx) {
     return;
   }
 
+  if (msg.type === "pong") {
+    actions.handleDebugPong?.(msg);
+    return;
+  }
+
   if (msg.type === "possess") {
     state.myCharacterId = msg.characterId ?? null;
     state.forceYawSyncOnNextWorld = state.myCharacterId != null;

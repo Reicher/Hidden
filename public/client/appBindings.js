@@ -57,6 +57,8 @@ export function bindAppEventHandlers({
     GAME_CREDITS_TEXT,
     MOBILE_CONTROLS_PREFS,
     GAME_CHAT_OPEN_SHORTCUT,
+    DEBUG_OVERLAY_TOGGLE_SHORTCUT,
+    DEBUG_OVERLAY_TOUCH_HOLD_MS,
     IS_TOUCH_DEVICE
   } = constants;
 
@@ -85,10 +87,21 @@ export function bindAppEventHandlers({
     controlsTextForCurrentMode,
     updateMobileControlsVisibility,
     requestPointerLockSafe,
+    toggleDebugOverlay,
+    canUseDebugOverlay,
     updateReadyButton,
     resize,
     getActiveSocket
   } = actions;
+
+  let debugLongPressTimer = null;
+  let suppressNextGameMenuClick = false;
+
+  function clearDebugLongPressTimer() {
+    if (debugLongPressTimer == null) return;
+    clearTimeout(debugLongPressTimer);
+    debugLongPressTimer = null;
+  }
 
   connectBtnEl?.addEventListener("click", connectAndLogin);
   createPrivateRoomBtnEl?.addEventListener("click", () => {
@@ -150,11 +163,30 @@ export function bindAppEventHandlers({
     }
   });
   gameMenuBtnEl?.addEventListener("click", () => {
+    if (suppressNextGameMenuClick) {
+      suppressNextGameMenuClick = false;
+      return;
+    }
     if (state.getAppMode() !== "playing") return;
     const sessionState = state.getSessionState();
     if (sessionState !== "alive" && sessionState !== "spectating") return;
     setGameMenuOpen(!state.getGameMenuOpen());
   });
+  gameMenuBtnEl?.addEventListener("pointerdown", (event) => {
+    if (!IS_TOUCH_DEVICE) return;
+    if (event.pointerType && event.pointerType !== "touch") return;
+    if (!canUseDebugOverlay?.()) return;
+    if (state.getAppMode() !== "playing") return;
+    clearDebugLongPressTimer();
+    debugLongPressTimer = setTimeout(() => {
+      debugLongPressTimer = null;
+      suppressNextGameMenuClick = true;
+      toggleDebugOverlay?.();
+    }, DEBUG_OVERLAY_TOUCH_HOLD_MS);
+  });
+  gameMenuBtnEl?.addEventListener("pointerup", clearDebugLongPressTimer);
+  gameMenuBtnEl?.addEventListener("pointercancel", clearDebugLongPressTimer);
+  gameMenuBtnEl?.addEventListener("lostpointercapture", clearDebugLongPressTimer);
   gameMenuCloseBtnEl?.addEventListener("click", () => {
     setGameMenuOpen(false, { restorePointerLock: true });
   });
@@ -258,6 +290,19 @@ export function bindAppEventHandlers({
     ) {
       event.preventDefault();
       setGameChatOpen(true);
+      return;
+    }
+    if (
+      state.getAppMode() === "playing" &&
+      event.code === DEBUG_OVERLAY_TOGGLE_SHORTCUT &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      !event.repeat &&
+      !isTextInputTarget(event.target)
+    ) {
+      event.preventDefault();
+      toggleDebugOverlay?.();
       return;
     }
     if (state.getAppMode() === "lobby" && event.key === "Escape") {

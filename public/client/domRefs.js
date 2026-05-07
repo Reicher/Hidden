@@ -52,6 +52,10 @@ export const gameHudEl               = document.getElementById("gameHud");
 export const crosshairHudEl          = document.getElementById("crosshairHud");
 export const crosshairCooldownArcEl  = document.getElementById("crosshairCooldownArc");
 export const aliveOthersTextEl       = document.getElementById("aliveOthersText");
+export const debugOverlayEl          = document.getElementById("debugOverlay");
+export const debugFpsTextEl          = document.getElementById("debugFpsText");
+export const debugFrameTimeTextEl    = document.getElementById("debugFrameTimeText");
+export const debugPingTextEl         = document.getElementById("debugPingText");
 export const knockdownToastEl        = document.getElementById("knockdownToast");
 
 // ─── Game menu ────────────────────────────────────────────────────────────────
