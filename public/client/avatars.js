@@ -154,6 +154,8 @@ export function drawCountdownCharacterPreview(canvas, characterId) {
   const cx = width * 0.5;
   const headCy = height * 0.44;
   const headR = Math.min(width, height) * 0.23;
+  const headTopY = headCy - headR * 1.02;
+  const minHatTopY = headTopY - headR * 0.02;
 
   ctx.clearRect(0, 0, width, height);
 
@@ -190,21 +192,26 @@ export function drawCountdownCharacterPreview(canvas, characterId) {
       fillRoundedRect(ctx, cx - headR * 0.58, headCy - headR * 1.25, headR * 1.16, headR * 0.6, 8);
       fillRoundedRect(ctx, cx - headR * 0.88, headCy - headR * 0.76, headR * 1.76, headR * 0.16, 6);
     } else if (style.hatType === "Trollkarlshatt") {
+      const brimRy = headR * 0.15;
+      const brimCy = Math.min(headCy - headR * 0.88, minHatTopY + brimRy);
       ctx.beginPath();
-      ctx.moveTo(cx, headCy - headR * 1.52);
-      ctx.lineTo(cx - headR * 0.82, headCy - headR * 0.62);
-      ctx.lineTo(cx + headR * 0.82, headCy - headR * 0.62);
+      ctx.moveTo(cx, brimCy - headR * 0.76);
+      ctx.lineTo(cx - headR * 0.82, brimCy);
+      ctx.lineTo(cx + headR * 0.82, brimCy);
       ctx.closePath();
       ctx.fill();
       ctx.beginPath();
-      ctx.ellipse(cx, headCy - headR * 0.62, headR * 0.88, headR * 0.15, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, brimCy, headR * 0.88, brimRy, 0, 0, Math.PI * 2);
       ctx.fill();
     } else {
+      const crownRy = headR * 0.24;
+      const crownCy = Math.min(headCy - headR * 0.82, minHatTopY + crownRy);
+      const brimCy = crownCy + headR * 0.1;
       ctx.beginPath();
-      ctx.ellipse(cx, headCy - headR * 0.66, headR * 0.62, headR * 0.24, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, crownCy, headR * 0.62, crownRy, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.ellipse(cx, headCy - headR * 0.56, headR * 1.08, headR * 0.18, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, brimCy, headR * 1.08, headR * 0.18, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
