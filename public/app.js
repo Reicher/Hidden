@@ -163,6 +163,10 @@ const DESKTOP_CONTROLS_TEXT = "Desktop: WASD rörelse, Shift sprint, mus för at
 const MOBILE_CONTROLS_TEXT =
   "Mobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta.";
 let lastCountdownPreviewCharacterId = null;
+const ROOM_INFO_DEFAULTS = Object.freeze({
+  maxPlayers: 10,
+  totalCharacters: 20
+});
 
 const chatUi = createChatUi({
   lobbyMessagesEl: chatMessagesEl,
@@ -207,14 +211,26 @@ const inputController = createInputController({
   requestPointerLock: requestPointerLockSafe
 });
 
-function setRoomInfo() {
+function roomInfoText({ roomCode = null, maxPlayers = ROOM_INFO_DEFAULTS.maxPlayers, totalCharacters = ROOM_INFO_DEFAULTS.totalCharacters } = {}) {
+  const scopeText = roomCode ? `Privat rum: ${roomCode}` : "Offentligt rum";
+  return `${scopeText} · Max ${maxPlayers} spelare av ${totalCharacters} karaktärer`;
+}
+
+async function setRoomInfo() {
   if (!roomInfoEl) return;
   const code = activeRoomCodeFromPath();
-  if (code) {
-    roomInfoEl.textContent = `Privat rum: ${code}`;
-    return;
+  roomInfoEl.textContent = roomInfoText({ roomCode: code });
+  try {
+    const response = await fetch(`/api/room-info?t=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`http_${response.status}`);
+    const payload = await response.json();
+    const maxPlayers = Math.max(1, Number(payload?.maxPlayers || 0));
+    const totalCharacters = Math.max(1, Number(payload?.totalCharacters || 0));
+    if (!Number.isFinite(maxPlayers) || !Number.isFinite(totalCharacters)) return;
+    roomInfoEl.textContent = roomInfoText({ roomCode: code, maxPlayers, totalCharacters });
+  } catch {
+    // Keep fallback text when endpoint is unavailable.
   }
-  roomInfoEl.textContent = "Offentligt rum";
 }
 
 function setPrivateRoomButtonVisible(visible) {

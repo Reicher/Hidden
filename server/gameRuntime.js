@@ -195,6 +195,19 @@ export function attachGameRuntime({ server, rootDir }) {
   ensureRoom({ roomId: PUBLIC_ROOM_ID, roomCode: null, isPrivate: false });
 
   async function handleHttpRequest({ req, res, requestUrl }) {
+    if (requestUrl.pathname === "/api/room-info") {
+      if (req.method !== "GET") {
+        writeJson(res, 405, { error: "method_not_allowed" });
+        return true;
+      }
+      const gameplay = getGameplaySettings();
+      writeJson(res, 200, {
+        maxPlayers: gameplay.maxPlayers,
+        totalCharacters: gameplay.totalCharacters
+      });
+      return true;
+    }
+
     if (requestUrl.pathname === "/api/debug/stats") {
       if (req.method !== "GET") {
         writeJson(res, 405, { error: "method_not_allowed" });
