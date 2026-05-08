@@ -65,7 +65,7 @@ const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
 const DEBUG_OVERLAY_ALLOWED_KEY = "hidden_debug_overlay_allowed";
 
 const sceneSystem = createSceneSystem(canvas);
-const { renderer, scene, camera, resize } = sceneSystem;
+const { renderer, scene, camera, resize, setRenderScale, getRenderScale } = sceneSystem;
 const roomSystem = createRoomSystem({ scene, renderer });
 const avatarSystem = createAvatarSystem({ scene, camera });
 
@@ -112,6 +112,8 @@ const DEBUG_PING_INTERVAL_MS = 1200;
 const DEBUG_OVERLAY_TOUCH_HOLD_MS = 900;
 const DEBUG_OVERLAY_UNLOCK_TOUCH_HOLD_MS = 2600;
 const DEBUG_FPS_SAMPLE_WINDOW_MS = 1000;
+const HUD_OVERLAY_REFRESH_MS = 120;
+const CROSSHAIR_AIM_CHECK_MS = 66;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
 const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
 const JOYSTICK_DEADZONE = 0.16;
@@ -122,6 +124,13 @@ const SPECTATOR_CAMERA_DISTANCE = 1.42;
 const SPECTATOR_CAMERA_HEIGHT_OFFSET = 0.28;
 const SPECTATOR_CAMERA_TARGET_HEIGHT_OFFSET = 0.12;
 const SPECTATOR_CAMERA_POS_SMOOTH_RATE = 12;
+const MOBILE_FRAME_MS_DEGRADE_THRESHOLD = 24;
+const MOBILE_FRAME_MS_UPGRADE_THRESHOLD = 19;
+const MOBILE_RENDER_SCALE_MIN = 0.72;
+const MOBILE_RENDER_SCALE_MAX = 1;
+const MOBILE_RENDER_SCALE_STEP_DOWN = 0.07;
+const MOBILE_RENDER_SCALE_STEP_UP = 0.04;
+const MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS = 1500;
 const FORCE_MOBILE_UI = new URLSearchParams(location.search).get("mobileUi") === "1";
 const DEBUG_OVERLAY_QUERY_PARAM = new URLSearchParams(location.search).get("debugOverlay");
 const IS_TOUCH_DEVICE = (() => {
@@ -155,6 +164,12 @@ let lastDebugOverlayUpdateAt = 0;
 let lastDebugPingSentAt = 0;
 let debugFpsSampleFrames = 0;
 let debugFpsSampleMs = 0;
+let smoothFrameMs = 16.7;
+let lastQualityAdjustAt = 0;
+let lastOverlayUiUpdateAt = 0;
+let cachedCrosshairAimingAtCharacter = false;
+let lastCrosshairAimCheckAt = 0;
+let lastScoreboardSignature = "";
 const musicLoopEl = new Audio("/assets/music.wav");
 musicLoopEl.loop = true;
 musicLoopEl.preload = "auto";
@@ -214,6 +229,37 @@ const inputController = createInputController({
 function roomInfoText({ roomCode = null, maxPlayers = ROOM_INFO_DEFAULTS.maxPlayers, totalCharacters = ROOM_INFO_DEFAULTS.totalCharacters } = {}) {
   const scopeText = roomCode ? `Privat rum: ${roomCode}` : "Offentligt rum";
   return `${scopeText} · Max ${maxPlayers} spelare av ${totalCharacters} karaktärer`;
+}
+
+function scoreboardSignature(players) {
+  if (!Array.isArray(players) || players.length <= 0) return "";
+  return players.map((p) => [
+    p?.name || "",
+    p?.ready ? 1 : 0,
+    p?.wins ?? 0,
+    p?.knockdowns ?? 0,
+    p?.streak ?? 0,
+    p?.downed ?? 0,
+    p?.innocents ?? 0,
+    p?.status || ""
+  ].join(":")).join("|");
+}
+
+function adaptRenderScale(nowMs, frameMs) {
+  if (!IS_TOUCH_DEVICE || appMode !== "playing") return;
+  smoothFrameMs += (frameMs - smoothFrameMs) * 0.06;
+  if (nowMs - lastQualityAdjustAt < MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS) return;
+
+  const currentScale = getRenderScale?.() ?? MOBILE_RENDER_SCALE_MAX;
+  if (smoothFrameMs >= MOBILE_FRAME_MS_DEGRADE_THRESHOLD && currentScale > MOBILE_RENDER_SCALE_MIN) {
+    const next = Math.max(MOBILE_RENDER_SCALE_MIN, currentScale - MOBILE_RENDER_SCALE_STEP_DOWN);
+    if (setRenderScale?.(next)) lastQualityAdjustAt = nowMs;
+    return;
+  }
+  if (smoothFrameMs <= MOBILE_FRAME_MS_UPGRADE_THRESHOLD && currentScale < MOBILE_RENDER_SCALE_MAX) {
+    const next = Math.min(MOBILE_RENDER_SCALE_MAX, currentScale + MOBILE_RENDER_SCALE_STEP_UP);
+    if (setRenderScale?.(next)) lastQualityAdjustAt = nowMs;
+  }
 }
 
 async function setRoomInfo() {
@@ -670,6 +716,9 @@ function resetSessionRuntimeState({ maxPlayers = 0, clearIdentity = false } = {}
   spectatorTargetCharacterId = null;
   spectatorTargetName = "";
   spectatorCandidates = [];
+  lastScoreboardSignature = "";
+  cachedCrosshairAimingAtCharacter = false;
+  lastCrosshairAimCheckAt = 0;
   updateDebugOverlay();
 }
 
@@ -801,7 +850,26 @@ function requestSpectatorCycle(direction) {
   activeSocket.sendJson({ type: "spectate_cycle", direction: step });
 }
 
-function updateCrosshairHud(deltaSec) {
+function updateCrosshairHud(deltaSec, nowMs) {
+  const canProbeAim =
+    appMode === "playing" &&
+    sessionState === "alive" &&
+    myCharacterId != null &&
+    attackCooldownMsRemaining <= CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS;
+
+  if (canProbeAim && nowMs - lastCrosshairAimCheckAt >= CROSSHAIR_AIM_CHECK_MS) {
+    camera.updateMatrixWorld(true);
+    cachedCrosshairAimingAtCharacter = avatarSystem.isAimingAtCharacter({
+      myCharacterId,
+      maxDistance: CROSSHAIR_HIT_DISTANCE_METERS
+    });
+    lastCrosshairAimCheckAt = nowMs;
+  }
+  if (!canProbeAim) {
+    cachedCrosshairAimingAtCharacter = false;
+    lastCrosshairAimCheckAt = 0;
+  }
+
   const next = updateCrosshairHudUi({
     crosshairHudEl,
     crosshairCooldownArcEl,
@@ -816,7 +884,8 @@ function updateCrosshairHud(deltaSec) {
     crosshairRingCircumference: CROSSHAIR_RING_CIRCUMFERENCE,
     crosshairHitDistanceMeters: CROSSHAIR_HIT_DISTANCE_METERS,
     camera,
-    avatarSystem
+    avatarSystem,
+    aimingAtCharacter: cachedCrosshairAimingAtCharacter
   });
   attackCooldownMsRemaining = next.attackCooldownMsRemaining;
   attackCooldownVisualMaxMs = next.attackCooldownVisualMaxMs;
@@ -906,8 +975,12 @@ function setCountdownTextFromSession(state) {
 
 function renderScoreboard(players) {
   if (!scoreBodyEl) return;
-  lobbyScoreboard = Array.isArray(players) ? players.slice() : [];
-  renderScoreboardFn(scoreBodyEl, players, colorForName);
+  const nextPlayers = Array.isArray(players) ? players : [];
+  const nextSignature = scoreboardSignature(nextPlayers);
+  if (nextSignature === lastScoreboardSignature) return;
+  lastScoreboardSignature = nextSignature;
+  lobbyScoreboard = nextPlayers.slice();
+  renderScoreboardFn(scoreBodyEl, nextPlayers, colorForName);
   updateLobbyMatchStatus();
 }
 
@@ -1191,6 +1264,10 @@ bindAppEventHandlers({
 function animate() {
   requestAnimationFrame(animate);
   const now = performance.now();
+  if (document.hidden) {
+    lastFrameAt = now;
+    return;
+  }
   const deltaSec = Math.min(0.05, (now - lastFrameAt) / 1000);
   lastFrameAt = now;
   const frameMs = Math.max(0, deltaSec * 1000);
@@ -1201,7 +1278,9 @@ function animate() {
     debugFpsSampleFrames = 0;
     debugFpsSampleMs = 0;
   }
+  if (appMode !== "playing") return;
   sendDebugPing(now);
+  adaptRenderScale(now, frameMs);
   const yaw = inputController.getYaw();
   const pitch = inputController.getPitch();
 
@@ -1234,10 +1313,13 @@ function animate() {
     winReturnToLobbyMsRemaining = Math.max(0, winReturnToLobbyMsRemaining - deltaSec * 1000);
   }
   knockdownToastMsRemaining = Math.max(0, knockdownToastMsRemaining - deltaSec * 1000);
-  updateDownedOverlay();
-  updateWinOverlay();
-  updateKnockdownToast();
-  updateCrosshairHud(deltaSec);
+  if (now - lastOverlayUiUpdateAt >= HUD_OVERLAY_REFRESH_MS) {
+    lastOverlayUiUpdateAt = now;
+    updateDownedOverlay();
+    updateWinOverlay();
+    updateKnockdownToast();
+  }
+  updateCrosshairHud(deltaSec, now);
   if (debugOverlayOpen && appMode === "playing" && now - lastDebugOverlayUpdateAt >= DEBUG_OVERLAY_REFRESH_MS) {
     lastDebugOverlayUpdateAt = now;
     updateDebugOverlay();

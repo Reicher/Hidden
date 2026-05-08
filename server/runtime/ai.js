@@ -3,11 +3,10 @@ import { clampInsideRoom, wallAvoidance, shelfAvoidance, resolveShelfCollisions 
 
 const DEFAULT_INSPECT_DOWNED_CHANCE = 0.75;
 const DEFAULT_INSPECT_DOWNED_NEARBY_RADIUS = 8.5;
-const INSPECT_DOWNED_MIN_MS = 1800;
-const INSPECT_DOWNED_MAX_MS = 4800;
 const INSPECT_DOWNED_RECHECK_MIN_MS = 540;
 const INSPECT_DOWNED_RECHECK_MAX_MS = 980;
 const INSPECT_DOWNED_ARRIVE_DISTANCE = 0.24;
+const INSPECT_DOWNED_HOLD_DISTANCE = 1.22;
 const INSPECT_DOWNED_HEAD_OFFSET_METERS = 0.58;
 const INSPECT_DOWNED_LOOK_PITCH = -0.42;
 const INSPECT_PITCH_HOLD_MS = 260;
@@ -184,6 +183,7 @@ export function createMovementSystem({
     if (characters && isCharacterDowned && c.ai.inspectDownedTargetId >= 0) {
       const candidate = findCharacterById(characters, c.ai.inspectDownedTargetId);
       if (candidate && !candidate.everPlayerControlled && isCharacterDowned(candidate, now)) {
+        c.ai.inspectDownedUntil = Number.MAX_SAFE_INTEGER;
         inspectTarget = candidate;
       } else {
         c.ai.inspectDownedTargetId = -1;
@@ -209,7 +209,7 @@ export function createMovementSystem({
       if (nearest && Math.random() < safeInspectDownedChance) {
         const slot = inspectSlotFor(c, nearest);
         c.ai.inspectDownedTargetId = nearest.id;
-        c.ai.inspectDownedUntil = now + rand(INSPECT_DOWNED_MIN_MS, INSPECT_DOWNED_MAX_MS);
+        c.ai.inspectDownedUntil = Number.MAX_SAFE_INTEGER;
         c.ai.inspectDownedAngle = slot.angle;
         c.ai.inspectDownedRadius = slot.radius;
         inspectTarget = nearest;
@@ -217,10 +217,8 @@ export function createMovementSystem({
       c.ai.nextInspectDecisionAt = now + rand(INSPECT_DOWNED_RECHECK_MIN_MS, INSPECT_DOWNED_RECHECK_MAX_MS);
     }
 
-    const inspectActive =
-      inspectTarget &&
-      now < c.ai.inspectDownedUntil &&
-      c.ai.inspectDownedTargetId === inspectTarget.id;
+    const inspectActive = inspectTarget && c.ai.inspectDownedTargetId === inspectTarget.id;
+    let inspectHoldingStance = false;
 
     if (inspectActive) {
       const slotX = inspectTarget.x + Math.sin(c.ai.inspectDownedAngle) * c.ai.inspectDownedRadius;
@@ -228,22 +226,21 @@ export function createMovementSystem({
       const toSlotX = slotX - c.x;
       const toSlotZ = slotZ - c.z;
       const toSlotDist = Math.hypot(toSlotX, toSlotZ);
+      const toTargetDist = Math.hypot(inspectTarget.x - c.x, inspectTarget.z - c.z);
       const headPoint = downedHeadPoint(inspectTarget);
       const faceTargetYaw = normalizeAngle(Math.atan2(headPoint.x - c.x, headPoint.z - c.z));
       c.ai.desiredPitch = INSPECT_DOWNED_LOOK_PITCH;
       c.ai.nextPitchDecisionAt = Math.max(c.ai.nextPitchDecisionAt, now + INSPECT_PITCH_HOLD_MS);
       c.ai.nextDecisionAt = Math.max(c.ai.nextDecisionAt, now + INSPECT_WANDER_HOLD_MS);
-      if (toSlotDist > INSPECT_DOWNED_ARRIVE_DISTANCE) {
+      if (toSlotDist > INSPECT_DOWNED_ARRIVE_DISTANCE && toTargetDist > INSPECT_DOWNED_HOLD_DISTANCE) {
         c.ai.mode = "move";
         c.ai.desiredYaw = normalizeAngle(Math.atan2(toSlotX, toSlotZ));
       } else {
+        inspectHoldingStance = true;
         c.ai.mode = "stop";
         c.ai.desiredYaw = faceTargetYaw;
         c.yaw = faceTargetYaw;
       }
-    } else if (c.ai.inspectDownedTargetId >= 0 && now >= c.ai.inspectDownedUntil) {
-      c.ai.inspectDownedTargetId = -1;
-      c.ai.inspectDownedUntil = 0;
     }
 
     if (!inspectActive && c.ai.mode === "stop" && now >= c.ai.stopUntil) {
@@ -265,8 +262,8 @@ export function createMovementSystem({
       }
     }
 
-    const wallPush = wallAvoidance(c, boundaries, wallMargin);
-    const shelfPush = shelfAvoidance(c, obstacles, shelfMargin);
+    const wallPush = inspectHoldingStance ? null : wallAvoidance(c, boundaries, wallMargin);
+    const shelfPush = inspectHoldingStance ? null : shelfAvoidance(c, obstacles, shelfMargin);
     const socialPush = !inspectActive && characters
       ? socialSeparation(c, characters, {
           skipCharacterId: inspectActive ? c.ai.inspectDownedTargetId : -1,
@@ -335,7 +332,7 @@ export function createMovementSystem({
 
     clampInsideRoom(c, boundaries, { steerOnClamp: true });
     const shelfHitNormal = resolveShelfCollisions(c, obstacles, characterRadius);
-    if (shelfHitNormal) {
+    if (shelfHitNormal && !inspectHoldingStance) {
       c.ai.mode = "move";
       c.ai.desiredYaw = normalizeAngle(Math.atan2(shelfHitNormal.x, shelfHitNormal.z));
       c.yaw = c.ai.desiredYaw;

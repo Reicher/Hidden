@@ -86,6 +86,8 @@ export function createCharacterSystem({
       everPlayerControlled: false,
       lastAttackAt: 0,
       downedUntil: 0,
+      downedRecoveryUntil: 0,
+      wasDownedLastTick: false,
       fallAwayX: 0,
       fallAwayZ: 1,
       ai: {
@@ -117,6 +119,8 @@ export function createCharacterSystem({
 
   function clearDownedState(character) {
     character.downedUntil = 0;
+    character.downedRecoveryUntil = 0;
+    character.wasDownedLastTick = false;
     character.fallAwayX = 0;
     character.fallAwayZ = 1;
   }
@@ -144,6 +148,8 @@ export function createCharacterSystem({
     victim.downedUntil = stayDownPermanently ? permanentDownedUntil : now + npcDownedRespawnMs;
     victim.fallAwayX = fallAwayX;
     victim.fallAwayZ = fallAwayZ;
+    victim.downedRecoveryUntil = 0;
+    victim.wasDownedLastTick = true;
     victim.lastAttackAt = now;
     victim.ai.mode = "stop";
     victim.ai.desiredYaw = victim.yaw;

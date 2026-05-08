@@ -35,7 +35,6 @@ export function createInputController({
   let pitch = 0;
   let inputDirty = true;
   let lastInputSentAt = 0;
-  let lastSentSnapshot = "";
   let heartbeatTimer = null;
   let mobileLookPointerId = null;
   let mobileLookLastX = 0;
@@ -43,6 +42,9 @@ export function createInputController({
   let mobileMovePointerId = null;
   let joystickCurrentX = 0;
   let joystickCurrentY = 0;
+  let joystickCenterX = 0;
+  let joystickCenterY = 0;
+  let joystickMaxRadius = 1;
 
   function canUseMovementInput() {
     if (getAppMode() !== "playing") return false;
@@ -58,15 +60,12 @@ export function createInputController({
     const state = getSessionState();
     if (state !== "alive" && state !== "won") return;
     const now = performance.now();
-    const payload = { type: "input", input };
-    const snapshot = JSON.stringify(payload);
     const heartbeatDue = now - lastInputSentAt >= inputHeartbeatMs;
-    if (!inputDirty && !heartbeatDue && snapshot === lastSentSnapshot) return;
+    if (!inputDirty && !heartbeatDue) return;
     const socket = getSocket();
-    if (!socket || !socket.sendJson(payload)) return;
+    if (!socket || !socket.sendJson({ type: "input", input })) return;
     inputDirty = false;
     lastInputSentAt = now;
-    lastSentSnapshot = snapshot;
   }
 
   function setMoveInputState(field, active) {
@@ -171,13 +170,16 @@ export function createInputController({
     }
 
     if (mobileJoystickBaseEl) {
-      const updateFromPointer = (event) => {
+      const refreshJoystickBounds = () => {
         const rect = mobileJoystickBaseEl.getBoundingClientRect();
-        const centerX = rect.left + rect.width * 0.5;
-        const centerY = rect.top + rect.height * 0.5;
-        const maxRadius = Math.max(1, rect.width * 0.5);
-        const dx = (event.clientX - centerX) / maxRadius;
-        const dy = (event.clientY - centerY) / maxRadius;
+        joystickCenterX = rect.left + rect.width * 0.5;
+        joystickCenterY = rect.top + rect.height * 0.5;
+        joystickMaxRadius = Math.max(1, rect.width * 0.5);
+      };
+
+      const updateFromPointer = (event) => {
+        const dx = (event.clientX - joystickCenterX) / joystickMaxRadius;
+        const dy = (event.clientY - joystickCenterY) / joystickMaxRadius;
         const mag = Math.hypot(dx, dy);
         const scale = mag > 1 ? 1 / mag : 1;
         joystickCurrentX = dx * scale;
@@ -191,6 +193,7 @@ export function createInputController({
         if (getGameMenuOpen()) return;
         if (mobileMovePointerId != null) return;
         mobileMovePointerId = event.pointerId;
+        refreshJoystickBounds();
         mobileJoystickBaseEl.setPointerCapture?.(event.pointerId);
         updateFromPointer(event);
       });

@@ -1,7 +1,19 @@
 import * as THREE from "/vendor/three.module.js";
 
 export function createSceneSystem(canvas) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  const isLikelyTouchDevice = (() => {
+    const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    const hoverNone = window.matchMedia && window.matchMedia("(hover: none)").matches;
+    const touchApi = "ontouchstart" in window;
+    const touchPoints = (navigator.maxTouchPoints || 0) > 0;
+    const mobileUa = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+    return coarsePointer || hoverNone || touchApi || touchPoints || mobileUa;
+  })();
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: !isLikelyTouchDevice,
+    powerPreference: "high-performance"
+  });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setClearColor(0x1f2530);
 
@@ -22,6 +34,8 @@ export function createSceneSystem(canvas) {
 
   const ambient = new THREE.AmbientLight(0xffffff, 0.3);
   scene.add(ambient);
+  let renderScale = 1;
+  let lastAppliedPixelRatio = -1;
 
   function resolveCanvasSize() {
     const width = Math.max(1, Math.floor(canvas.clientWidth || window.innerWidth || 1));
@@ -31,7 +45,13 @@ export function createSceneSystem(canvas) {
 
   function resize() {
     const { width, height } = resolveCanvasSize();
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const cappedDpr = isLikelyTouchDevice ? Math.min(dpr, 1.25) : Math.min(dpr, 1.5);
+    const targetPixelRatio = Math.max(0.6, cappedDpr * renderScale);
+    if (Math.abs(targetPixelRatio - lastAppliedPixelRatio) > 0.01) {
+      renderer.setPixelRatio(targetPixelRatio);
+      lastAppliedPixelRatio = targetPixelRatio;
+    }
     renderer.setSize(width, height, false);
     renderer.setViewport(0, 0, width, height);
     renderer.setScissor(0, 0, width, height);
@@ -40,7 +60,19 @@ export function createSceneSystem(canvas) {
     camera.updateProjectionMatrix();
   }
 
+  function setRenderScale(nextScale) {
+    const normalized = Math.max(0.6, Math.min(1, Number(nextScale) || 1));
+    if (Math.abs(normalized - renderScale) < 0.01) return false;
+    renderScale = normalized;
+    resize();
+    return true;
+  }
+
+  function getRenderScale() {
+    return renderScale;
+  }
+
   resize();
 
-  return { THREE, renderer, scene, camera, resize };
+  return { THREE, renderer, scene, camera, resize, setRenderScale, getRenderScale };
 }

@@ -32,6 +32,7 @@ export function createRoomTickLoop({
   send,
   onTick = null
 }) {
+  const KNOCKDOWN_RISE_LOCK_MS = 420;
   let lastTickAt = Date.now();
   let cachedScoreboard = [];
   let nextScoreboardRefreshAt = 0;
@@ -80,7 +81,19 @@ export function createRoomTickLoop({
     }
 
     for (const c of characters) {
-      if (isCharacterDowned(c, now)) continue;
+      const currentlyDowned = isCharacterDowned(c, now);
+      if (currentlyDowned) {
+        c.wasDownedLastTick = true;
+        continue;
+      }
+      if (c.wasDownedLastTick) {
+        c.wasDownedLastTick = false;
+        c.downedRecoveryUntil = Math.max(Number(c.downedRecoveryUntil || 0), now + KNOCKDOWN_RISE_LOCK_MS);
+        c.ai.mode = "stop";
+        c.ai.desiredYaw = c.yaw;
+        c.ai.nextDecisionAt = Math.max(Number(c.ai.nextDecisionAt || 0), c.downedRecoveryUntil);
+      }
+      if (now < Number(c.downedRecoveryUntil || 0)) continue;
 
       if (c.controllerType === "AI") {
         movement.updateAI(c, dt, now, { characters, isCharacterDowned });

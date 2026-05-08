@@ -84,7 +84,8 @@ export function updateCrosshairHud({
   crosshairRingCircumference,
   crosshairHitDistanceMeters,
   camera,
-  avatarSystem
+  avatarSystem,
+  aimingAtCharacter = null
 }) {
   if (!crosshairHudEl || !crosshairCooldownArcEl) {
     return { attackCooldownMsRemaining, attackCooldownVisualMaxMs };
@@ -111,12 +112,16 @@ export function updateCrosshairHud({
   }
 
   crosshairCooldownArcEl.style.strokeDashoffset = crosshairRingCircumference.toFixed(3);
-  camera.updateMatrixWorld(true);
-  const aimingAtCharacter = avatarSystem.isAimingAtCharacter({
-    myCharacterId,
-    maxDistance: crosshairHitDistanceMeters
-  });
-  crosshairHudEl.classList.toggle("targeting", aimingAtCharacter);
+  const isTargeting = typeof aimingAtCharacter === "boolean"
+    ? aimingAtCharacter
+    : (() => {
+      camera.updateMatrixWorld(true);
+      return avatarSystem.isAimingAtCharacter({
+        myCharacterId,
+        maxDistance: crosshairHitDistanceMeters
+      });
+    })();
+  crosshairHudEl.classList.toggle("targeting", isTargeting);
   return {
     attackCooldownMsRemaining: cooldownMsRemaining,
     attackCooldownVisualMaxMs
