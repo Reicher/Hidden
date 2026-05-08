@@ -46,7 +46,7 @@ import {
   lobbyMatchStatusEl, lobbyMatchStatusTitleEl,
   lobbySettingsBtnEl, lobbyMenuBackdropEl, lobbyMenuSettingsBtnEl, lobbyMenuCreditsBtnEl, lobbyMenuCloseBtnEl,
   lobbyDialogBackdropEl, lobbyDialogTitleEl, lobbyDialogTextEl, lobbyDialogCloseBtnEl, settingsPanelEl,
-  countdownOverlayEl, countdownTextEl, countdownCharacterCanvasEl, countdownCharacterMetaEl, countdownControlsTextEl,
+  countdownOverlayEl, countdownTextEl, countdownCharacterCanvasEl, countdownControlsTextEl,
   gameHudEl, crosshairHudEl, crosshairCooldownArcEl, aliveOthersTextEl,
   debugOverlayEl, debugFpsTextEl, debugFrameTimeTextEl, debugPingTextEl, knockdownToastEl,
   gameMenuBtnEl, gameMenuBackdropEl, gameMenuSettingsBtnEl, gameMenuCreditsBtnEl, gameMenuCloseBtnEl, gameMenuLobbyBtnEl,
@@ -889,10 +889,8 @@ function setCountdownTextFromSession(state) {
         drawCountdownCharacterPreview(countdownCharacterCanvasEl, characterId);
         lastCountdownPreviewCharacterId = characterId;
       }
-      if (countdownCharacterMetaEl) countdownCharacterMetaEl.textContent = `Karaktär #${characterId + 1}`;
     } else {
       lastCountdownPreviewCharacterId = null;
-      if (countdownCharacterMetaEl) countdownCharacterMetaEl.textContent = "Väljer karaktär...";
     }
     countdownOverlayEl.classList.remove("hidden");
     updateLobbyMatchStatus();

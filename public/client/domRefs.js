@@ -48,7 +48,6 @@ export const settingsPanelEl         = document.getElementById("settingsPanel");
 export const countdownOverlayEl          = document.getElementById("countdownOverlay");
 export const countdownTextEl             = document.getElementById("countdownText");
 export const countdownCharacterCanvasEl  = document.getElementById("countdownCharacterCanvas");
-export const countdownCharacterMetaEl    = document.getElementById("countdownCharacterMeta");
 export const countdownControlsTextEl     = document.getElementById("countdownControlsText");
 
 // ─── In-game HUD ──────────────────────────────────────────────────────────────

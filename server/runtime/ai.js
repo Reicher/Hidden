@@ -8,6 +8,7 @@ const INSPECT_DOWNED_MAX_MS = 4800;
 const INSPECT_DOWNED_RECHECK_MIN_MS = 540;
 const INSPECT_DOWNED_RECHECK_MAX_MS = 980;
 const INSPECT_DOWNED_ARRIVE_DISTANCE = 0.24;
+const INSPECT_DOWNED_HEAD_OFFSET_METERS = 0.58;
 const INSPECT_DOWNED_LOOK_PITCH = -0.42;
 const INSPECT_PITCH_HOLD_MS = 260;
 const INSPECT_WANDER_HOLD_MS = 220;
@@ -63,6 +64,33 @@ function socialSeparation(c, characters, { skipCharacterId = -1, isCharacterDown
   const len = Math.hypot(ax, az);
   if (len < 0.001) return null;
   return { x: ax / len, z: az / len, strength: Math.min(1, len) };
+}
+
+function downedHeadPoint(target) {
+  const rawX = Number(target?.fallAwayX);
+  const rawZ = Number(target?.fallAwayZ);
+  let dirX = Number.isFinite(rawX) ? rawX : 0;
+  let dirZ = Number.isFinite(rawZ) ? rawZ : 1;
+  const len = Math.hypot(dirX, dirZ);
+  if (len > 0.001) {
+    dirX /= len;
+    dirZ /= len;
+  } else {
+    dirX = Math.sin(Number(target?.yaw || 0));
+    dirZ = Math.cos(Number(target?.yaw || 0));
+    const fallbackLen = Math.hypot(dirX, dirZ);
+    if (fallbackLen > 0.001) {
+      dirX /= fallbackLen;
+      dirZ /= fallbackLen;
+    } else {
+      dirX = 0;
+      dirZ = 1;
+    }
+  }
+  return {
+    x: Number(target?.x || 0) + dirX * INSPECT_DOWNED_HEAD_OFFSET_METERS,
+    z: Number(target?.z || 0) + dirZ * INSPECT_DOWNED_HEAD_OFFSET_METERS
+  };
 }
 
 /**
@@ -200,7 +228,8 @@ export function createMovementSystem({
       const toSlotX = slotX - c.x;
       const toSlotZ = slotZ - c.z;
       const toSlotDist = Math.hypot(toSlotX, toSlotZ);
-      const faceTargetYaw = normalizeAngle(Math.atan2(inspectTarget.x - c.x, inspectTarget.z - c.z));
+      const headPoint = downedHeadPoint(inspectTarget);
+      const faceTargetYaw = normalizeAngle(Math.atan2(headPoint.x - c.x, headPoint.z - c.z));
       c.ai.desiredPitch = INSPECT_DOWNED_LOOK_PITCH;
       c.ai.nextPitchDecisionAt = Math.max(c.ai.nextPitchDecisionAt, now + INSPECT_PITCH_HOLD_MS);
       c.ai.nextDecisionAt = Math.max(c.ai.nextDecisionAt, now + INSPECT_WANDER_HOLD_MS);
@@ -210,6 +239,7 @@ export function createMovementSystem({
       } else {
         c.ai.mode = "stop";
         c.ai.desiredYaw = faceTargetYaw;
+        c.yaw = faceTargetYaw;
       }
     } else if (c.ai.inspectDownedTargetId >= 0 && now >= c.ai.inspectDownedUntil) {
       c.ai.inspectDownedTargetId = -1;

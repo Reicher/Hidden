@@ -324,24 +324,31 @@ button:disabled {
 }
 
 #countdownTopRow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
+  position: relative;
+  min-height: 196px;
 }
 
 #countdownText {
+  position: absolute;
+  left: 33.333%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   font-size: clamp(84px, 20vw, 210px);
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0.04em;
   color: var(--fg-strong);
   text-shadow: 0 8px 22px rgba(0, 0, 0, 0.72);
-  min-width: 0.8em;
+  width: 2ch;
+  font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
 #countdownCharacterCard {
+  position: absolute;
+  left: 66.667%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   pointer-events: auto;
   display: grid;
   justify-items: center;
@@ -365,11 +372,6 @@ button:disabled {
   border-radius: 8px;
   border: 1px solid var(--line-soft);
   background: var(--surface-3);
-}
-
-#countdownCharacterMeta {
-  color: var(--muted-soft);
-  font-size: 12px;
 }
 
 #countdownControlsCard {
@@ -1212,7 +1214,7 @@ body.touch-device #gameChatNotice {
   }
 
   #countdownTopRow {
-    gap: 12px;
+    min-height: 166px;
   }
 
   #countdownCharacterCanvas {
@@ -1283,12 +1285,27 @@ body.touch-device #gameChatNotice {
 
 @media (max-width: 560px) and (orientation: portrait) {
   #countdownTopRow {
-    flex-direction: column;
+    position: static;
+    min-height: 0;
+    display: grid;
+    justify-items: center;
     gap: 10px;
   }
 
   #countdownText {
+    position: static;
+    left: auto;
+    top: auto;
+    width: auto;
+    transform: none;
     font-size: clamp(74px, 26vw, 150px);
+  }
+
+  #countdownCharacterCard {
+    position: static;
+    left: auto;
+    top: auto;
+    transform: none;
   }
 
   #countdownCharacterCanvas {
