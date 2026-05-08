@@ -980,6 +980,7 @@ function setAppMode(mode) {
     myCharacterId = null;
     attackCooldownMsRemaining = 0;
     attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
+    resetKnockdownToast();
     setDebugOverlayOpen(false);
     resetInputState();
   }
