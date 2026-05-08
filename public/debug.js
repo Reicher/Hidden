@@ -21,6 +21,8 @@ const maxPlayersInputEl = document.getElementById("maxPlayersInput");
 const minPlayersToStartInputEl = document.getElementById("minPlayersToStartInput");
 const npcDownedRespawnSecondsInputEl = document.getElementById("npcDownedRespawnSecondsInput");
 const playerAttackCooldownSecondsInputEl = document.getElementById("playerAttackCooldownSecondsInput");
+const moveSpeedMetersPerSecondInputEl = document.getElementById("moveSpeedMetersPerSecondInput");
+const playerSprintMultiplierInputEl = document.getElementById("playerSprintMultiplierInput");
 const npcInspectDownedChanceInputEl = document.getElementById("npcInspectDownedChanceInput");
 const npcInspectDownedChanceValueEl = document.getElementById("npcInspectDownedChanceValue");
 const npcInspectDownedRadiusInputEl = document.getElementById("npcInspectDownedRadiusInput");
@@ -44,6 +46,15 @@ let settingsSaving = false;
 let activeTab = "stats";
 let cachedSettings = null;
 const LIST_LIMIT = 20;
+const DEFAULT_GAMEPLAY_SETTINGS = Object.freeze({
+  totalCharacters: 20,
+  maxPlayers: 10,
+  minPlayersToStart: 2,
+  npcDownedRespawnSeconds: 8,
+  playerAttackCooldownSeconds: 2,
+  moveSpeedMetersPerSecond: 2.9,
+  playerSprintMultiplier: 1.45
+});
 const DEFAULT_AI_BEHAVIOR_SETTINGS = Object.freeze({
   npcInspectDownedChancePercent: 75,
   npcInspectDownedNearbyRadiusMeters: 8.5,
@@ -144,6 +155,28 @@ function renderAiSliderLabels() {
   setSliderValueLabel(npcInspectDownedChanceValueEl, `${Math.round(chance)}%`);
   setSliderValueLabel(npcInspectDownedRadiusValueEl, `${radius.toFixed(1)} m`);
   setSliderValueLabel(npcSocialSeparationValueEl, `${Math.round(spread)}%`);
+}
+
+function resolvedGameplaySettings(input) {
+  const src = input && typeof input === "object" ? input : {};
+  const out = { ...DEFAULT_GAMEPLAY_SETTINGS };
+  const isFiniteInRange = (value, min, max) => Number.isFinite(value) && value >= min && value <= max;
+  const setIntIfFinite = (key, value) => {
+    const n = Number(value);
+    if (Number.isFinite(n) && Number.isInteger(n)) out[key] = n;
+  };
+  const setNumberIfFinite = (key, value, min, max) => {
+    const n = Number(value);
+    if (isFiniteInRange(n, min, max)) out[key] = n;
+  };
+  setIntIfFinite("totalCharacters", src.totalCharacters);
+  setIntIfFinite("maxPlayers", src.maxPlayers);
+  setIntIfFinite("minPlayersToStart", src.minPlayersToStart);
+  setIntIfFinite("npcDownedRespawnSeconds", src.npcDownedRespawnSeconds);
+  setIntIfFinite("playerAttackCooldownSeconds", src.playerAttackCooldownSeconds);
+  setNumberIfFinite("moveSpeedMetersPerSecond", src.moveSpeedMetersPerSecond, 0.5, 8);
+  setNumberIfFinite("playerSprintMultiplier", src.playerSprintMultiplier, 1, 3);
+  return out;
 }
 
 function resolvedAiBehaviorSettings(input) {
@@ -454,7 +487,7 @@ function renderSettings(settings) {
   }
   if (activeLayoutId) layoutSelectEl.value = activeLayoutId;
 
-  const gameplay = settings?.gameplaySettings || {};
+  const gameplay = resolvedGameplaySettings(settings?.gameplaySettings);
   const aiBehavior = resolvedAiBehaviorSettings(settings?.aiBehaviorSettings);
   if (totalCharactersInputEl && Number.isFinite(Number(gameplay.totalCharacters))) {
     totalCharactersInputEl.value = String(gameplay.totalCharacters);
@@ -470,6 +503,12 @@ function renderSettings(settings) {
   }
   if (playerAttackCooldownSecondsInputEl && Number.isFinite(Number(gameplay.playerAttackCooldownSeconds))) {
     playerAttackCooldownSecondsInputEl.value = String(gameplay.playerAttackCooldownSeconds);
+  }
+  if (moveSpeedMetersPerSecondInputEl && Number.isFinite(Number(gameplay.moveSpeedMetersPerSecond))) {
+    moveSpeedMetersPerSecondInputEl.value = String(gameplay.moveSpeedMetersPerSecond);
+  }
+  if (playerSprintMultiplierInputEl && Number.isFinite(Number(gameplay.playerSprintMultiplier))) {
+    playerSprintMultiplierInputEl.value = String(gameplay.playerSprintMultiplier);
   }
   if (npcInspectDownedChanceInputEl) npcInspectDownedChanceInputEl.value = String(aiBehavior.npcInspectDownedChancePercent);
   if (npcInspectDownedRadiusInputEl) npcInspectDownedRadiusInputEl.value = String(aiBehavior.npcInspectDownedNearbyRadiusMeters);
@@ -495,6 +534,12 @@ function renderSettings(settings) {
       : "-";
     const infoAttackCooldown = Number.isFinite(Number(gameplay.playerAttackCooldownSeconds))
       ? gameplay.playerAttackCooldownSeconds
+      : "-";
+    const infoMoveSpeed = Number.isFinite(Number(gameplay.moveSpeedMetersPerSecond))
+      ? gameplay.moveSpeedMetersPerSecond
+      : "-";
+    const infoSprintMultiplier = Number.isFinite(Number(gameplay.playerSprintMultiplier))
+      ? gameplay.playerSprintMultiplier
       : "-";
     const infoInspectChance = Number.isFinite(Number(aiBehavior.npcInspectDownedChancePercent))
       ? aiBehavior.npcInspectDownedChancePercent
@@ -524,13 +569,13 @@ function renderSettings(settings) {
       activeWarnings.length > 0
         ? ` VARNING: ${activeWarnings.map((warning) => warning?.message || "Okänd varning").join(" | ")}`
         : "";
-    settingsInfoEl.textContent = `Aktiv karta: ${activeLabel}${activeSize ? ` (${activeSize})` : ""}. Karaktärer: ${infoChars}, max spelare: ${infoMax}, min start: ${infoMinStart}, NPC återresning: ${infoNpcRespawn}s, slag-cooldown: ${infoAttackCooldown}s, AI tid mellan beslut: ${infoMoveDecisionMin}-${infoMoveDecisionMax} ms, AI stoppchans vid beslut: ${infoStopChance}%, AI stopptid: ${infoStopDurationMin}-${infoStopDurationMax} ms, AI kolla-chans: ${infoInspectChance}%, AI sök-radie: ${infoInspectRadius}m, AI spridning: ${infoSpread}%.${warningText} Ändringar startar om aktiva rum.`;
+    settingsInfoEl.textContent = `Aktiv karta: ${activeLabel}${activeSize ? ` (${activeSize})` : ""}. Karaktärer: ${infoChars}, max spelare: ${infoMax}, min start: ${infoMinStart}, NPC återresning: ${infoNpcRespawn}s, slag-cooldown: ${infoAttackCooldown}s, gångfart: ${infoMoveSpeed} m/s, spelar-sprintfaktor: ${infoSprintMultiplier}x, AI tid mellan beslut: ${infoMoveDecisionMin}-${infoMoveDecisionMax} ms, AI stoppchans vid beslut: ${infoStopChance}%, AI stopptid: ${infoStopDurationMin}-${infoStopDurationMax} ms, AI kolla-chans: ${infoInspectChance}%, AI sök-radie: ${infoInspectRadius}m, AI spridning: ${infoSpread}%.${warningText} Ändringar startar om aktiva rum.`;
   }
 }
 
 function hasUnsavedSettingsFormChanges(referenceSettings) {
   const settings = referenceSettings || cachedSettings || {};
-  const gameplay = settings?.gameplaySettings || {};
+  const gameplay = resolvedGameplaySettings(settings?.gameplaySettings);
   const aiBehavior = resolvedAiBehaviorSettings(settings?.aiBehaviorSettings);
   const referenceLayoutId = String(settings?.layout?.id || "");
   const selectedLayoutId = String(layoutSelectEl?.value || "");
@@ -541,7 +586,9 @@ function hasUnsavedSettingsFormChanges(referenceSettings) {
     [maxPlayersInputEl, gameplay.maxPlayers],
     [minPlayersToStartInputEl, gameplay.minPlayersToStart],
     [npcDownedRespawnSecondsInputEl, gameplay.npcDownedRespawnSeconds],
-    [playerAttackCooldownSecondsInputEl, gameplay.playerAttackCooldownSeconds]
+    [playerAttackCooldownSecondsInputEl, gameplay.playerAttackCooldownSeconds],
+    [moveSpeedMetersPerSecondInputEl, gameplay.moveSpeedMetersPerSecond],
+    [playerSprintMultiplierInputEl, gameplay.playerSprintMultiplier]
   ];
   for (const [inputEl, expectedValue] of pairs) {
     const currentRaw = inputEl?.value?.trim() || "";
@@ -684,7 +731,7 @@ async function saveSettings() {
       setSettingsStatus("Välj en karta först.", true);
       return;
     }
-    const currentGameplay = cachedSettings?.gameplaySettings || {};
+    const currentGameplay = resolvedGameplaySettings(cachedSettings?.gameplaySettings);
     const currentAiBehavior = resolvedAiBehaviorSettings(cachedSettings?.aiBehaviorSettings);
     const totalCharactersPatch = readOptionalPatchedIntField(
       totalCharactersInputEl,
@@ -710,6 +757,18 @@ async function saveSettings() {
       playerAttackCooldownSecondsInputEl,
       "Spelarslag cooldown (sek)",
       currentGameplay.playerAttackCooldownSeconds
+    );
+    const moveSpeedMetersPerSecondPatch = readOptionalPatchedNumberField(
+      moveSpeedMetersPerSecondInputEl,
+      "Gångfart spelare + NPC (m/s)",
+      currentGameplay.moveSpeedMetersPerSecond,
+      { min: 0.5, max: 8, step: 0.05 }
+    );
+    const playerSprintMultiplierPatch = readOptionalPatchedNumberField(
+      playerSprintMultiplierInputEl,
+      "Spelare sprintfaktor (x)",
+      currentGameplay.playerSprintMultiplier,
+      { min: 1, max: 3, step: 0.05 }
     );
     const npcInspectDownedChancePatch = readOptionalPatchedNumberField(
       npcInspectDownedChanceInputEl,
@@ -761,6 +820,8 @@ async function saveSettings() {
     const minPlayersToStart = minPlayersToStartPatch.value;
     const npcDownedRespawnSeconds = npcDownedRespawnSecondsPatch.value;
     const playerAttackCooldownSeconds = playerAttackCooldownSecondsPatch.value;
+    const moveSpeedMetersPerSecond = moveSpeedMetersPerSecondPatch.value;
+    const playerSprintMultiplier = playerSprintMultiplierPatch.value;
     const npcInspectDownedChancePercent = npcInspectDownedChancePatch.value;
     const npcInspectDownedNearbyRadiusMeters = npcInspectDownedRadiusPatch.value;
     const npcSocialSeparationPercent = npcSocialSeparationPatch.value;
@@ -775,7 +836,9 @@ async function saveSettings() {
       maxPlayersPatch.changed ||
       minPlayersToStartPatch.changed ||
       npcDownedRespawnSecondsPatch.changed ||
-      playerAttackCooldownSecondsPatch.changed;
+      playerAttackCooldownSecondsPatch.changed ||
+      moveSpeedMetersPerSecondPatch.changed ||
+      playerSprintMultiplierPatch.changed;
     const aiBehaviorChanged =
       npcInspectDownedChancePatch.changed ||
       npcInspectDownedRadiusPatch.changed ||
@@ -815,6 +878,8 @@ async function saveSettings() {
       payload.minPlayersToStart = minPlayersToStart;
       payload.npcDownedRespawnSeconds = npcDownedRespawnSeconds;
       payload.playerAttackCooldownSeconds = playerAttackCooldownSeconds;
+      payload.moveSpeedMetersPerSecond = moveSpeedMetersPerSecond;
+      payload.playerSprintMultiplier = playerSprintMultiplier;
     }
     if (aiBehaviorChanged) {
       payload.npcInspectDownedChancePercent = npcInspectDownedChancePercent;

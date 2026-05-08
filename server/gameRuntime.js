@@ -99,7 +99,9 @@ export function attachGameRuntime({ server, rootDir }) {
         minPlayersToStart: gameplay.minPlayersToStart ?? currentGameplay.minPlayersToStart,
         npcDownedRespawnSeconds: gameplay.npcDownedRespawnSeconds ?? currentGameplay.npcDownedRespawnSeconds,
         playerAttackCooldownSeconds:
-          gameplay.playerAttackCooldownSeconds ?? currentGameplay.playerAttackCooldownSeconds
+          gameplay.playerAttackCooldownSeconds ?? currentGameplay.playerAttackCooldownSeconds,
+        moveSpeedMetersPerSecond: gameplay.moveSpeedMetersPerSecond ?? currentGameplay.moveSpeedMetersPerSecond,
+        playerSprintMultiplier: gameplay.playerSprintMultiplier ?? currentGameplay.playerSprintMultiplier
       });
     }
 
@@ -261,7 +263,9 @@ export function attachGameRuntime({ server, rootDir }) {
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "maxPlayers") ||
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "minPlayersToStart") ||
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcDownedRespawnSeconds") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "playerAttackCooldownSeconds");
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "playerAttackCooldownSeconds") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "moveSpeedMetersPerSecond") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "playerSprintMultiplier");
       const hasAiBehaviorPatch =
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcInspectDownedChancePercent") ||
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcInspectDownedNearbyRadiusMeters") ||
@@ -303,13 +307,27 @@ export function attachGameRuntime({ server, rootDir }) {
           )
             ? parsedBody.playerAttackCooldownSeconds
             : currentGameplay.playerAttackCooldownSeconds;
+          const nextMoveSpeedMetersPerSecond = Object.prototype.hasOwnProperty.call(
+            parsedBody,
+            "moveSpeedMetersPerSecond"
+          )
+            ? parsedBody.moveSpeedMetersPerSecond
+            : currentGameplay.moveSpeedMetersPerSecond;
+          const nextPlayerSprintMultiplier = Object.prototype.hasOwnProperty.call(
+            parsedBody,
+            "playerSprintMultiplier"
+          )
+            ? parsedBody.playerSprintMultiplier
+            : currentGameplay.playerSprintMultiplier;
           changed =
             setGameplaySettings({
               totalCharacters: nextTotalCharacters,
               maxPlayers: nextMaxPlayers,
               minPlayersToStart: nextMinPlayersToStart,
               npcDownedRespawnSeconds: nextNpcDownedRespawnSeconds,
-              playerAttackCooldownSeconds: nextPlayerAttackCooldownSeconds
+              playerAttackCooldownSeconds: nextPlayerAttackCooldownSeconds,
+              moveSpeedMetersPerSecond: nextMoveSpeedMetersPerSecond,
+              playerSprintMultiplier: nextPlayerSprintMultiplier
             }) || changed;
         }
         if (hasAiBehaviorPatch) {

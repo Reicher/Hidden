@@ -294,6 +294,16 @@
               <input id="playerAttackCooldownSecondsInput" type="number" min="1" step="1" />
               <span class="settingsHint">Tid mellan slag för spelarkontrollerade karaktärer</span>
             </div>
+            <div class="settingsRow">
+              <label for="moveSpeedMetersPerSecondInput">Gångfart spelare + NPC (m/s)</label>
+              <input id="moveSpeedMetersPerSecondInput" type="number" min="0.5" max="8" step="0.05" />
+              <span class="settingsHint">Basfart för all rörelse utan sprint</span>
+            </div>
+            <div class="settingsRow">
+              <label for="playerSprintMultiplierInput">Spelare sprintfaktor (x)</label>
+              <input id="playerSprintMultiplierInput" type="number" min="1" max="3" step="0.05" />
+              <span class="settingsHint">Multiplikator på gångfart när spelare springer</span>
+            </div>
             <h3 class="settingsSubheading">NPC AI-beteende</h3>
             <div class="settingsRow">
               <label>Tid mellan beslut (ms)</label>

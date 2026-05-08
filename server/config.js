@@ -62,6 +62,8 @@ const DEFAULT_MAX_PLAYERS = 10;
 const DEFAULT_MIN_PLAYERS_TO_START = 2;
 const DEFAULT_NPC_DOWNED_RESPAWN_SECONDS = 8;
 const DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS = 2;
+const DEFAULT_MOVE_SPEED_METERS_PER_SECOND = 2.9;
+const DEFAULT_PLAYER_SPRINT_MULTIPLIER = 1.45;
 const DEFAULT_NPC_INSPECT_DOWNED_CHANCE_PERCENT = 75;
 const DEFAULT_NPC_INSPECT_DOWNED_RADIUS_METERS = 8.5;
 const DEFAULT_NPC_SOCIAL_SEPARATION_PERCENT = 45;
@@ -98,7 +100,9 @@ function normalizeGameplaySettings({
   maxPlayers,
   minPlayersToStart,
   npcDownedRespawnSeconds,
-  playerAttackCooldownSeconds
+  playerAttackCooldownSeconds,
+  moveSpeedMetersPerSecond,
+  playerSprintMultiplier
 }) {
   const normalizedTotal = parsePositiveInt(totalCharacters, "totalCharacters");
   const normalizedMax = parsePositiveInt(maxPlayers, "maxPlayers");
@@ -107,6 +111,16 @@ function normalizeGameplaySettings({
   const normalizedPlayerAttackCooldownSeconds = parsePositiveInt(
     playerAttackCooldownSeconds,
     "playerAttackCooldownSeconds"
+  );
+  const normalizedMoveSpeedMetersPerSecond = parseBoundedNumber(
+    moveSpeedMetersPerSecond,
+    "moveSpeedMetersPerSecond",
+    { min: 0.5, max: 8 }
+  );
+  const normalizedPlayerSprintMultiplier = parseBoundedNumber(
+    playerSprintMultiplier,
+    "playerSprintMultiplier",
+    { min: 1, max: 3 }
   );
 
   if (normalizedMax >= normalizedTotal) {
@@ -124,7 +138,9 @@ function normalizeGameplaySettings({
     maxPlayers: normalizedMax,
     minPlayersToStart: normalizedMin,
     npcDownedRespawnSeconds: normalizedNpcRespawnSeconds,
-    playerAttackCooldownSeconds: normalizedPlayerAttackCooldownSeconds
+    playerAttackCooldownSeconds: normalizedPlayerAttackCooldownSeconds,
+    moveSpeedMetersPerSecond: Number(normalizedMoveSpeedMetersPerSecond.toFixed(2)),
+    playerSprintMultiplier: Number(normalizedPlayerSprintMultiplier.toFixed(2))
   });
 }
 
@@ -207,7 +223,9 @@ let gameplaySettings = (() => {
       playerAttackCooldownSeconds: envInt(
         "PLAYER_ATTACK_COOLDOWN_SECONDS",
         DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS
-      )
+      ),
+      moveSpeedMetersPerSecond: envNumber("MOVE_SPEED_METERS_PER_SECOND", DEFAULT_MOVE_SPEED_METERS_PER_SECOND),
+      playerSprintMultiplier: envNumber("PLAYER_SPRINT_MULTIPLIER", DEFAULT_PLAYER_SPRINT_MULTIPLIER)
     });
   } catch {
     return normalizeGameplaySettings({
@@ -215,7 +233,9 @@ let gameplaySettings = (() => {
       maxPlayers: DEFAULT_MAX_PLAYERS,
       minPlayersToStart: DEFAULT_MIN_PLAYERS_TO_START,
       npcDownedRespawnSeconds: DEFAULT_NPC_DOWNED_RESPAWN_SECONDS,
-      playerAttackCooldownSeconds: DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS
+      playerAttackCooldownSeconds: DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS,
+      moveSpeedMetersPerSecond: DEFAULT_MOVE_SPEED_METERS_PER_SECOND,
+      playerSprintMultiplier: DEFAULT_PLAYER_SPRINT_MULTIPLIER
     });
   }
 })();
@@ -272,6 +292,8 @@ export let MAX_PLAYERS = gameplaySettings.maxPlayers;
 export let MIN_PLAYERS_TO_START = gameplaySettings.minPlayersToStart;
 export let NPC_DOWNED_RESPAWN_MS = gameplaySettings.npcDownedRespawnSeconds * 1000;
 export let ATTACK_COOLDOWN_MS = gameplaySettings.playerAttackCooldownSeconds * 1000;
+export let MOVE_SPEED = gameplaySettings.moveSpeedMetersPerSecond;
+export let PLAYER_SPRINT_MULTIPLIER = gameplaySettings.playerSprintMultiplier;
 export let NPC_INSPECT_DOWNED_CHANCE = aiBehaviorSettings.npcInspectDownedChancePercent / 100;
 export let NPC_INSPECT_DOWNED_RADIUS_METERS = aiBehaviorSettings.npcInspectDownedNearbyRadiusMeters;
 export let NPC_SOCIAL_SEPARATION_WEIGHT = (aiBehaviorSettings.npcSocialSeparationPercent / 100) * 0.4;
@@ -288,6 +310,8 @@ function applyGameplaySettings(nextSettings) {
   MIN_PLAYERS_TO_START = nextSettings.minPlayersToStart;
   NPC_DOWNED_RESPAWN_MS = nextSettings.npcDownedRespawnSeconds * 1000;
   ATTACK_COOLDOWN_MS = nextSettings.playerAttackCooldownSeconds * 1000;
+  MOVE_SPEED = nextSettings.moveSpeedMetersPerSecond;
+  PLAYER_SPRINT_MULTIPLIER = nextSettings.playerSprintMultiplier;
 }
 
 function applyAiBehaviorSettings(nextSettings) {
@@ -307,21 +331,27 @@ export function setGameplaySettings({
   maxPlayers,
   minPlayersToStart,
   npcDownedRespawnSeconds,
-  playerAttackCooldownSeconds
+  playerAttackCooldownSeconds,
+  moveSpeedMetersPerSecond,
+  playerSprintMultiplier
 }) {
   const nextSettings = normalizeGameplaySettings({
     totalCharacters,
     maxPlayers,
     minPlayersToStart,
     npcDownedRespawnSeconds,
-    playerAttackCooldownSeconds
+    playerAttackCooldownSeconds,
+    moveSpeedMetersPerSecond,
+    playerSprintMultiplier
   });
   const changed =
     nextSettings.totalCharacters !== TOTAL_CHARACTERS ||
     nextSettings.maxPlayers !== MAX_PLAYERS ||
     nextSettings.minPlayersToStart !== MIN_PLAYERS_TO_START ||
     nextSettings.npcDownedRespawnSeconds * 1000 !== NPC_DOWNED_RESPAWN_MS ||
-    nextSettings.playerAttackCooldownSeconds * 1000 !== ATTACK_COOLDOWN_MS;
+    nextSettings.playerAttackCooldownSeconds * 1000 !== ATTACK_COOLDOWN_MS ||
+    nextSettings.moveSpeedMetersPerSecond !== MOVE_SPEED ||
+    nextSettings.playerSprintMultiplier !== PLAYER_SPRINT_MULTIPLIER;
   if (!changed) return false;
   applyGameplaySettings(nextSettings);
   return true;
@@ -333,7 +363,9 @@ export function getGameplaySettings() {
     maxPlayers: MAX_PLAYERS,
     minPlayersToStart: MIN_PLAYERS_TO_START,
     npcDownedRespawnSeconds: Math.round(NPC_DOWNED_RESPAWN_MS / 1000),
-    playerAttackCooldownSeconds: Math.round(ATTACK_COOLDOWN_MS / 1000)
+    playerAttackCooldownSeconds: Math.round(ATTACK_COOLDOWN_MS / 1000),
+    moveSpeedMetersPerSecond: Number(MOVE_SPEED.toFixed(2)),
+    playerSprintMultiplier: Number(PLAYER_SPRINT_MULTIPLIER.toFixed(2))
   });
 }
 
@@ -386,8 +418,6 @@ export function getAiBehaviorSettings() {
 
 export const TICK_RATE = 20;
 export const TICK_MS = 1000 / TICK_RATE;
-export const MOVE_SPEED = 2.9;
-export const PLAYER_SPRINT_MULTIPLIER = 1.45;
 export const TURN_SPEED = 2.3;
 export const AI_DECISION_MS_MIN = 600;
 export const AI_DECISION_MS_MAX = 1800;

@@ -13,7 +13,6 @@ const INSPECT_PITCH_HOLD_MS = 260;
 const INSPECT_WANDER_HOLD_MS = 220;
 const SOCIAL_SEPARATION_RADIUS = 2.4;
 const DEFAULT_SOCIAL_SEPARATION_WEIGHT = 0.18;
-const SOCIAL_SEPARATION_INSPECT_FACTOR = 0.39;
 const DEFAULT_STOP_CHANCE = 0.25;
 const DEFAULT_MOVE_DECISION_INTERVAL_MIN_MS = 600;
 const DEFAULT_MOVE_DECISION_INTERVAL_MAX_MS = 1800;
@@ -119,7 +118,6 @@ export function createMovementSystem({
   const safeInspectDownedChance = Math.max(0, Math.min(1, Number(inspectDownedChance) || 0));
   const safeInspectDownedNearbyRadius = Math.max(1, Number(inspectDownedNearbyRadius) || DEFAULT_INSPECT_DOWNED_NEARBY_RADIUS);
   const safeSocialSeparationWeight = Math.max(0, Number(socialSeparationWeight) || 0);
-  const safeSocialSeparationInspectWeight = safeSocialSeparationWeight * SOCIAL_SEPARATION_INSPECT_FACTOR;
   const safeStopChance = Math.max(0, Math.min(1, Number(stopChance) || 0));
   const safeMoveDecisionIntervalMinMs = Math.max(200, Number(moveDecisionIntervalMinMs) || DEFAULT_MOVE_DECISION_INTERVAL_MIN_MS);
   const safeMoveDecisionIntervalMaxMs = Math.max(
@@ -239,7 +237,7 @@ export function createMovementSystem({
 
     const wallPush = wallAvoidance(c, boundaries, wallMargin);
     const shelfPush = shelfAvoidance(c, obstacles, shelfMargin);
-    const socialPush = characters
+    const socialPush = !inspectActive && characters
       ? socialSeparation(c, characters, {
           skipCharacterId: inspectActive ? c.ai.inspectDownedTargetId : -1,
           isCharacterDowned,
@@ -248,15 +246,14 @@ export function createMovementSystem({
       : null;
     let avoidance = null;
     if (wallPush || shelfPush || socialPush) {
-      const socialWeight = inspectActive ? safeSocialSeparationInspectWeight : safeSocialSeparationWeight;
       const ax =
         (wallPush?.x || 0) +
         (shelfPush?.x || 0) +
-        (socialPush ? socialPush.x * socialPush.strength * socialWeight : 0);
+        (socialPush ? socialPush.x * socialPush.strength * safeSocialSeparationWeight : 0);
       const az =
         (wallPush?.z || 0) +
         (shelfPush?.z || 0) +
-        (socialPush ? socialPush.z * socialPush.strength * socialWeight : 0);
+        (socialPush ? socialPush.z * socialPush.strength * safeSocialSeparationWeight : 0);
       const len = Math.hypot(ax, az);
       if (len > 0.001) {
         avoidance = { x: ax / len, z: az / len, strength: Math.min(1, len) };
