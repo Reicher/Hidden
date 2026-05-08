@@ -170,14 +170,25 @@ let lastOverlayUiUpdateAt = 0;
 let cachedCrosshairAimingAtCharacter = false;
 let lastCrosshairAimCheckAt = 0;
 let lastScoreboardSignature = "";
-const musicLoopEl = new Audio("/assets/music.wav");
+const musicLoopEl = new Audio("/assets/sounds/music.wav");
+const uiBlipSfxTemplateEl = new Audio("/assets/sounds/blipSelect.wav");
+const hitHurtSfxTemplateEl = new Audio("/assets/sounds/hitHurt.wav");
+const winSfxTemplateEl = new Audio("/assets/sounds/win.wav");
+uiBlipSfxTemplateEl.preload = "auto";
+hitHurtSfxTemplateEl.preload = "auto";
+winSfxTemplateEl.preload = "auto";
 musicLoopEl.loop = true;
 musicLoopEl.preload = "auto";
+const HIT_SFX_MIN_DISTANCE = 0.8;
+const HIT_SFX_MAX_DISTANCE = 13;
+const HIT_SFX_BASE_GAIN = 0.95;
+const WIN_SFX_DELAY_MS = 1100;
 const GAMEPLAY_SUMMARY_TEXT = "Håll dig gömd, hitta spelare och slå ner dem.";
 const DESKTOP_CONTROLS_TEXT = "Desktop: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack.";
 const MOBILE_CONTROLS_TEXT =
   "Mobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta.";
 let lastCountdownPreviewCharacterId = null;
+let winSfxTimeout = null;
 const ROOM_INFO_DEFAULTS = Object.freeze({
   maxPlayers: 10,
   totalCharacters: 20
@@ -448,6 +459,64 @@ function syncMusicLoop() {
   musicLoopEl.currentTime = 0;
 }
 
+function sfxVolumeMultiplier() {
+  if (audioSettings.sfxMuted) return 0;
+  return Math.max(0, Math.min(1, Number(audioSettings.sfxVolume || 0) / 100));
+}
+
+function playSfx(templateEl, gain = 1) {
+  const master = sfxVolumeMultiplier();
+  if (master <= 0) return;
+  const safeGain = Math.max(0, Math.min(1, Number(gain) || 0));
+  const volume = Math.max(0, Math.min(1, master * safeGain));
+  if (volume <= 0.001) return;
+  const instance = templateEl.cloneNode();
+  instance.volume = volume;
+  const playPromise = instance.play();
+  if (playPromise && typeof playPromise.catch === "function") {
+    playPromise.catch(() => {});
+  }
+}
+
+function clearPendingWinSfx() {
+  if (winSfxTimeout == null) return;
+  clearTimeout(winSfxTimeout);
+  winSfxTimeout = null;
+}
+
+function playUiBlipSfx() {
+  playSfx(uiBlipSfxTemplateEl, 0.92);
+}
+
+function hitSfxGainByDistance(distanceMeters) {
+  const distance = Math.max(0, Number(distanceMeters) || 0);
+  if (distance <= HIT_SFX_MIN_DISTANCE) return HIT_SFX_BASE_GAIN;
+  if (distance >= HIT_SFX_MAX_DISTANCE) return 0;
+  const t = (distance - HIT_SFX_MIN_DISTANCE) / (HIT_SFX_MAX_DISTANCE - HIT_SFX_MIN_DISTANCE);
+  return HIT_SFX_BASE_GAIN * Math.pow(1 - t, 1.3);
+}
+
+function playHitHurtAtPosition(position) {
+  if (!position || appMode !== "playing") return;
+  const x = Number(position.x);
+  const y = Number(position.y || 0);
+  const z = Number(position.z);
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+  const dx = x - camera.position.x;
+  const dy = y - camera.position.y;
+  const dz = z - camera.position.z;
+  const distance = Math.hypot(dx, dy, dz);
+  playSfx(hitHurtSfxTemplateEl, hitSfxGainByDistance(distance));
+}
+
+function queueWinSfx() {
+  clearPendingWinSfx();
+  winSfxTimeout = setTimeout(() => {
+    winSfxTimeout = null;
+    playSfx(winSfxTemplateEl, 1);
+  }, WIN_SFX_DELAY_MS);
+}
+
 function requestPointerLockSafe(targetEl = canvas) {
   try {
     const maybePromise = targetEl?.requestPointerLock?.();
@@ -689,6 +758,7 @@ function resetKnockdownToast() {
 }
 
 function resetSessionRuntimeState({ maxPlayers = 0, clearIdentity = false } = {}) {
+  clearPendingWinSfx();
   if (clearIdentity) {
     authenticated = false;
     myName = "";
@@ -911,6 +981,7 @@ function setAppMode(mode) {
   }
 
   if (previous === "playing" && mode !== "playing") {
+    clearPendingWinSfx();
     myCharacterId = null;
     attackCooldownMsRemaining = 0;
     attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
@@ -1068,6 +1139,8 @@ const socketMessageContext = createSocketMessageContext({
     setGameChatOpen,
     requestPointerLockSafe,
     renderScoreboard,
+    playHitHurtAtPosition,
+    queueWinSfx,
     setViewYaw: (value) => {
       viewYaw = value;
     }
@@ -1240,6 +1313,7 @@ bindAppEventHandlers({
     enableDebugOverlayForDevice,
     updateReadyButton,
     resize,
+    playUiBlipSfx,
     getActiveSocket: () => socketConnection?.getSocket() || null
   },
   state: {

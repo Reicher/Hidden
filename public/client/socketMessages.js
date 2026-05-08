@@ -69,7 +69,6 @@ export function handleSocketMessage(msg, ctx) {
 
   const previousCharacterId = state.myCharacterId;
   const previousSessionState = state.sessionState;
-  let enteredAlive = false;
   const session = msg.session;
 
   if (msg.match && typeof msg.match === "object") {
@@ -112,7 +111,9 @@ export function handleSocketMessage(msg, ctx) {
     actions.updateSpectatorHud();
     actions.updateDocumentTitle();
     if (previousSessionState !== state.sessionState) actions.refreshGameChat?.();
-    enteredAlive = previousSessionState !== "alive" && state.sessionState === "alive";
+    if (previousSessionState !== "won" && state.sessionState === "won") {
+      actions.queueWinSfx?.();
+    }
   } else {
     actions.resetDownedState();
     actions.resetWinState();
@@ -160,12 +161,17 @@ export function handleSocketMessage(msg, ctx) {
 
     actions.renderScoreboard(msg.scoreboard || []);
 
-    const controlledYaw = avatarSystem.applyWorldCharacters({
+    const worldResult = avatarSystem.applyWorldCharacters({
       characters: msg.characters || [],
       myCharacterId: state.myCharacterId,
       nowMs: getNowMs(),
       hideMyCharacter: state.sessionState === "alive" || state.sessionState === "won"
     });
+    const controlledYaw = worldResult?.myYaw ?? null;
+    const downedHitEvents = Array.isArray(worldResult?.downedHitEvents) ? worldResult.downedHitEvents : [];
+    for (const hitEvent of downedHitEvents) {
+      actions.playHitHurtAtPosition?.(hitEvent);
+    }
 
     if (controlledYaw != null) {
       const gainedNewCharacter = state.myCharacterId != null && state.myCharacterId !== previousCharacterId;

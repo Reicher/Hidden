@@ -677,6 +677,7 @@ export function createAvatarSystem({ scene, camera }) {
   }
 
   function updateFromServer(avatar, character, nowMs) {
+    const wasDowned = avatar.isDowned;
     avatar.seenAtTick = true;
     avatar.targetYaw = visualYaw(character.yaw, character.controllerType);
     avatar.lookPitch = THREE.MathUtils.clamp(Number(character.pitch || 0), -MAX_LOOK_PITCH_RAD, MAX_LOOK_PITCH_RAD);
@@ -756,6 +757,7 @@ export function createAvatarSystem({ scene, camera }) {
     avatar.lastServerX = character.x;
     avatar.lastServerZ = character.z;
     avatar.lastServerAt = nowMs;
+    return { downedStarted: !wasDowned && avatar.isDowned };
   }
 
   function setAvatarEyeTarget(avatar, x, y) {
@@ -1005,6 +1007,7 @@ export function createAvatarSystem({ scene, camera }) {
 
   function applyWorldCharacters({ characters, myCharacterId, nowMs, hideMyCharacter = true }) {
     let myYaw = null;
+    const downedHitEvents = [];
     for (const avatar of avatars.values()) avatar.seenAtTick = false;
 
     for (const character of characters) {
@@ -1015,7 +1018,15 @@ export function createAvatarSystem({ scene, camera }) {
         avatars.set(character.id, avatar);
       }
 
-      updateFromServer(avatar, character, nowMs);
+      const transition = updateFromServer(avatar, character, nowMs);
+      if (transition?.downedStarted) {
+        downedHitEvents.push({
+          characterId: character.id,
+          x: Number(character.x) || 0,
+          y: 0,
+          z: Number(character.z) || 0
+        });
+      }
       avatar.group.visible = !(hideMyCharacter && character.id === myCharacterId);
 
       if (character.id === myCharacterId) {
@@ -1029,7 +1040,7 @@ export function createAvatarSystem({ scene, camera }) {
       avatars.delete(id);
     }
 
-    return myYaw;
+    return { myYaw, downedHitEvents };
   }
 
   function animate(deltaSec, myCharacterId) {

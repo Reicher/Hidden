@@ -95,6 +95,7 @@ export function bindAppEventHandlers({
     enableDebugOverlayForDevice,
     updateReadyButton,
     resize,
+    playUiBlipSfx,
     getActiveSocket
   } = actions;
 
@@ -298,6 +299,13 @@ export function bindAppEventHandlers({
   window.addEventListener("orientationchange", () => {
     resize();
     updateMobileControlsVisibility();
+  });
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const button = target.closest("button");
+    if (!button || button.disabled) return;
+    playUiBlipSfx?.();
   });
 
   window.addEventListener("keydown", (event) => {
