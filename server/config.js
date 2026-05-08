@@ -11,6 +11,14 @@ function envInt(name, fallback) {
   return Math.trunc(parsed);
 }
 
+function envNumber(name, fallback) {
+  const value = process.env[name];
+  if (value == null) return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return parsed;
+}
+
 function envPositiveInt(name, fallback) {
   const parsed = envInt(name, fallback);
   if (!Number.isInteger(parsed) || parsed < 1) return fallback;
@@ -54,11 +62,33 @@ const DEFAULT_MAX_PLAYERS = 10;
 const DEFAULT_MIN_PLAYERS_TO_START = 2;
 const DEFAULT_NPC_DOWNED_RESPAWN_SECONDS = 8;
 const DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS = 2;
+const DEFAULT_NPC_INSPECT_DOWNED_CHANCE_PERCENT = 75;
+const DEFAULT_NPC_INSPECT_DOWNED_RADIUS_METERS = 8.5;
+const DEFAULT_NPC_SOCIAL_SEPARATION_PERCENT = 45;
+const DEFAULT_NPC_STOP_CHANCE_PERCENT = 25;
+const DEFAULT_NPC_MOVE_DECISION_INTERVAL_MIN_MS = 600;
+const DEFAULT_NPC_MOVE_DECISION_INTERVAL_MAX_MS = 1800;
+const DEFAULT_NPC_STOP_DURATION_MIN_MS = 600;
+const DEFAULT_NPC_STOP_DURATION_MAX_MS = 1800;
 
 function parsePositiveInt(value, fieldName) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 1 || !Number.isInteger(parsed)) {
     throw new Error(`${fieldName} måste vara ett heltal >= 1.`);
+  }
+  return parsed;
+}
+
+function parseBoundedNumber(value, fieldName, { min, max, integer = false }) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${fieldName} måste vara ett giltigt tal.`);
+  }
+  if (integer && !Number.isInteger(parsed)) {
+    throw new Error(`${fieldName} måste vara ett heltal.`);
+  }
+  if (parsed < min || parsed > max) {
+    throw new Error(`${fieldName} måste vara mellan ${min} och ${max}.`);
   }
   return parsed;
 }
@@ -98,6 +128,75 @@ function normalizeGameplaySettings({
   });
 }
 
+function normalizeAiBehaviorSettings({
+  npcInspectDownedChancePercent,
+  npcInspectDownedNearbyRadiusMeters,
+  npcSocialSeparationPercent,
+  npcStopChancePercent,
+  npcMoveDecisionIntervalMinMs,
+  npcMoveDecisionIntervalMaxMs,
+  npcStopDurationMinMs,
+  npcStopDurationMaxMs
+}) {
+  const normalizedInspectChance = parseBoundedNumber(
+    npcInspectDownedChancePercent,
+    "npcInspectDownedChancePercent",
+    { min: 0, max: 100, integer: true }
+  );
+  const normalizedInspectRadius = parseBoundedNumber(
+    npcInspectDownedNearbyRadiusMeters,
+    "npcInspectDownedNearbyRadiusMeters",
+    { min: 2, max: 20 }
+  );
+  const normalizedSocialSeparation = parseBoundedNumber(
+    npcSocialSeparationPercent,
+    "npcSocialSeparationPercent",
+    { min: 0, max: 100, integer: true }
+  );
+  const normalizedStopChance = parseBoundedNumber(
+    npcStopChancePercent,
+    "npcStopChancePercent",
+    { min: 0, max: 100, integer: true }
+  );
+  const normalizedMoveDecisionIntervalMinMs = parseBoundedNumber(
+    npcMoveDecisionIntervalMinMs,
+    "npcMoveDecisionIntervalMinMs",
+    { min: 200, max: 4000, integer: true }
+  );
+  const normalizedMoveDecisionIntervalMaxMs = parseBoundedNumber(
+    npcMoveDecisionIntervalMaxMs,
+    "npcMoveDecisionIntervalMaxMs",
+    { min: 250, max: 6000, integer: true }
+  );
+  const normalizedStopDurationMinMs = parseBoundedNumber(
+    npcStopDurationMinMs,
+    "npcStopDurationMinMs",
+    { min: 200, max: 5000, integer: true }
+  );
+  const normalizedStopDurationMaxMs = parseBoundedNumber(
+    npcStopDurationMaxMs,
+    "npcStopDurationMaxMs",
+    { min: 250, max: 7000, integer: true }
+  );
+  if (normalizedMoveDecisionIntervalMinMs > normalizedMoveDecisionIntervalMaxMs) {
+    throw new Error("npcMoveDecisionIntervalMinMs kan inte vara större än npcMoveDecisionIntervalMaxMs.");
+  }
+  if (normalizedStopDurationMinMs > normalizedStopDurationMaxMs) {
+    throw new Error("npcStopDurationMinMs kan inte vara större än npcStopDurationMaxMs.");
+  }
+
+  return Object.freeze({
+    npcInspectDownedChancePercent: normalizedInspectChance,
+    npcInspectDownedNearbyRadiusMeters: Number(normalizedInspectRadius.toFixed(1)),
+    npcSocialSeparationPercent: normalizedSocialSeparation,
+    npcStopChancePercent: normalizedStopChance,
+    npcMoveDecisionIntervalMinMs: normalizedMoveDecisionIntervalMinMs,
+    npcMoveDecisionIntervalMaxMs: normalizedMoveDecisionIntervalMaxMs,
+    npcStopDurationMinMs: normalizedStopDurationMinMs,
+    npcStopDurationMaxMs: normalizedStopDurationMaxMs
+  });
+}
+
 let gameplaySettings = (() => {
   try {
     return normalizeGameplaySettings({
@@ -121,11 +220,66 @@ let gameplaySettings = (() => {
   }
 })();
 
+let aiBehaviorSettings = (() => {
+  try {
+    return normalizeAiBehaviorSettings({
+      npcInspectDownedChancePercent: envInt(
+        "NPC_INSPECT_DOWNED_CHANCE_PERCENT",
+        DEFAULT_NPC_INSPECT_DOWNED_CHANCE_PERCENT
+      ),
+      npcInspectDownedNearbyRadiusMeters: envNumber(
+        "NPC_INSPECT_DOWNED_RADIUS_METERS",
+        DEFAULT_NPC_INSPECT_DOWNED_RADIUS_METERS
+      ),
+      npcSocialSeparationPercent: envInt(
+        "NPC_SOCIAL_SEPARATION_PERCENT",
+        DEFAULT_NPC_SOCIAL_SEPARATION_PERCENT
+      ),
+      npcStopChancePercent: envInt("NPC_STOP_CHANCE_PERCENT", DEFAULT_NPC_STOP_CHANCE_PERCENT),
+      npcMoveDecisionIntervalMinMs: envInt(
+        "NPC_MOVE_DECISION_INTERVAL_MIN_MS",
+        DEFAULT_NPC_MOVE_DECISION_INTERVAL_MIN_MS
+      ),
+      npcMoveDecisionIntervalMaxMs: envInt(
+        "NPC_MOVE_DECISION_INTERVAL_MAX_MS",
+        DEFAULT_NPC_MOVE_DECISION_INTERVAL_MAX_MS
+      ),
+      npcStopDurationMinMs: envInt(
+        "NPC_STOP_DURATION_MIN_MS",
+        DEFAULT_NPC_STOP_DURATION_MIN_MS
+      ),
+      npcStopDurationMaxMs: envInt(
+        "NPC_STOP_DURATION_MAX_MS",
+        DEFAULT_NPC_STOP_DURATION_MAX_MS
+      )
+    });
+  } catch {
+    return normalizeAiBehaviorSettings({
+      npcInspectDownedChancePercent: DEFAULT_NPC_INSPECT_DOWNED_CHANCE_PERCENT,
+      npcInspectDownedNearbyRadiusMeters: DEFAULT_NPC_INSPECT_DOWNED_RADIUS_METERS,
+      npcSocialSeparationPercent: DEFAULT_NPC_SOCIAL_SEPARATION_PERCENT,
+      npcStopChancePercent: DEFAULT_NPC_STOP_CHANCE_PERCENT,
+      npcMoveDecisionIntervalMinMs: DEFAULT_NPC_MOVE_DECISION_INTERVAL_MIN_MS,
+      npcMoveDecisionIntervalMaxMs: DEFAULT_NPC_MOVE_DECISION_INTERVAL_MAX_MS,
+      npcStopDurationMinMs: DEFAULT_NPC_STOP_DURATION_MIN_MS,
+      npcStopDurationMaxMs: DEFAULT_NPC_STOP_DURATION_MAX_MS
+    });
+  }
+})();
+
 export let TOTAL_CHARACTERS = gameplaySettings.totalCharacters;
 export let MAX_PLAYERS = gameplaySettings.maxPlayers;
 export let MIN_PLAYERS_TO_START = gameplaySettings.minPlayersToStart;
 export let NPC_DOWNED_RESPAWN_MS = gameplaySettings.npcDownedRespawnSeconds * 1000;
 export let ATTACK_COOLDOWN_MS = gameplaySettings.playerAttackCooldownSeconds * 1000;
+export let NPC_INSPECT_DOWNED_CHANCE = aiBehaviorSettings.npcInspectDownedChancePercent / 100;
+export let NPC_INSPECT_DOWNED_RADIUS_METERS = aiBehaviorSettings.npcInspectDownedNearbyRadiusMeters;
+export let NPC_SOCIAL_SEPARATION_WEIGHT = (aiBehaviorSettings.npcSocialSeparationPercent / 100) * 0.4;
+export let NPC_STOP_CHANCE = aiBehaviorSettings.npcStopChancePercent / 100;
+export let NPC_MOVE_DECISION_INTERVAL_MIN_MS = aiBehaviorSettings.npcMoveDecisionIntervalMinMs;
+export let NPC_MOVE_DECISION_INTERVAL_MAX_MS = aiBehaviorSettings.npcMoveDecisionIntervalMaxMs;
+export let NPC_STOP_DURATION_MIN_MS = aiBehaviorSettings.npcStopDurationMinMs;
+export let NPC_STOP_DURATION_MAX_MS = aiBehaviorSettings.npcStopDurationMaxMs;
 
 function applyGameplaySettings(nextSettings) {
   gameplaySettings = nextSettings;
@@ -134,6 +288,18 @@ function applyGameplaySettings(nextSettings) {
   MIN_PLAYERS_TO_START = nextSettings.minPlayersToStart;
   NPC_DOWNED_RESPAWN_MS = nextSettings.npcDownedRespawnSeconds * 1000;
   ATTACK_COOLDOWN_MS = nextSettings.playerAttackCooldownSeconds * 1000;
+}
+
+function applyAiBehaviorSettings(nextSettings) {
+  aiBehaviorSettings = nextSettings;
+  NPC_INSPECT_DOWNED_CHANCE = nextSettings.npcInspectDownedChancePercent / 100;
+  NPC_INSPECT_DOWNED_RADIUS_METERS = nextSettings.npcInspectDownedNearbyRadiusMeters;
+  NPC_SOCIAL_SEPARATION_WEIGHT = (nextSettings.npcSocialSeparationPercent / 100) * 0.4;
+  NPC_STOP_CHANCE = nextSettings.npcStopChancePercent / 100;
+  NPC_MOVE_DECISION_INTERVAL_MIN_MS = nextSettings.npcMoveDecisionIntervalMinMs;
+  NPC_MOVE_DECISION_INTERVAL_MAX_MS = nextSettings.npcMoveDecisionIntervalMaxMs;
+  NPC_STOP_DURATION_MIN_MS = nextSettings.npcStopDurationMinMs;
+  NPC_STOP_DURATION_MAX_MS = nextSettings.npcStopDurationMaxMs;
 }
 
 export function setGameplaySettings({
@@ -168,6 +334,53 @@ export function getGameplaySettings() {
     minPlayersToStart: MIN_PLAYERS_TO_START,
     npcDownedRespawnSeconds: Math.round(NPC_DOWNED_RESPAWN_MS / 1000),
     playerAttackCooldownSeconds: Math.round(ATTACK_COOLDOWN_MS / 1000)
+  });
+}
+
+export function setAiBehaviorSettings({
+  npcInspectDownedChancePercent,
+  npcInspectDownedNearbyRadiusMeters,
+  npcSocialSeparationPercent,
+  npcStopChancePercent,
+  npcMoveDecisionIntervalMinMs,
+  npcMoveDecisionIntervalMaxMs,
+  npcStopDurationMinMs,
+  npcStopDurationMaxMs
+}) {
+  const nextSettings = normalizeAiBehaviorSettings({
+    npcInspectDownedChancePercent,
+    npcInspectDownedNearbyRadiusMeters,
+    npcSocialSeparationPercent,
+    npcStopChancePercent,
+    npcMoveDecisionIntervalMinMs,
+    npcMoveDecisionIntervalMaxMs,
+    npcStopDurationMinMs,
+    npcStopDurationMaxMs
+  });
+  const changed =
+    nextSettings.npcInspectDownedChancePercent !== aiBehaviorSettings.npcInspectDownedChancePercent ||
+    nextSettings.npcInspectDownedNearbyRadiusMeters !== aiBehaviorSettings.npcInspectDownedNearbyRadiusMeters ||
+    nextSettings.npcSocialSeparationPercent !== aiBehaviorSettings.npcSocialSeparationPercent ||
+    nextSettings.npcStopChancePercent !== aiBehaviorSettings.npcStopChancePercent ||
+    nextSettings.npcMoveDecisionIntervalMinMs !== aiBehaviorSettings.npcMoveDecisionIntervalMinMs ||
+    nextSettings.npcMoveDecisionIntervalMaxMs !== aiBehaviorSettings.npcMoveDecisionIntervalMaxMs ||
+    nextSettings.npcStopDurationMinMs !== aiBehaviorSettings.npcStopDurationMinMs ||
+    nextSettings.npcStopDurationMaxMs !== aiBehaviorSettings.npcStopDurationMaxMs;
+  if (!changed) return false;
+  applyAiBehaviorSettings(nextSettings);
+  return true;
+}
+
+export function getAiBehaviorSettings() {
+  return Object.freeze({
+    npcInspectDownedChancePercent: aiBehaviorSettings.npcInspectDownedChancePercent,
+    npcInspectDownedNearbyRadiusMeters: aiBehaviorSettings.npcInspectDownedNearbyRadiusMeters,
+    npcSocialSeparationPercent: aiBehaviorSettings.npcSocialSeparationPercent,
+    npcStopChancePercent: aiBehaviorSettings.npcStopChancePercent,
+    npcMoveDecisionIntervalMinMs: aiBehaviorSettings.npcMoveDecisionIntervalMinMs,
+    npcMoveDecisionIntervalMaxMs: aiBehaviorSettings.npcMoveDecisionIntervalMaxMs,
+    npcStopDurationMinMs: aiBehaviorSettings.npcStopDurationMinMs,
+    npcStopDurationMaxMs: aiBehaviorSettings.npcStopDurationMaxMs
   });
 }
 

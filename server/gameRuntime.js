@@ -7,7 +7,9 @@ import {
   DEBUG_VIEW_TOKEN,
   getActiveLayoutInfo,
   getAvailableLayouts,
+  getAiBehaviorSettings,
   getGameplaySettings,
+  setAiBehaviorSettings,
   setActiveLayout,
   setGameplaySettings
 } from "./config.js";
@@ -60,7 +62,8 @@ export function attachGameRuntime({ server, rootDir }) {
   function persistedSettingsPayload() {
     return Object.freeze({
       layoutId: getActiveLayoutInfo().id,
-      gameplaySettings: getGameplaySettings()
+      gameplaySettings: getGameplaySettings(),
+      aiBehaviorSettings: getAiBehaviorSettings()
     });
   }
 
@@ -97,6 +100,29 @@ export function attachGameRuntime({ server, rootDir }) {
         npcDownedRespawnSeconds: gameplay.npcDownedRespawnSeconds ?? currentGameplay.npcDownedRespawnSeconds,
         playerAttackCooldownSeconds:
           gameplay.playerAttackCooldownSeconds ?? currentGameplay.playerAttackCooldownSeconds
+      });
+    }
+
+    const aiBehavior = parsed.aiBehaviorSettings;
+    if (aiBehavior && typeof aiBehavior === "object") {
+      const currentAiBehavior = getAiBehaviorSettings();
+      setAiBehaviorSettings({
+        npcInspectDownedChancePercent:
+          aiBehavior.npcInspectDownedChancePercent ?? currentAiBehavior.npcInspectDownedChancePercent,
+        npcInspectDownedNearbyRadiusMeters:
+          aiBehavior.npcInspectDownedNearbyRadiusMeters ?? currentAiBehavior.npcInspectDownedNearbyRadiusMeters,
+        npcSocialSeparationPercent:
+          aiBehavior.npcSocialSeparationPercent ?? currentAiBehavior.npcSocialSeparationPercent,
+        npcStopChancePercent:
+          aiBehavior.npcStopChancePercent ?? currentAiBehavior.npcStopChancePercent,
+        npcMoveDecisionIntervalMinMs:
+          aiBehavior.npcMoveDecisionIntervalMinMs ?? currentAiBehavior.npcMoveDecisionIntervalMinMs,
+        npcMoveDecisionIntervalMaxMs:
+          aiBehavior.npcMoveDecisionIntervalMaxMs ?? currentAiBehavior.npcMoveDecisionIntervalMaxMs,
+        npcStopDurationMinMs:
+          aiBehavior.npcStopDurationMinMs ?? currentAiBehavior.npcStopDurationMinMs,
+        npcStopDurationMaxMs:
+          aiBehavior.npcStopDurationMaxMs ?? currentAiBehavior.npcStopDurationMaxMs
       });
     }
   }
@@ -184,6 +210,7 @@ export function attachGameRuntime({ server, rootDir }) {
       payload.logFiles = debugStats.logs;
       payload.layout = getActiveLayoutInfo();
       payload.gameplaySettings = getGameplaySettings();
+      payload.aiBehaviorSettings = getAiBehaviorSettings();
       writeJson(res, 200, payload);
       return true;
     }
@@ -195,7 +222,8 @@ export function attachGameRuntime({ server, rootDir }) {
           authRequired: true,
           layout: getActiveLayoutInfo(),
           availableLayouts: getAvailableLayouts(),
-          gameplaySettings: getGameplaySettings()
+          gameplaySettings: getGameplaySettings(),
+          aiBehaviorSettings: getAiBehaviorSettings()
         });
         return true;
       }
@@ -234,7 +262,16 @@ export function attachGameRuntime({ server, rootDir }) {
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "minPlayersToStart") ||
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcDownedRespawnSeconds") ||
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "playerAttackCooldownSeconds");
-      if (!hasLayoutPatch && !hasGameplayPatch) {
+      const hasAiBehaviorPatch =
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcInspectDownedChancePercent") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcInspectDownedNearbyRadiusMeters") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcSocialSeparationPercent") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcStopChancePercent") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcMoveDecisionIntervalMinMs") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcMoveDecisionIntervalMaxMs") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcStopDurationMinMs") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcStopDurationMaxMs");
+      if (!hasLayoutPatch && !hasGameplayPatch && !hasAiBehaviorPatch) {
         writeJson(res, 400, { error: "no_settings_provided" });
         return true;
       }
@@ -242,6 +279,7 @@ export function attachGameRuntime({ server, rootDir }) {
       let changed = false;
       const previousLayoutId = getActiveLayoutInfo().id;
       const previousGameplay = getGameplaySettings();
+      const previousAiBehavior = getAiBehaviorSettings();
       try {
         if (hasLayoutPatch && requestedLayoutId) {
           changed = setActiveLayout(requestedLayoutId) || changed;
@@ -274,6 +312,68 @@ export function attachGameRuntime({ server, rootDir }) {
               playerAttackCooldownSeconds: nextPlayerAttackCooldownSeconds
             }) || changed;
         }
+        if (hasAiBehaviorPatch) {
+          const currentAiBehavior = getAiBehaviorSettings();
+          const nextNpcInspectDownedChancePercent = Object.prototype.hasOwnProperty.call(
+            parsedBody,
+            "npcInspectDownedChancePercent"
+          )
+            ? parsedBody.npcInspectDownedChancePercent
+            : currentAiBehavior.npcInspectDownedChancePercent;
+          const nextNpcInspectDownedNearbyRadiusMeters = Object.prototype.hasOwnProperty.call(
+            parsedBody,
+            "npcInspectDownedNearbyRadiusMeters"
+          )
+            ? parsedBody.npcInspectDownedNearbyRadiusMeters
+            : currentAiBehavior.npcInspectDownedNearbyRadiusMeters;
+          const nextNpcSocialSeparationPercent = Object.prototype.hasOwnProperty.call(
+            parsedBody,
+            "npcSocialSeparationPercent"
+          )
+            ? parsedBody.npcSocialSeparationPercent
+            : currentAiBehavior.npcSocialSeparationPercent;
+          const nextNpcStopChancePercent = Object.prototype.hasOwnProperty.call(
+            parsedBody,
+            "npcStopChancePercent"
+          )
+            ? parsedBody.npcStopChancePercent
+            : currentAiBehavior.npcStopChancePercent;
+          const nextNpcMoveDecisionIntervalMinMs = Object.prototype.hasOwnProperty.call(
+            parsedBody,
+            "npcMoveDecisionIntervalMinMs"
+          )
+            ? parsedBody.npcMoveDecisionIntervalMinMs
+            : currentAiBehavior.npcMoveDecisionIntervalMinMs;
+          const nextNpcMoveDecisionIntervalMaxMs = Object.prototype.hasOwnProperty.call(
+            parsedBody,
+            "npcMoveDecisionIntervalMaxMs"
+          )
+            ? parsedBody.npcMoveDecisionIntervalMaxMs
+            : currentAiBehavior.npcMoveDecisionIntervalMaxMs;
+          const nextNpcStopDurationMinMs = Object.prototype.hasOwnProperty.call(
+            parsedBody,
+            "npcStopDurationMinMs"
+          )
+            ? parsedBody.npcStopDurationMinMs
+            : currentAiBehavior.npcStopDurationMinMs;
+          const nextNpcStopDurationMaxMs = Object.prototype.hasOwnProperty.call(
+            parsedBody,
+            "npcStopDurationMaxMs"
+          )
+            ? parsedBody.npcStopDurationMaxMs
+            : currentAiBehavior.npcStopDurationMaxMs;
+          changed =
+            setAiBehaviorSettings({
+              npcInspectDownedChancePercent: nextNpcInspectDownedChancePercent,
+              npcInspectDownedNearbyRadiusMeters: nextNpcInspectDownedNearbyRadiusMeters,
+              npcSocialSeparationPercent: nextNpcSocialSeparationPercent,
+              npcStopChancePercent: nextNpcStopChancePercent,
+              npcMoveDecisionIntervalMinMs: nextNpcMoveDecisionIntervalMinMs,
+              npcMoveDecisionIntervalMaxMs: nextNpcMoveDecisionIntervalMaxMs,
+              npcStopDurationMinMs: nextNpcStopDurationMinMs,
+              npcStopDurationMaxMs: nextNpcStopDurationMaxMs
+            }) || changed;
+        }
         if (changed) {
           try {
             writePersistedServerSettings();
@@ -281,6 +381,7 @@ export function attachGameRuntime({ server, rootDir }) {
             try {
               setActiveLayout(previousLayoutId);
               setGameplaySettings(previousGameplay);
+              setAiBehaviorSettings(previousAiBehavior);
             } catch {
               // If rollback fails, keep throwing the persistence error below.
             }
@@ -302,7 +403,8 @@ export function attachGameRuntime({ server, rootDir }) {
         authRequired: true,
         layout: getActiveLayoutInfo(),
         availableLayouts: getAvailableLayouts(),
-        gameplaySettings: getGameplaySettings()
+        gameplaySettings: getGameplaySettings(),
+        aiBehaviorSettings: getAiBehaviorSettings()
       });
       return true;
     }

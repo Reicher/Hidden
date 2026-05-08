@@ -1,15 +1,24 @@
 import { normalizeAngle } from "./combat.js";
 import { clampInsideRoom, wallAvoidance, shelfAvoidance, resolveShelfCollisions } from "./physics.js";
 
-const INSPECT_DOWNED_CHANCE = 0.75;
-const INSPECT_DOWNED_NEARBY_RADIUS = 8.5;
+const DEFAULT_INSPECT_DOWNED_CHANCE = 0.75;
+const DEFAULT_INSPECT_DOWNED_NEARBY_RADIUS = 8.5;
 const INSPECT_DOWNED_MIN_MS = 1800;
 const INSPECT_DOWNED_MAX_MS = 4800;
+const INSPECT_DOWNED_RECHECK_MIN_MS = 540;
+const INSPECT_DOWNED_RECHECK_MAX_MS = 980;
 const INSPECT_DOWNED_ARRIVE_DISTANCE = 0.24;
 const INSPECT_DOWNED_LOOK_PITCH = -0.42;
+const INSPECT_PITCH_HOLD_MS = 260;
+const INSPECT_WANDER_HOLD_MS = 220;
 const SOCIAL_SEPARATION_RADIUS = 2.4;
-const SOCIAL_SEPARATION_WEIGHT = 0.18;
-const SOCIAL_SEPARATION_INSPECT_WEIGHT = 0.07;
+const DEFAULT_SOCIAL_SEPARATION_WEIGHT = 0.18;
+const SOCIAL_SEPARATION_INSPECT_FACTOR = 0.39;
+const DEFAULT_STOP_CHANCE = 0.25;
+const DEFAULT_MOVE_DECISION_INTERVAL_MIN_MS = 600;
+const DEFAULT_MOVE_DECISION_INTERVAL_MAX_MS = 1800;
+const DEFAULT_STOP_DURATION_MIN_MS = 600;
+const DEFAULT_STOP_DURATION_MAX_MS = 1800;
 
 function inspectSlotFor(c, target) {
   const seed = (c.id * 73856093 + target.id * 19349663) >>> 0;
@@ -18,11 +27,32 @@ function inspectSlotFor(c, target) {
   return { angle, radius };
 }
 
-function socialSeparation(c, characters, skipCharacterId = -1) {
+function ensureAIState(c) {
+  if (!c.ai || typeof c.ai !== "object") c.ai = {};
+  if (!Number.isFinite(c.ai.avoidanceX)) c.ai.avoidanceX = 0;
+  if (!Number.isFinite(c.ai.avoidanceZ)) c.ai.avoidanceZ = 0;
+  if (!Number.isFinite(c.ai.nextAvoidanceRetargetAt)) c.ai.nextAvoidanceRetargetAt = 0;
+  if (!Number.isFinite(c.ai.nextInspectDecisionAt)) c.ai.nextInspectDecisionAt = 0;
+  if (!Number.isFinite(c.ai.inspectDownedUntil)) c.ai.inspectDownedUntil = 0;
+  if (!Number.isFinite(c.ai.inspectDownedAngle)) c.ai.inspectDownedAngle = 0;
+  if (!Number.isFinite(c.ai.inspectDownedRadius)) c.ai.inspectDownedRadius = 1.05;
+  if (!Number.isFinite(c.ai.inspectDownedTargetId)) c.ai.inspectDownedTargetId = -1;
+  if (!Number.isFinite(c.ai.stopUntil)) c.ai.stopUntil = 0;
+}
+
+function findCharacterById(characters, id) {
+  if (!Array.isArray(characters) || !Number.isFinite(id) || id < 0) return null;
+  const byIndex = characters[id];
+  if (byIndex?.id === id) return byIndex;
+  return characters.find((character) => character?.id === id) || null;
+}
+
+function socialSeparation(c, characters, { skipCharacterId = -1, isCharacterDowned = null, now = 0 } = {}) {
   let ax = 0;
   let az = 0;
   for (const other of characters) {
     if (!other || other.id === c.id || other.id === skipCharacterId) continue;
+    if (typeof isCharacterDowned === "function" && isCharacterDowned(other, now)) continue;
     const dx = c.x - other.x;
     const dz = c.z - other.z;
     const dist = Math.hypot(dx, dz);
@@ -51,6 +81,14 @@ function socialSeparation(c, characters, skipCharacterId = -1) {
  *   moveSpeed: number,
  *   sprintMultiplier: number,
  *   turnSpeed: number,
+ *   inspectDownedChance?: number,
+ *   inspectDownedNearbyRadius?: number,
+ *   socialSeparationWeight?: number,
+ *   stopChance?: number,
+ *   moveDecisionIntervalMinMs?: number,
+ *   moveDecisionIntervalMaxMs?: number,
+ *   stopDurationMinMs?: number,
+ *   stopDurationMaxMs?: number,
  *   rand: (min: number, max: number) => number,
  *   clampPitch: (value: number) => number,
  * }} deps
@@ -67,9 +105,41 @@ export function createMovementSystem({
   moveSpeed,
   sprintMultiplier,
   turnSpeed,
+  inspectDownedChance = DEFAULT_INSPECT_DOWNED_CHANCE,
+  inspectDownedNearbyRadius = DEFAULT_INSPECT_DOWNED_NEARBY_RADIUS,
+  socialSeparationWeight = DEFAULT_SOCIAL_SEPARATION_WEIGHT,
+  stopChance = DEFAULT_STOP_CHANCE,
+  moveDecisionIntervalMinMs = DEFAULT_MOVE_DECISION_INTERVAL_MIN_MS,
+  moveDecisionIntervalMaxMs = DEFAULT_MOVE_DECISION_INTERVAL_MAX_MS,
+  stopDurationMinMs = DEFAULT_STOP_DURATION_MIN_MS,
+  stopDurationMaxMs = DEFAULT_STOP_DURATION_MAX_MS,
   rand,
   clampPitch
 }) {
+  const safeInspectDownedChance = Math.max(0, Math.min(1, Number(inspectDownedChance) || 0));
+  const safeInspectDownedNearbyRadius = Math.max(1, Number(inspectDownedNearbyRadius) || DEFAULT_INSPECT_DOWNED_NEARBY_RADIUS);
+  const safeSocialSeparationWeight = Math.max(0, Number(socialSeparationWeight) || 0);
+  const safeSocialSeparationInspectWeight = safeSocialSeparationWeight * SOCIAL_SEPARATION_INSPECT_FACTOR;
+  const safeStopChance = Math.max(0, Math.min(1, Number(stopChance) || 0));
+  const safeMoveDecisionIntervalMinMs = Math.max(200, Number(moveDecisionIntervalMinMs) || DEFAULT_MOVE_DECISION_INTERVAL_MIN_MS);
+  const safeMoveDecisionIntervalMaxMs = Math.max(
+    safeMoveDecisionIntervalMinMs,
+    Number(moveDecisionIntervalMaxMs) || DEFAULT_MOVE_DECISION_INTERVAL_MAX_MS
+  );
+  const safeStopDurationMinMs = Math.max(200, Number(stopDurationMinMs) || DEFAULT_STOP_DURATION_MIN_MS);
+  const safeStopDurationMaxMs = Math.max(
+    safeStopDurationMinMs,
+    Number(stopDurationMaxMs) || DEFAULT_STOP_DURATION_MAX_MS
+  );
+
+  function nextDecisionDelay() {
+    return rand(safeMoveDecisionIntervalMinMs, safeMoveDecisionIntervalMaxMs);
+  }
+
+  function nextStopDuration() {
+    return rand(safeStopDurationMinMs, safeStopDurationMaxMs);
+  }
+
   /**
    * Advance an AI-controlled character by one tick.
    *
@@ -78,14 +148,7 @@ export function createMovementSystem({
    * @param {number} now  - current timestamp (ms)
    */
   function updateAI(c, dt, now, context = null) {
-    if (!Number.isFinite(c.ai.avoidanceX)) c.ai.avoidanceX = 0;
-    if (!Number.isFinite(c.ai.avoidanceZ)) c.ai.avoidanceZ = 0;
-    if (!Number.isFinite(c.ai.nextAvoidanceRetargetAt)) c.ai.nextAvoidanceRetargetAt = 0;
-    if (!Number.isFinite(c.ai.nextInspectDecisionAt)) c.ai.nextInspectDecisionAt = 0;
-    if (!Number.isFinite(c.ai.inspectDownedUntil)) c.ai.inspectDownedUntil = 0;
-    if (!Number.isFinite(c.ai.inspectDownedAngle)) c.ai.inspectDownedAngle = 0;
-    if (!Number.isFinite(c.ai.inspectDownedRadius)) c.ai.inspectDownedRadius = 1.05;
-    if (!Number.isFinite(c.ai.inspectDownedTargetId)) c.ai.inspectDownedTargetId = -1;
+    ensureAIState(c);
 
     const characters = Array.isArray(context?.characters) ? context.characters : null;
     const isCharacterDowned =
@@ -93,7 +156,7 @@ export function createMovementSystem({
 
     let inspectTarget = null;
     if (characters && isCharacterDowned && c.ai.inspectDownedTargetId >= 0) {
-      const candidate = characters[c.ai.inspectDownedTargetId];
+      const candidate = findCharacterById(characters, c.ai.inspectDownedTargetId);
       if (candidate && !candidate.everPlayerControlled && isCharacterDowned(candidate, now)) {
         inspectTarget = candidate;
       } else {
@@ -110,14 +173,14 @@ export function createMovementSystem({
         if (candidate.everPlayerControlled) continue;
         if (!isCharacterDowned(candidate, now)) continue;
         const dist = Math.hypot(candidate.x - c.x, candidate.z - c.z);
-        if (dist > INSPECT_DOWNED_NEARBY_RADIUS) continue;
+        if (dist > safeInspectDownedNearbyRadius) continue;
         if (dist < nearestDist) {
           nearest = candidate;
           nearestDist = dist;
         }
       }
 
-      if (nearest && Math.random() < INSPECT_DOWNED_CHANCE) {
+      if (nearest && Math.random() < safeInspectDownedChance) {
         const slot = inspectSlotFor(c, nearest);
         c.ai.inspectDownedTargetId = nearest.id;
         c.ai.inspectDownedUntil = now + rand(INSPECT_DOWNED_MIN_MS, INSPECT_DOWNED_MAX_MS);
@@ -125,7 +188,7 @@ export function createMovementSystem({
         c.ai.inspectDownedRadius = slot.radius;
         inspectTarget = nearest;
       }
-      c.ai.nextInspectDecisionAt = now + rand(540, 980);
+      c.ai.nextInspectDecisionAt = now + rand(INSPECT_DOWNED_RECHECK_MIN_MS, INSPECT_DOWNED_RECHECK_MAX_MS);
     }
 
     const inspectActive =
@@ -141,8 +204,8 @@ export function createMovementSystem({
       const toSlotDist = Math.hypot(toSlotX, toSlotZ);
       const faceTargetYaw = normalizeAngle(Math.atan2(inspectTarget.x - c.x, inspectTarget.z - c.z));
       c.ai.desiredPitch = INSPECT_DOWNED_LOOK_PITCH;
-      c.ai.nextPitchDecisionAt = Math.max(c.ai.nextPitchDecisionAt, now + 260);
-      c.ai.nextDecisionAt = Math.max(c.ai.nextDecisionAt, now + 220);
+      c.ai.nextPitchDecisionAt = Math.max(c.ai.nextPitchDecisionAt, now + INSPECT_PITCH_HOLD_MS);
+      c.ai.nextDecisionAt = Math.max(c.ai.nextDecisionAt, now + INSPECT_WANDER_HOLD_MS);
       if (toSlotDist > INSPECT_DOWNED_ARRIVE_DISTANCE) {
         c.ai.mode = "move";
         c.ai.desiredYaw = normalizeAngle(Math.atan2(toSlotX, toSlotZ));
@@ -155,20 +218,37 @@ export function createMovementSystem({
       c.ai.inspectDownedUntil = 0;
     }
 
+    if (!inspectActive && c.ai.mode === "stop" && now >= c.ai.stopUntil) {
+      c.ai.mode = "move";
+      c.ai.stopUntil = 0;
+      c.ai.nextDecisionAt = Math.max(c.ai.nextDecisionAt, now + nextDecisionDelay());
+    }
+
     if (!inspectActive && now >= c.ai.nextDecisionAt) {
-      c.ai.mode = Math.random() < 0.25 ? "stop" : "move";
-      c.ai.desiredYaw = normalizeAngle(c.yaw + rand(-Math.PI / 2, Math.PI / 2));
-      c.ai.nextDecisionAt = now + rand(aiDecisionMsMin, aiDecisionMsMax);
+      if (Math.random() < safeStopChance) {
+        c.ai.mode = "stop";
+        c.ai.stopUntil = now + nextStopDuration();
+        c.ai.nextDecisionAt = c.ai.stopUntil;
+        c.ai.desiredYaw = c.yaw;
+      } else {
+        c.ai.mode = "move";
+        c.ai.desiredYaw = normalizeAngle(c.yaw + rand(-Math.PI / 2, Math.PI / 2));
+        c.ai.nextDecisionAt = now + nextDecisionDelay();
+      }
     }
 
     const wallPush = wallAvoidance(c, boundaries, wallMargin);
     const shelfPush = shelfAvoidance(c, obstacles, shelfMargin);
     const socialPush = characters
-      ? socialSeparation(c, characters, inspectActive ? c.ai.inspectDownedTargetId : -1)
+      ? socialSeparation(c, characters, {
+          skipCharacterId: inspectActive ? c.ai.inspectDownedTargetId : -1,
+          isCharacterDowned,
+          now
+        })
       : null;
     let avoidance = null;
     if (wallPush || shelfPush || socialPush) {
-      const socialWeight = inspectActive ? SOCIAL_SEPARATION_INSPECT_WEIGHT : SOCIAL_SEPARATION_WEIGHT;
+      const socialWeight = inspectActive ? safeSocialSeparationInspectWeight : safeSocialSeparationWeight;
       const ax =
         (wallPush?.x || 0) +
         (shelfPush?.x || 0) +

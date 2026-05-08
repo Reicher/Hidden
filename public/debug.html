@@ -131,6 +131,10 @@
         display: flex;
         flex-direction: column;
       }
+      .pane.settingsPane {
+        min-height: 0;
+        height: auto;
+      }
       .pane h2 {
         margin: 0;
         padding: 8px;
@@ -148,6 +152,31 @@
         gap: 8px;
         grid-template-columns: minmax(0, 220px) minmax(0, 280px) auto;
         align-items: center;
+      }
+      .dualInputs {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .dualInput {
+        display: grid;
+        gap: 4px;
+      }
+      .dualInput label {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .settingsSubheading {
+        margin: 2px 0 0;
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .sliderValue {
+        color: var(--muted);
+        font-size: 12px;
+        min-width: 70px;
       }
       .settingsHint {
         color: var(--muted);
@@ -232,8 +261,8 @@
         <div id="meta" class="muted"></div>
       </section>
       <section id="settingsTab" class="tabPane hidden">
-        <section class="pane">
-          <h2>Kartinställningar</h2>
+        <section class="pane settingsPane">
+          <h2>Spelinställningar</h2>
           <div class="settingsBody">
             <div class="settingsRow">
               <label for="layoutSelect">Aktiv karta</label>
@@ -264,6 +293,55 @@
               <label for="playerAttackCooldownSecondsInput">Spelarslag cooldown (sek)</label>
               <input id="playerAttackCooldownSecondsInput" type="number" min="1" step="1" />
               <span class="settingsHint">Tid mellan slag för spelarkontrollerade karaktärer</span>
+            </div>
+            <h3 class="settingsSubheading">NPC AI-beteende</h3>
+            <div class="settingsRow">
+              <label>Tid mellan beslut (ms)</label>
+              <div class="dualInputs">
+                <div class="dualInput">
+                  <label for="npcMoveDecisionIntervalMinMsInput">Min</label>
+                  <input id="npcMoveDecisionIntervalMinMsInput" type="number" min="200" max="4000" step="10" />
+                </div>
+                <div class="dualInput">
+                  <label for="npcMoveDecisionIntervalMaxMsInput">Max</label>
+                  <input id="npcMoveDecisionIntervalMaxMsInput" type="number" min="250" max="6000" step="10" />
+                </div>
+              </div>
+              <span></span>
+            </div>
+            <div class="settingsRow">
+              <label for="npcStopChanceInput">Stoppchans vid beslut</label>
+              <input id="npcStopChanceInput" type="range" min="0" max="100" step="1" />
+              <span id="npcStopChanceValue" class="sliderValue">-</span>
+            </div>
+            <div class="settingsRow">
+              <label>Stopptid (ms)</label>
+              <div class="dualInputs">
+                <div class="dualInput">
+                  <label for="npcStopDurationMinMsInput">Min</label>
+                  <input id="npcStopDurationMinMsInput" type="number" min="200" max="5000" step="10" />
+                </div>
+                <div class="dualInput">
+                  <label for="npcStopDurationMaxMsInput">Max</label>
+                  <input id="npcStopDurationMaxMsInput" type="number" min="250" max="7000" step="10" />
+                </div>
+              </div>
+              <span></span>
+            </div>
+            <div class="settingsRow">
+              <label for="npcInspectDownedChanceInput">Kollar nedslagen NPC (chans)</label>
+              <input id="npcInspectDownedChanceInput" type="range" min="0" max="100" step="1" />
+              <span id="npcInspectDownedChanceValue" class="sliderValue">-</span>
+            </div>
+            <div class="settingsRow">
+              <label for="npcInspectDownedRadiusInput">Sök-radie till nedslagen NPC</label>
+              <input id="npcInspectDownedRadiusInput" type="range" min="2" max="20" step="0.5" />
+              <span id="npcInspectDownedRadiusValue" class="sliderValue">-</span>
+            </div>
+            <div class="settingsRow">
+              <label for="npcSocialSeparationInput">Spridningstendens</label>
+              <input id="npcSocialSeparationInput" type="range" min="0" max="100" step="1" />
+              <span id="npcSocialSeparationValue" class="sliderValue">-</span>
             </div>
             <div class="settingsRow">
               <span></span>

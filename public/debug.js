@@ -21,6 +21,18 @@ const maxPlayersInputEl = document.getElementById("maxPlayersInput");
 const minPlayersToStartInputEl = document.getElementById("minPlayersToStartInput");
 const npcDownedRespawnSecondsInputEl = document.getElementById("npcDownedRespawnSecondsInput");
 const playerAttackCooldownSecondsInputEl = document.getElementById("playerAttackCooldownSecondsInput");
+const npcInspectDownedChanceInputEl = document.getElementById("npcInspectDownedChanceInput");
+const npcInspectDownedChanceValueEl = document.getElementById("npcInspectDownedChanceValue");
+const npcInspectDownedRadiusInputEl = document.getElementById("npcInspectDownedRadiusInput");
+const npcInspectDownedRadiusValueEl = document.getElementById("npcInspectDownedRadiusValue");
+const npcSocialSeparationInputEl = document.getElementById("npcSocialSeparationInput");
+const npcSocialSeparationValueEl = document.getElementById("npcSocialSeparationValue");
+const npcStopChanceInputEl = document.getElementById("npcStopChanceInput");
+const npcStopChanceValueEl = document.getElementById("npcStopChanceValue");
+const npcMoveDecisionIntervalMinMsInputEl = document.getElementById("npcMoveDecisionIntervalMinMsInput");
+const npcMoveDecisionIntervalMaxMsInputEl = document.getElementById("npcMoveDecisionIntervalMaxMsInput");
+const npcStopDurationMinMsInputEl = document.getElementById("npcStopDurationMinMsInput");
+const npcStopDurationMaxMsInputEl = document.getElementById("npcStopDurationMaxMsInput");
 const saveSettingsBtnEl = document.getElementById("saveSettingsBtn");
 const settingsInfoEl = document.getElementById("settingsInfo");
 const settingsStatusEl = document.getElementById("settingsStatus");
@@ -32,6 +44,16 @@ let settingsSaving = false;
 let activeTab = "stats";
 let cachedSettings = null;
 const LIST_LIMIT = 20;
+const DEFAULT_AI_BEHAVIOR_SETTINGS = Object.freeze({
+  npcInspectDownedChancePercent: 75,
+  npcInspectDownedNearbyRadiusMeters: 8.5,
+  npcSocialSeparationPercent: 45,
+  npcStopChancePercent: 25,
+  npcMoveDecisionIntervalMinMs: 600,
+  npcMoveDecisionIntervalMaxMs: 1800,
+  npcStopDurationMinMs: 600,
+  npcStopDurationMaxMs: 1800
+});
 
 function getToken() {
   return localStorage.getItem(TOKEN_KEY) || "";
@@ -82,6 +104,97 @@ function readOptionalPatchedIntField(inputEl, fieldName, currentValue) {
     throw new Error(`${fieldName} måste vara ett heltal >= 1.`);
   }
   return { changed: true, value: parsed };
+}
+
+function readOptionalPatchedNumberField(inputEl, fieldName, currentValue, { min, max, step = null } = {}) {
+  const raw = inputEl?.value?.trim() || "";
+  const hasCurrent = Number.isFinite(Number(currentValue));
+  if (!raw) {
+    if (hasCurrent) return { changed: false, value: Number(currentValue) };
+    throw new Error(`${fieldName} saknas.`);
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${fieldName} måste vara ett giltigt tal.`);
+  }
+  if (Number.isFinite(min) && parsed < min) {
+    throw new Error(`${fieldName} måste vara minst ${min}.`);
+  }
+  if (Number.isFinite(max) && parsed > max) {
+    throw new Error(`${fieldName} får vara max ${max}.`);
+  }
+  const normalized = Number.isFinite(step) && step > 0 ? Number((Math.round(parsed / step) * step).toFixed(4)) : parsed;
+  if (hasCurrent && Math.abs(Number(currentValue) - normalized) < 0.0001) {
+    return { changed: false, value: Number(currentValue) };
+  }
+  return { changed: true, value: normalized };
+}
+
+function setSliderValueLabel(valueEl, text) {
+  if (!valueEl) return;
+  valueEl.textContent = text;
+}
+
+function renderAiSliderLabels() {
+  const stopChance = Number(npcStopChanceInputEl?.value || 0);
+  const chance = Number(npcInspectDownedChanceInputEl?.value || 0);
+  const radius = Number(npcInspectDownedRadiusInputEl?.value || 0);
+  const spread = Number(npcSocialSeparationInputEl?.value || 0);
+  setSliderValueLabel(npcStopChanceValueEl, `${Math.round(stopChance)}%`);
+  setSliderValueLabel(npcInspectDownedChanceValueEl, `${Math.round(chance)}%`);
+  setSliderValueLabel(npcInspectDownedRadiusValueEl, `${radius.toFixed(1)} m`);
+  setSliderValueLabel(npcSocialSeparationValueEl, `${Math.round(spread)}%`);
+}
+
+function resolvedAiBehaviorSettings(input) {
+  const src = input && typeof input === "object" ? input : {};
+  const moveScaleLegacy = Number(src.npcMoveDecisionFrequencyPercent);
+  const stopScaleLegacy = Number(src.npcStopDurationPercent);
+  const useMoveLegacy = Number.isFinite(moveScaleLegacy);
+  const useStopLegacy = Number.isFinite(stopScaleLegacy);
+  const moveScale = useMoveLegacy ? Math.max(0.4, moveScaleLegacy / 100) : 1;
+  const stopScale = useStopLegacy ? Math.max(0.4, stopScaleLegacy / 100) : 1;
+
+  const moveMinLegacy = Math.round(DEFAULT_AI_BEHAVIOR_SETTINGS.npcMoveDecisionIntervalMinMs / moveScale);
+  const moveMaxLegacy = Math.round(DEFAULT_AI_BEHAVIOR_SETTINGS.npcMoveDecisionIntervalMaxMs / moveScale);
+  const stopMinLegacy = Math.round(DEFAULT_AI_BEHAVIOR_SETTINGS.npcStopDurationMinMs * stopScale);
+  const stopMaxLegacy = Math.round(DEFAULT_AI_BEHAVIOR_SETTINGS.npcStopDurationMaxMs * stopScale);
+
+  const out = {
+    ...DEFAULT_AI_BEHAVIOR_SETTINGS
+  };
+  const setIfFinite = (key, value) => {
+    const n = Number(value);
+    if (Number.isFinite(n)) out[key] = n;
+  };
+  setIfFinite("npcInspectDownedChancePercent", src.npcInspectDownedChancePercent);
+  setIfFinite("npcInspectDownedNearbyRadiusMeters", src.npcInspectDownedNearbyRadiusMeters);
+  setIfFinite("npcSocialSeparationPercent", src.npcSocialSeparationPercent);
+  setIfFinite("npcStopChancePercent", src.npcStopChancePercent);
+  setIfFinite("npcMoveDecisionIntervalMinMs", src.npcMoveDecisionIntervalMinMs);
+  setIfFinite("npcMoveDecisionIntervalMaxMs", src.npcMoveDecisionIntervalMaxMs);
+  setIfFinite("npcStopDurationMinMs", src.npcStopDurationMinMs);
+  setIfFinite("npcStopDurationMaxMs", src.npcStopDurationMaxMs);
+
+  if (!Number.isFinite(Number(src.npcMoveDecisionIntervalMinMs)) && useMoveLegacy) {
+    out.npcMoveDecisionIntervalMinMs = moveMinLegacy;
+  }
+  if (!Number.isFinite(Number(src.npcMoveDecisionIntervalMaxMs)) && useMoveLegacy) {
+    out.npcMoveDecisionIntervalMaxMs = moveMaxLegacy;
+  }
+  if (!Number.isFinite(Number(src.npcStopDurationMinMs)) && useStopLegacy) {
+    out.npcStopDurationMinMs = stopMinLegacy;
+  }
+  if (!Number.isFinite(Number(src.npcStopDurationMaxMs)) && useStopLegacy) {
+    out.npcStopDurationMaxMs = stopMaxLegacy;
+  }
+  if (out.npcMoveDecisionIntervalMinMs > out.npcMoveDecisionIntervalMaxMs) {
+    out.npcMoveDecisionIntervalMaxMs = out.npcMoveDecisionIntervalMinMs;
+  }
+  if (out.npcStopDurationMinMs > out.npcStopDurationMaxMs) {
+    out.npcStopDurationMaxMs = out.npcStopDurationMinMs;
+  }
+  return out;
 }
 
 function fmtN(value) {
@@ -342,6 +455,7 @@ function renderSettings(settings) {
   if (activeLayoutId) layoutSelectEl.value = activeLayoutId;
 
   const gameplay = settings?.gameplaySettings || {};
+  const aiBehavior = resolvedAiBehaviorSettings(settings?.aiBehaviorSettings);
   if (totalCharactersInputEl && Number.isFinite(Number(gameplay.totalCharacters))) {
     totalCharactersInputEl.value = String(gameplay.totalCharacters);
   }
@@ -357,6 +471,15 @@ function renderSettings(settings) {
   if (playerAttackCooldownSecondsInputEl && Number.isFinite(Number(gameplay.playerAttackCooldownSeconds))) {
     playerAttackCooldownSecondsInputEl.value = String(gameplay.playerAttackCooldownSeconds);
   }
+  if (npcInspectDownedChanceInputEl) npcInspectDownedChanceInputEl.value = String(aiBehavior.npcInspectDownedChancePercent);
+  if (npcInspectDownedRadiusInputEl) npcInspectDownedRadiusInputEl.value = String(aiBehavior.npcInspectDownedNearbyRadiusMeters);
+  if (npcSocialSeparationInputEl) npcSocialSeparationInputEl.value = String(aiBehavior.npcSocialSeparationPercent);
+  if (npcStopChanceInputEl) npcStopChanceInputEl.value = String(aiBehavior.npcStopChancePercent);
+  if (npcMoveDecisionIntervalMinMsInputEl) npcMoveDecisionIntervalMinMsInputEl.value = String(aiBehavior.npcMoveDecisionIntervalMinMs);
+  if (npcMoveDecisionIntervalMaxMsInputEl) npcMoveDecisionIntervalMaxMsInputEl.value = String(aiBehavior.npcMoveDecisionIntervalMaxMs);
+  if (npcStopDurationMinMsInputEl) npcStopDurationMinMsInputEl.value = String(aiBehavior.npcStopDurationMinMs);
+  if (npcStopDurationMaxMsInputEl) npcStopDurationMaxMsInputEl.value = String(aiBehavior.npcStopDurationMaxMs);
+  renderAiSliderLabels();
 
   if (settingsInfoEl) {
     const activeLabel = settings?.layout?.fileName || settings?.layout?.label || activeLayoutId || "-";
@@ -373,17 +496,42 @@ function renderSettings(settings) {
     const infoAttackCooldown = Number.isFinite(Number(gameplay.playerAttackCooldownSeconds))
       ? gameplay.playerAttackCooldownSeconds
       : "-";
+    const infoInspectChance = Number.isFinite(Number(aiBehavior.npcInspectDownedChancePercent))
+      ? aiBehavior.npcInspectDownedChancePercent
+      : "-";
+    const infoInspectRadius = Number.isFinite(Number(aiBehavior.npcInspectDownedNearbyRadiusMeters))
+      ? aiBehavior.npcInspectDownedNearbyRadiusMeters
+      : "-";
+    const infoSpread = Number.isFinite(Number(aiBehavior.npcSocialSeparationPercent))
+      ? aiBehavior.npcSocialSeparationPercent
+      : "-";
+    const infoStopChance = Number.isFinite(Number(aiBehavior.npcStopChancePercent))
+      ? aiBehavior.npcStopChancePercent
+      : "-";
+    const infoMoveDecisionMin = Number.isFinite(Number(aiBehavior.npcMoveDecisionIntervalMinMs))
+      ? aiBehavior.npcMoveDecisionIntervalMinMs
+      : "-";
+    const infoMoveDecisionMax = Number.isFinite(Number(aiBehavior.npcMoveDecisionIntervalMaxMs))
+      ? aiBehavior.npcMoveDecisionIntervalMaxMs
+      : "-";
+    const infoStopDurationMin = Number.isFinite(Number(aiBehavior.npcStopDurationMinMs))
+      ? aiBehavior.npcStopDurationMinMs
+      : "-";
+    const infoStopDurationMax = Number.isFinite(Number(aiBehavior.npcStopDurationMaxMs))
+      ? aiBehavior.npcStopDurationMaxMs
+      : "-";
     const warningText =
       activeWarnings.length > 0
         ? ` VARNING: ${activeWarnings.map((warning) => warning?.message || "Okänd varning").join(" | ")}`
         : "";
-    settingsInfoEl.textContent = `Aktiv karta: ${activeLabel}${activeSize ? ` (${activeSize})` : ""}. Karaktärer: ${infoChars}, max spelare: ${infoMax}, min start: ${infoMinStart}, NPC återresning: ${infoNpcRespawn}s, slag-cooldown: ${infoAttackCooldown}s.${warningText} Ändringar startar om aktiva rum.`;
+    settingsInfoEl.textContent = `Aktiv karta: ${activeLabel}${activeSize ? ` (${activeSize})` : ""}. Karaktärer: ${infoChars}, max spelare: ${infoMax}, min start: ${infoMinStart}, NPC återresning: ${infoNpcRespawn}s, slag-cooldown: ${infoAttackCooldown}s, AI tid mellan beslut: ${infoMoveDecisionMin}-${infoMoveDecisionMax} ms, AI stoppchans vid beslut: ${infoStopChance}%, AI stopptid: ${infoStopDurationMin}-${infoStopDurationMax} ms, AI kolla-chans: ${infoInspectChance}%, AI sök-radie: ${infoInspectRadius}m, AI spridning: ${infoSpread}%.${warningText} Ändringar startar om aktiva rum.`;
   }
 }
 
 function hasUnsavedSettingsFormChanges(referenceSettings) {
   const settings = referenceSettings || cachedSettings || {};
   const gameplay = settings?.gameplaySettings || {};
+  const aiBehavior = resolvedAiBehaviorSettings(settings?.aiBehaviorSettings);
   const referenceLayoutId = String(settings?.layout?.id || "");
   const selectedLayoutId = String(layoutSelectEl?.value || "");
   if (referenceLayoutId && selectedLayoutId && referenceLayoutId !== selectedLayoutId) return true;
@@ -400,6 +548,22 @@ function hasUnsavedSettingsFormChanges(referenceSettings) {
     const expectedRaw = Number.isFinite(Number(expectedValue)) ? String(Number(expectedValue)) : "";
     if (currentRaw && expectedRaw && currentRaw !== expectedRaw) return true;
   }
+
+  const aiPairs = [
+    [npcInspectDownedChanceInputEl, aiBehavior.npcInspectDownedChancePercent],
+    [npcInspectDownedRadiusInputEl, aiBehavior.npcInspectDownedNearbyRadiusMeters],
+    [npcSocialSeparationInputEl, aiBehavior.npcSocialSeparationPercent],
+    [npcStopChanceInputEl, aiBehavior.npcStopChancePercent],
+    [npcMoveDecisionIntervalMinMsInputEl, aiBehavior.npcMoveDecisionIntervalMinMs],
+    [npcMoveDecisionIntervalMaxMsInputEl, aiBehavior.npcMoveDecisionIntervalMaxMs],
+    [npcStopDurationMinMsInputEl, aiBehavior.npcStopDurationMinMs],
+    [npcStopDurationMaxMsInputEl, aiBehavior.npcStopDurationMaxMs]
+  ];
+  for (const [inputEl, expectedValue] of aiPairs) {
+    const currentRaw = inputEl?.value?.trim() || "";
+    const expectedRaw = Number.isFinite(Number(expectedValue)) ? String(Number(expectedValue)) : "";
+    if (currentRaw && expectedRaw && currentRaw !== expectedRaw) return true;
+  }
   return false;
 }
 
@@ -407,15 +571,18 @@ function mergeSettingsFromStats(data) {
   if (!data || typeof data !== "object") return;
   const layout = data.layout;
   const gameplaySettings = data.gameplaySettings;
+  const aiBehaviorSettings = data.aiBehaviorSettings;
   const hasLayout = layout && typeof layout === "object";
   const hasGameplay = gameplaySettings && typeof gameplaySettings === "object";
-  if (!hasLayout && !hasGameplay) return;
+  const hasAiBehavior = aiBehaviorSettings && typeof aiBehaviorSettings === "object";
+  if (!hasLayout && !hasGameplay && !hasAiBehavior) return;
   const source = cachedSettings || {};
   const hadUnsavedChanges = activeTab === "settings" && hasUnsavedSettingsFormChanges(source);
   const availableLayouts = Array.isArray(source.availableLayouts) ? source.availableLayouts : [];
   const nextSettings = {
     layout: hasLayout ? layout : source.layout,
     gameplaySettings: hasGameplay ? gameplaySettings : source.gameplaySettings,
+    aiBehaviorSettings: hasAiBehavior ? aiBehaviorSettings : source.aiBehaviorSettings,
     availableLayouts
   };
   cachedSettings = nextSettings;
@@ -518,6 +685,7 @@ async function saveSettings() {
       return;
     }
     const currentGameplay = cachedSettings?.gameplaySettings || {};
+    const currentAiBehavior = resolvedAiBehaviorSettings(cachedSettings?.aiBehaviorSettings);
     const totalCharactersPatch = readOptionalPatchedIntField(
       totalCharactersInputEl,
       "Antal karaktärer",
@@ -543,12 +711,64 @@ async function saveSettings() {
       "Spelarslag cooldown (sek)",
       currentGameplay.playerAttackCooldownSeconds
     );
+    const npcInspectDownedChancePatch = readOptionalPatchedNumberField(
+      npcInspectDownedChanceInputEl,
+      "Kolla nedslagen NPC (chans)",
+      currentAiBehavior.npcInspectDownedChancePercent,
+      { min: 0, max: 100, step: 1 }
+    );
+    const npcInspectDownedRadiusPatch = readOptionalPatchedNumberField(
+      npcInspectDownedRadiusInputEl,
+      "Sök-radie till nedslagen NPC",
+      currentAiBehavior.npcInspectDownedNearbyRadiusMeters,
+      { min: 2, max: 20, step: 0.5 }
+    );
+    const npcSocialSeparationPatch = readOptionalPatchedNumberField(
+      npcSocialSeparationInputEl,
+      "Spridningstendens",
+      currentAiBehavior.npcSocialSeparationPercent,
+      { min: 0, max: 100, step: 1 }
+    );
+    const npcStopChancePatch = readOptionalPatchedNumberField(
+      npcStopChanceInputEl,
+      "Stopfrekvens",
+      currentAiBehavior.npcStopChancePercent,
+      { min: 0, max: 100, step: 1 }
+    );
+    const npcMoveDecisionIntervalMinMsPatch = readOptionalPatchedIntField(
+      npcMoveDecisionIntervalMinMsInputEl,
+      "Rörelsefrekvens min (ms)",
+      currentAiBehavior.npcMoveDecisionIntervalMinMs
+    );
+    const npcMoveDecisionIntervalMaxMsPatch = readOptionalPatchedIntField(
+      npcMoveDecisionIntervalMaxMsInputEl,
+      "Rörelsefrekvens max (ms)",
+      currentAiBehavior.npcMoveDecisionIntervalMaxMs
+    );
+    const npcStopDurationMinMsPatch = readOptionalPatchedIntField(
+      npcStopDurationMinMsInputEl,
+      "Stopplängd min (ms)",
+      currentAiBehavior.npcStopDurationMinMs
+    );
+    const npcStopDurationMaxMsPatch = readOptionalPatchedIntField(
+      npcStopDurationMaxMsInputEl,
+      "Stopplängd max (ms)",
+      currentAiBehavior.npcStopDurationMaxMs
+    );
 
     const totalCharacters = totalCharactersPatch.value;
     const maxPlayers = maxPlayersPatch.value;
     const minPlayersToStart = minPlayersToStartPatch.value;
     const npcDownedRespawnSeconds = npcDownedRespawnSecondsPatch.value;
     const playerAttackCooldownSeconds = playerAttackCooldownSecondsPatch.value;
+    const npcInspectDownedChancePercent = npcInspectDownedChancePatch.value;
+    const npcInspectDownedNearbyRadiusMeters = npcInspectDownedRadiusPatch.value;
+    const npcSocialSeparationPercent = npcSocialSeparationPatch.value;
+    const npcStopChancePercent = npcStopChancePatch.value;
+    const npcMoveDecisionIntervalMinMs = npcMoveDecisionIntervalMinMsPatch.value;
+    const npcMoveDecisionIntervalMaxMs = npcMoveDecisionIntervalMaxMsPatch.value;
+    const npcStopDurationMinMs = npcStopDurationMinMsPatch.value;
+    const npcStopDurationMaxMs = npcStopDurationMaxMsPatch.value;
 
     const gameplayChanged =
       totalCharactersPatch.changed ||
@@ -556,6 +776,15 @@ async function saveSettings() {
       minPlayersToStartPatch.changed ||
       npcDownedRespawnSecondsPatch.changed ||
       playerAttackCooldownSecondsPatch.changed;
+    const aiBehaviorChanged =
+      npcInspectDownedChancePatch.changed ||
+      npcInspectDownedRadiusPatch.changed ||
+      npcSocialSeparationPatch.changed ||
+      npcStopChancePatch.changed ||
+      npcMoveDecisionIntervalMinMsPatch.changed ||
+      npcMoveDecisionIntervalMaxMsPatch.changed ||
+      npcStopDurationMinMsPatch.changed ||
+      npcStopDurationMaxMsPatch.changed;
 
     if (maxPlayers >= totalCharacters) {
       setSettingsStatus("Max antal spelare måste vara mindre än antal karaktärer.", true);
@@ -569,6 +798,14 @@ async function saveSettings() {
       setSettingsStatus("Min spelare för spelstart kan inte vara större än max antal spelare.", true);
       return;
     }
+    if (npcMoveDecisionIntervalMinMs > npcMoveDecisionIntervalMaxMs) {
+      setSettingsStatus("Rörelsefrekvens min (ms) kan inte vara större än max.", true);
+      return;
+    }
+    if (npcStopDurationMinMs > npcStopDurationMaxMs) {
+      setSettingsStatus("Stopplängd min (ms) kan inte vara större än max.", true);
+      return;
+    }
 
     const payload = {};
     payload.layoutId = layoutId;
@@ -578,6 +815,16 @@ async function saveSettings() {
       payload.minPlayersToStart = minPlayersToStart;
       payload.npcDownedRespawnSeconds = npcDownedRespawnSeconds;
       payload.playerAttackCooldownSeconds = playerAttackCooldownSeconds;
+    }
+    if (aiBehaviorChanged) {
+      payload.npcInspectDownedChancePercent = npcInspectDownedChancePercent;
+      payload.npcInspectDownedNearbyRadiusMeters = npcInspectDownedNearbyRadiusMeters;
+      payload.npcSocialSeparationPercent = npcSocialSeparationPercent;
+      payload.npcStopChancePercent = npcStopChancePercent;
+      payload.npcMoveDecisionIntervalMinMs = npcMoveDecisionIntervalMinMs;
+      payload.npcMoveDecisionIntervalMaxMs = npcMoveDecisionIntervalMaxMs;
+      payload.npcStopDurationMinMs = npcStopDurationMinMs;
+      payload.npcStopDurationMaxMs = npcStopDurationMaxMs;
     }
 
     const url = buildDebugUrl("/api/debug/settings", token);
@@ -643,6 +890,10 @@ tokenEl?.addEventListener("keydown", (event) => {
 tabStatsBtnEl?.addEventListener("click", () => setActiveTab("stats"));
 tabSettingsBtnEl?.addEventListener("click", () => setActiveTab("settings"));
 saveSettingsBtnEl?.addEventListener("click", saveSettings);
+npcInspectDownedChanceInputEl?.addEventListener("input", renderAiSliderLabels);
+npcInspectDownedRadiusInputEl?.addEventListener("input", renderAiSliderLabels);
+npcSocialSeparationInputEl?.addEventListener("input", renderAiSliderLabels);
+npcStopChanceInputEl?.addEventListener("input", renderAiSliderLabels);
 window.addEventListener("resize", () => {
   refresh();
 });
