@@ -304,7 +304,7 @@ export function bindAppEventHandlers({
     const target = event.target;
     if (!(target instanceof Element)) return;
     const button = target.closest("button");
-    if (!button || button.disabled) return;
+    if (!button) return;
     playUiBlipSfx?.();
   });
 

@@ -710,38 +710,33 @@ function updateLobbyMatchStatus() {
 
 function updateReadyButton() {
   if (!playBtnEl) return;
+  let buttonReadyState = "inactive";
   if (!authenticated) {
     playBtnEl.disabled = true;
     playBtnEl.textContent = "Redo";
-    return;
-  }
-  if (sessionState === "alive") {
+  } else if (sessionState === "alive") {
     playBtnEl.disabled = true;
     playBtnEl.textContent = "Du spelar";
-    return;
-  }
-  if (sessionState === "spectating") {
+  } else if (sessionState === "spectating") {
     playBtnEl.disabled = true;
     playBtnEl.textContent = "Åskådar";
-    return;
-  }
-  if (currentMatch.inProgress) {
+  } else if (currentMatch.inProgress) {
     playBtnEl.disabled = false;
     playBtnEl.textContent = "Åskåda";
-    return;
-  }
-  if (sessionState === "countdown" && sessionReady) {
+  } else if (sessionState === "countdown" && sessionReady) {
     playBtnEl.disabled = true;
     playBtnEl.textContent = "Match startar...";
-    return;
-  }
-  if (sessionReady) {
+  } else if (sessionReady) {
     playBtnEl.disabled = false;
     playBtnEl.textContent = "Inte redo";
-    return;
+    buttonReadyState = "ready";
+  } else {
+    playBtnEl.disabled = false;
+    playBtnEl.textContent = "Redo";
+    buttonReadyState = "not-ready";
   }
-  playBtnEl.disabled = false;
-  playBtnEl.textContent = "Redo";
+  playBtnEl.dataset.readyState = buttonReadyState;
+  playBtnEl.setAttribute("aria-pressed", buttonReadyState === "ready" ? "true" : "false");
 }
 
 function resetDownedState() {

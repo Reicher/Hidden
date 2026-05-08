@@ -59,7 +59,9 @@ export function createStaticHttpServer({ host, port, rootDir, onBeforeStaticRequ
         const ext = path.extname(absolutePath).toLowerCase();
         const contentType = CONTENT_TYPES.get(ext);
         if (contentType) res.setHeader("Content-Type", contentType);
-        if (ext === ".html") {
+        const normalizedRequestPath = (primaryPath || "").replace(/\\/g, "/");
+        const isSoundAsset = normalizedRequestPath.startsWith("/assets/sounds/");
+        if (ext === ".html" || isSoundAsset) {
           res.setHeader("Cache-Control", "no-cache");
         } else {
           res.setHeader("Cache-Control", "public, max-age=86400");

@@ -27,6 +27,7 @@ const FLOOR_TILE_METERS = 1;
 const CEILING_TILE_METERS = 3;
 const PRODUCT_SPAWN_CHANCE = 0.8;
 const PRODUCT_WIDTH_METERS = 0.8;
+const PRODUCT_TILE_WIDTH = 32;
 const PRODUCT_ATLAS_URLS = ["/assets/products.png"];
 const PRODUCT_YAW_JITTER_RAD = Math.PI / 9; // +/- 20 deg
 const PRODUCT_SIDE_JITTER_METERS = 0.2; // +/- 20 cm along shelf length
@@ -70,6 +71,15 @@ const TEXTURE_SPECS = Object.freeze({
     fallbackColor: 0xf7f9fc,
   }),
 });
+
+function randomSeed32() {
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = new Uint32Array(1);
+    crypto.getRandomValues(bytes);
+    return bytes[0] >>> 0;
+  }
+  return Math.floor(Math.random() * 0x100000000) >>> 0;
+}
 
 export function createRoomSystem({ scene, renderer }) {
   const textureLoader = new THREE.TextureLoader();
@@ -127,7 +137,9 @@ export function createRoomSystem({ scene, renderer }) {
   let currentPlaneHeightMeters = 30;
   let productAtlasTexture = null;
   let productAtlasAvailable = false;
-  let productVariantCount = 2;
+  let productVariantCount = 1;
+  const productRng = seededRandom(randomSeed32());
+  let productVariantBag = [];
 
   function hasImageData(texture) {
     const image = texture?.image;
@@ -147,7 +159,7 @@ export function createRoomSystem({ scene, renderer }) {
     texture.anisotropy = 1;
   }
 
-  const wallRng = seededRandom(20260429);
+  const wallRng = seededRandom(randomSeed32());
   const floorRng = seededRandom(20260431);
   const ceilingRng = seededRandom(20260502);
   const coolerRng = seededRandom(20260503);
@@ -286,6 +298,42 @@ export function createRoomSystem({ scene, renderer }) {
     map.offset.set(col / variants, 0);
     if (hasImageData(map)) map.needsUpdate = true;
     return map;
+  }
+
+  function updateProductVariantCount(texture) {
+    const image = texture?.image;
+    const imageWidth = Number(image?.videoWidth ?? image?.width ?? 0);
+    const imageHeight = Number(image?.videoHeight ?? image?.height ?? 0);
+    if (
+      !Number.isFinite(imageWidth) ||
+      imageWidth < 1 ||
+      !Number.isFinite(imageHeight) ||
+      imageHeight < 1
+    ) {
+      productVariantCount = 1;
+      return;
+    }
+    const cellWidth = imageWidth < PRODUCT_TILE_WIDTH ? imageWidth : PRODUCT_TILE_WIDTH;
+    productVariantCount = Math.max(1, Math.floor(imageWidth / cellWidth));
+  }
+
+  function refillProductVariantBag() {
+    const variants = Math.max(1, productVariantCount);
+    const nextBag = [];
+    for (let i = 0; i < variants; i += 1) nextBag.push(i);
+    for (let i = nextBag.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(productRng() * (i + 1));
+      const temp = nextBag[i];
+      nextBag[i] = nextBag[j];
+      nextBag[j] = temp;
+    }
+    productVariantBag = nextBag;
+  }
+
+  function chooseProductVariantIndex() {
+    if (productVariantBag.length <= 0) refillProductVariantBag();
+    const next = productVariantBag.pop();
+    return Number.isFinite(next) ? next : 0;
   }
 
   function createProductMaterial(productIndex) {
@@ -576,18 +624,8 @@ export function createRoomSystem({ scene, renderer }) {
       productAtlasTexture = texture;
       productAtlasAvailable = true;
 
-      const image = texture?.image;
-      const imageWidth = Number(image?.videoWidth ?? image?.width ?? 0);
-      const imageHeight = Number(image?.videoHeight ?? image?.height ?? 0);
-      if (
-        Number.isFinite(imageWidth) &&
-        imageWidth > 0 &&
-        Number.isFinite(imageHeight) &&
-        imageHeight > 0
-      ) {
-        const inferredVariants = Math.max(1, Math.floor(imageWidth / imageHeight));
-        productVariantCount = inferredVariants;
-      }
+      updateProductVariantCount(texture);
+      productVariantBag = [];
 
       builtWorldWidthMeters = null;
       builtWorldHeightMeters = null;
@@ -844,7 +882,7 @@ export function createRoomSystem({ scene, renderer }) {
         const productHeight = Math.min(naturalProductHeight, availableHeight);
         if (!Number.isFinite(productHeight) || productHeight < 0.06) continue;
 
-        const productIndex = Math.floor(Math.random() * productVariantCount);
+        const productIndex = chooseProductVariantIndex();
         const sideJitter = (Math.random() * 2 - 1) * PRODUCT_SIDE_JITTER_METERS;
         const depthJitter =
           (Math.random() * 2 - 1) * PRODUCT_DEPTH_JITTER_METERS;
