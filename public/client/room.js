@@ -32,6 +32,13 @@ const PRODUCT_ATLAS_URLS = ["/assets/products.png"];
 const PRODUCT_YAW_JITTER_RAD = Math.PI / 9; // +/- 20 deg
 const PRODUCT_SIDE_JITTER_METERS = 0.2; // +/- 20 cm along shelf length
 const PRODUCT_DEPTH_JITTER_METERS = 0.1; // +/- 10 cm toward/away from shelf front
+const POSTER_SIZE_METERS = 2.0;
+const POSTER_BOTTOM_Y_METERS = 1.2;
+const POSTER_CENTER_Y_METERS = POSTER_BOTTOM_Y_METERS + POSTER_SIZE_METERS * 0.5;
+const POSTER_CORNER_MARGIN_METERS = 0.5;
+const POSTER_MIN_SPACING_METERS = 1.5;
+const POSTER_WALL_OFFSET_METERS = 0.012;
+const WALL_RENDER_OUTSET_METERS = 0.04;
 
 const TEXTURE_SPECS = Object.freeze({
   floor: Object.freeze({
@@ -69,6 +76,12 @@ const TEXTURE_SPECS = Object.freeze({
     baseWidth: 32,
     baseHeight: 32,
     fallbackColor: 0xf7f9fc,
+  }),
+  poster: Object.freeze({
+    urls: ["/assets/posters.png"],
+    baseWidth: 64,
+    baseHeight: 64,
+    fallbackColor: 0xc8b06f,
   }),
 });
 
@@ -122,11 +135,13 @@ export function createRoomSystem({ scene, renderer }) {
   const wallMaterials = [];
   const coolerFrontMaterials = [];
   const freezerLidMaterials = [];
+  const posterMaterials = [];
   const fluorescentUnits = [];
   let fluorescentAccumSec = 0;
   const shelfBackInstances = [];
   const shelfBoardInstances = [];
   const productInstancesByVariant = new Map();
+  const posterInstancesByVariant = new Map();
   const staticInstancedResources = [];
   const tempPos = new THREE.Vector3();
   const tempScale = new THREE.Vector3();
@@ -209,6 +224,16 @@ export function createRoomSystem({ scene, renderer }) {
       ? Math.abs(Math.trunc(seed))
       : 0;
     return normalizedSeed % variantCount;
+  }
+
+  function hashString32(text) {
+    let hash = 2166136261;
+    const value = String(text ?? "");
+    for (let i = 0; i < value.length; i += 1) {
+      hash ^= value.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
   }
 
   function updateTextureVariantInfo(state) {
@@ -567,6 +592,11 @@ export function createRoomSystem({ scene, renderer }) {
       "freezer",
       TEXTURE_SPECS.freezer.fallbackColor,
     );
+    applyVariantMaterials(
+      posterMaterials,
+      "poster",
+      TEXTURE_SPECS.poster.fallbackColor,
+    );
   }
 
   function onTextureLoaded(key, texture) {
@@ -581,6 +611,18 @@ export function createRoomSystem({ scene, renderer }) {
     state.available = true;
     updateTextureVariantInfo(state);
     refreshAllTextureApplications();
+    if (key === "poster") {
+      builtWorldWidthMeters = null;
+      builtWorldHeightMeters = null;
+      builtFixturesSignature = "";
+      syncFromWorld({
+        worldWidthMeters: lastSyncedWorldWidthMeters,
+        worldHeightMeters: lastSyncedWorldHeightMeters,
+        shelves: lastSyncedShelves,
+        coolers: lastSyncedCoolers,
+        freezers: lastSyncedFreezers,
+      });
+    }
   }
 
   function onTextureFailed(key) {
@@ -687,6 +729,23 @@ export function createRoomSystem({ scene, renderer }) {
     return material;
   }
 
+  function createPosterMaterial(variantSeed) {
+    const material = new THREE.MeshBasicMaterial({
+      color: TEXTURE_SPECS.poster.fallbackColor,
+      transparent: true,
+      alphaTest: 0.35,
+      side: THREE.FrontSide,
+    });
+    material.userData.variantSeed = variantSeed;
+    posterMaterials.push(material);
+    applyVariantMaterials(
+      [material],
+      "poster",
+      TEXTURE_SPECS.poster.fallbackColor,
+    );
+    return material;
+  }
+
   function disposeMaterial(material) {
     if (!material) return;
     if (material.map) {
@@ -717,9 +776,11 @@ export function createRoomSystem({ scene, renderer }) {
     wallMaterials.length = 0;
     coolerFrontMaterials.length = 0;
     freezerLidMaterials.length = 0;
+    posterMaterials.length = 0;
     shelfBackInstances.length = 0;
     shelfBoardInstances.length = 0;
     productInstancesByVariant.clear();
+    posterInstancesByVariant.clear();
     staticInstancedResources.length = 0;
   }
 
@@ -744,6 +805,24 @@ export function createRoomSystem({ scene, renderer }) {
     bucket.push({ x, y, z, sx, sy, yaw });
     if (!productInstancesByVariant.has(normalized)) {
       productInstancesByVariant.set(normalized, bucket);
+    }
+  }
+
+  function pushPosterInstance(variantIndex, x, y, z, yaw) {
+    const state = textureStates.get("poster");
+    const variantCount = Math.max(1, Number(state?.variantCount ?? 1));
+    const normalized = ((Math.trunc(variantIndex) % variantCount) + variantCount) % variantCount;
+    const bucket = posterInstancesByVariant.get(normalized) || [];
+    bucket.push({
+      x,
+      y,
+      z,
+      sx: POSTER_SIZE_METERS,
+      sy: POSTER_SIZE_METERS,
+      yaw
+    });
+    if (!posterInstancesByVariant.has(normalized)) {
+      posterInstancesByVariant.set(normalized, bucket);
     }
   }
 
@@ -806,17 +885,30 @@ export function createRoomSystem({ scene, renderer }) {
     }
   }
 
-  function createWall(x, z, sx, sz) {
-    const wallSpanMeters = Math.max(sx, sz);
+  function buildPosterInstancedMeshes() {
+    for (const [variantIndex, bucket] of posterInstancesByVariant.entries()) {
+      if (!bucket || bucket.length <= 0) continue;
+      const material = createPosterMaterial(variantIndex);
+      const geometry = new THREE.PlaneGeometry(1, 1);
+      buildInstancedMesh({
+        geometry,
+        material,
+        instances: bucket
+      });
+    }
+  }
+
+  function createWall(x, z, width, yaw) {
     const material = createWallMaterial(
       chooseVariantSeed(wallRng),
-      wallSpanMeters,
+      width,
     );
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(sx, WALL_HEIGHT, sz),
+      new THREE.PlaneGeometry(width, WALL_HEIGHT),
       material,
     );
     mesh.position.set(x, WALL_HEIGHT * 0.5, z);
+    mesh.rotation.y = yaw;
     roomRoot.add(mesh);
   }
 
@@ -1016,6 +1108,176 @@ export function createRoomSystem({ scene, renderer }) {
     roomRoot.add(group);
   }
 
+  function fixtureAabb(fixture, fallbackWidth, fallbackDepth) {
+    const width = typeof fixture?.width === "number" ? fixture.width : fallbackWidth;
+    const depth = typeof fixture?.depth === "number" ? fixture.depth : fallbackDepth;
+    const yaw = typeof fixture?.yaw === "number" ? fixture.yaw : 0;
+    const cos = Math.abs(Math.cos(yaw));
+    const sin = Math.abs(Math.sin(yaw));
+    const halfX = (width * cos + depth * sin) * 0.5;
+    const halfZ = (width * sin + depth * cos) * 0.5;
+    const x = Number(fixture?.x ?? 0);
+    const z = Number(fixture?.z ?? 0);
+    return {
+      minX: x - halfX,
+      maxX: x + halfX,
+      minZ: z - halfZ,
+      maxZ: z + halfZ
+    };
+  }
+
+  function subtractBlockedRange(ranges, blockMin, blockMax) {
+    const nextRanges = [];
+    for (const range of ranges) {
+      if (blockMax <= range.min || blockMin >= range.max) {
+        nextRanges.push(range);
+        continue;
+      }
+      if (blockMin > range.min) {
+        nextRanges.push({ min: range.min, max: Math.min(blockMin, range.max) });
+      }
+      if (blockMax < range.max) {
+        nextRanges.push({ min: Math.max(blockMax, range.min), max: range.max });
+      }
+    }
+    return nextRanges.filter((range) => range.max - range.min >= 0.01);
+  }
+
+  function shuffleInPlace(items, rng) {
+    for (let i = items.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rng() * (i + 1));
+      const temp = items[i];
+      items[i] = items[j];
+      items[j] = temp;
+    }
+  }
+
+  function placeWallPosters({
+    worldWidthMeters,
+    worldHeightMeters,
+    shelves,
+    coolers,
+    fixturesSignature
+  }) {
+    const halfWorldWidth = worldWidthMeters * 0.5;
+    const halfWorldHeight = worldHeightMeters * 0.5;
+    const centerInset = POSTER_CORNER_MARGIN_METERS + POSTER_SIZE_METERS * 0.5;
+    const horizontalMin = -halfWorldWidth + centerInset;
+    const horizontalMax = halfWorldWidth - centerInset;
+    const verticalMin = -halfWorldHeight + centerInset;
+    const verticalMax = halfWorldHeight - centerInset;
+    const sides = [
+      {
+        key: "negZ",
+        axis: "x",
+        fixed: -halfWorldHeight + POSTER_WALL_OFFSET_METERS,
+        min: horizontalMin,
+        max: horizontalMax,
+        yaw: 0
+      },
+      {
+        key: "posZ",
+        axis: "x",
+        fixed: halfWorldHeight - POSTER_WALL_OFFSET_METERS,
+        min: horizontalMin,
+        max: horizontalMax,
+        yaw: Math.PI
+      },
+      {
+        key: "negX",
+        axis: "z",
+        fixed: -halfWorldWidth + POSTER_WALL_OFFSET_METERS,
+        min: verticalMin,
+        max: verticalMax,
+        yaw: Math.PI / 2
+      },
+      {
+        key: "posX",
+        axis: "z",
+        fixed: halfWorldWidth - POSTER_WALL_OFFSET_METERS,
+        min: verticalMin,
+        max: verticalMax,
+        yaw: -Math.PI / 2
+      }
+    ].map((side) => ({
+      ...side,
+      ranges: side.max > side.min ? [{ min: side.min, max: side.max }] : []
+    }));
+    const sideByKey = new Map(sides.map((side) => [side.key, side]));
+    const wallSnapTolerance = 0.65;
+    const posterHalf = POSTER_SIZE_METERS * 0.5;
+
+    function blockFixture(fixture, fallbackWidth, fallbackDepth) {
+      const box = fixtureAabb(fixture, fallbackWidth, fallbackDepth);
+      const blockers = [];
+      if (box.minZ <= -halfWorldHeight + wallSnapTolerance) {
+        blockers.push({ key: "negZ", min: box.minX, max: box.maxX });
+      }
+      if (box.maxZ >= halfWorldHeight - wallSnapTolerance) {
+        blockers.push({ key: "posZ", min: box.minX, max: box.maxX });
+      }
+      if (box.minX <= -halfWorldWidth + wallSnapTolerance) {
+        blockers.push({ key: "negX", min: box.minZ, max: box.maxZ });
+      }
+      if (box.maxX >= halfWorldWidth - wallSnapTolerance) {
+        blockers.push({ key: "posX", min: box.minZ, max: box.maxZ });
+      }
+      for (const blocker of blockers) {
+        const side = sideByKey.get(blocker.key);
+        if (!side) continue;
+        side.ranges = subtractBlockedRange(
+          side.ranges,
+          blocker.min - posterHalf,
+          blocker.max + posterHalf
+        );
+      }
+    }
+
+    for (const shelf of shelves) blockFixture(shelf, SHELF_WIDTH, SHELF_DEPTH);
+    for (const cooler of coolers) blockFixture(cooler, COOLER_WIDTH, COOLER_DEPTH);
+
+    const rng = seededRandom(hashString32([
+      worldWidthMeters,
+      worldHeightMeters,
+      fixturesSignature,
+      "posters"
+    ].join("|")));
+    const candidates = [];
+    for (const side of sides) {
+      for (const range of side.ranges) {
+        const length = range.max - range.min;
+        if (length < POSTER_SIZE_METERS) continue;
+        let cursor = range.min + rng() * Math.min(2.5, length);
+        while (cursor <= range.max) {
+          if (rng() < 0.65) {
+            const coord = Math.min(range.max, Math.max(range.min, cursor));
+            candidates.push({ side, coord });
+          }
+          cursor += 3.5 + rng() * 5.0;
+        }
+      }
+    }
+    shuffleInPlace(candidates, rng);
+
+    const placed = [];
+    const state = textureStates.get("poster");
+    const variantCount = Math.max(1, Number(state?.variantCount ?? 1));
+    for (const candidate of candidates) {
+      const { side, coord } = candidate;
+      const x = side.axis === "x" ? coord : side.fixed;
+      const z = side.axis === "z" ? coord : side.fixed;
+      const hasSpacing = placed.every((poster) => {
+        const dx = poster.x - x;
+        const dz = poster.z - z;
+        return Math.hypot(dx, dz) >= POSTER_MIN_SPACING_METERS;
+      });
+      if (!hasSpacing) continue;
+      const variantIndex = Math.floor(rng() * variantCount);
+      pushPosterInstance(variantIndex, x, POSTER_CENTER_Y_METERS, z, side.yaw);
+      placed.push({ x, z });
+    }
+  }
+
   function createFluorescentGrid(halfWorldWidth, halfWorldHeight) {
     fluorescentUnits.length = 0;
     const ceilingY = WALL_HEIGHT - 0.2;
@@ -1122,14 +1384,10 @@ export function createRoomSystem({ scene, renderer }) {
   ) {
     const halfWorldWidth = worldWidthMeters * 0.5;
     const halfWorldHeight = worldHeightMeters * 0.5;
-    const wallThickness = 1;
-    const wallSegmentsPerSide = 4;
-    const wallCenterOffsetX = halfWorldWidth + wallThickness * 0.5;
-    const wallCenterOffsetZ = halfWorldHeight + wallThickness * 0.5;
-    const wallSpanX = worldWidthMeters + wallThickness;
-    const wallSpanZ = worldHeightMeters + wallThickness;
-    const wallSegmentSpanX = wallSpanX / wallSegmentsPerSide;
-    const wallSegmentSpanZ = wallSpanZ / wallSegmentsPerSide;
+    const wallCenterOffsetX = halfWorldWidth + WALL_RENDER_OUTSET_METERS;
+    const wallCenterOffsetZ = halfWorldHeight + WALL_RENDER_OUTSET_METERS;
+    const wallSpanX = worldWidthMeters + WALL_RENDER_OUTSET_METERS * 2;
+    const wallSpanZ = worldHeightMeters + WALL_RENDER_OUTSET_METERS * 2;
     const planeWidth = wallSpanX + 5;
     const planeHeight = wallSpanZ + 5;
     currentPlaneWidthMeters = planeWidth;
@@ -1147,20 +1405,28 @@ export function createRoomSystem({ scene, renderer }) {
     roomRoot.add(ceiling);
     refreshFloorAndCeilingTextures();
 
-    for (let i = 0; i < wallSegmentsPerSide; i += 1) {
-      const xOffset = -wallSpanX / 2 + wallSegmentSpanX * (i + 0.5);
-      const zOffset = -wallSpanZ / 2 + wallSegmentSpanZ * (i + 0.5);
-      createWall(xOffset, -wallCenterOffsetZ, wallSegmentSpanX, wallThickness);
-      createWall(xOffset, wallCenterOffsetZ, wallSegmentSpanX, wallThickness);
-      createWall(-wallCenterOffsetX, zOffset, wallThickness, wallSegmentSpanZ);
-      createWall(wallCenterOffsetX, zOffset, wallThickness, wallSegmentSpanZ);
-    }
+    createWall(0, -wallCenterOffsetZ, wallSpanX, 0);
+    createWall(0, wallCenterOffsetZ, wallSpanX, Math.PI);
+    createWall(-wallCenterOffsetX, 0, wallSpanZ, Math.PI / 2);
+    createWall(wallCenterOffsetX, 0, wallSpanZ, -Math.PI / 2);
 
     for (const shelf of shelves) createShelf(shelf);
     for (const cooler of coolers) createCooler(cooler);
     for (const freezer of freezers) createFreezer(freezer);
+    placeWallPosters({
+      worldWidthMeters,
+      worldHeightMeters,
+      shelves,
+      coolers,
+      fixturesSignature: [
+        fixtureSignature(shelves),
+        fixtureSignature(coolers),
+        fixtureSignature(freezers),
+      ].join("||")
+    });
     buildStaticInstancedGeometry();
     buildProductInstancedMeshes();
+    buildPosterInstancedMeshes();
     createFluorescentGrid(halfWorldWidth, halfWorldHeight);
   }
 

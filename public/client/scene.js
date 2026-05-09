@@ -27,7 +27,7 @@ export function createSceneSystem(canvas) {
   const camera = new THREE.PerspectiveCamera(
     75,
     window.innerWidth / window.innerHeight,
-    0.1,
+    0.02,
     100,
   );
   camera.position.set(0, 1.6, 0);
