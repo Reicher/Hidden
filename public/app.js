@@ -765,7 +765,7 @@ function setCountdownTextFromSession(state) {
     authenticated: state?.authenticated ?? clientState.authenticated,
     characterId: state?.characterId ?? clientState.myCharacterId,
     lastCountdownPreviewCharacterId,
-    controlsText: controlsTextForCurrentMode(),
+    isTouchDevice: IS_TOUCH_DEVICE,
     drawCharacterPreview: drawCountdownCharacterPreview,
   }));
   updateLobbyMatchStatus();

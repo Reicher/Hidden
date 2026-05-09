@@ -15,11 +15,61 @@
  *   authenticated: boolean,
  *   characterId: number|null,
  *   lastCountdownPreviewCharacterId: number|null,
- *   controlsText: string,
+ *   isTouchDevice: boolean,
  *   drawCharacterPreview: (canvas: HTMLCanvasElement, characterId: number) => void,
  * }} opts
  * @returns {{ lastCountdownPreviewCharacterId: number|null }}
  */
+
+function buildDesktopControlsHtml() {
+  return `
+    <div class="ctrl-grid">
+      <div class="ctrl-row">
+        <div class="ctrl-keys">
+          <div class="ctrl-key-row"><kbd class="key">W</kbd></div>
+          <div class="ctrl-key-row"><kbd class="key">A</kbd><kbd class="key">S</kbd><kbd class="key">D</kbd></div>
+        </div>
+        <span class="ctrl-label">Rörelse</span>
+      </div>
+      <div class="ctrl-row">
+        <kbd class="key key-wide">⇧ Shift</kbd>
+        <span class="ctrl-label">Sprint</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-mouse"><svg viewBox="0 0 20 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1" y="1" width="18" height="26" rx="9" stroke="currentColor" stroke-width="1.6"/><line x1="10" y1="1" x2="10" y2="14" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="19" r="1.5" fill="currentColor"/><rect x="1" y="1" width="8.2" height="13" rx="4" fill="currentColor" fill-opacity="0.25"/></svg></span>
+        <span class="ctrl-label">Klick vänster – Attackera</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-mouse ctrl-mouse-drag"><svg viewBox="0 0 20 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1" y="1" width="18" height="26" rx="9" stroke="currentColor" stroke-width="1.6"/><line x1="10" y1="1" x2="10" y2="14" stroke="currentColor" stroke-width="1.6"/><path d="M10 22 L7 25 M10 22 L13 25 M10 22 L10 26" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span>
+        <span class="ctrl-label">Dra – Titta runt</span>
+      </div>
+    </div>
+  `;
+}
+
+function buildMobileControlsHtml() {
+  return `
+    <div class="ctrl-grid ctrl-grid-mobile">
+      <div class="ctrl-row">
+        <span class="ctrl-badge">◉</span>
+        <span class="ctrl-label">Joystick nere till vänster – Rörelse</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-badge">⚡</span>
+        <span class="ctrl-label">Sprint-knapp – Spring</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-badge">⚔</span>
+        <span class="ctrl-label">Attack-knapp – Attackera</span>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-badge">👆</span>
+        <span class="ctrl-label">Dra höger ruta – Titta runt</span>
+      </div>
+    </div>
+  `;
+}
+
 export function updateCountdownOverlay({
   countdownTextEl,
   countdownOverlayEl,
@@ -31,7 +81,7 @@ export function updateCountdownOverlay({
   authenticated,
   characterId,
   lastCountdownPreviewCharacterId,
-  controlsText,
+  isTouchDevice,
   drawCharacterPreview,
 }) {
   if (!countdownTextEl || !countdownOverlayEl) {
@@ -39,7 +89,14 @@ export function updateCountdownOverlay({
   }
 
   if (countdownControlsTextEl) {
-    countdownControlsTextEl.textContent = controlsText;
+    const rendered = countdownControlsTextEl.dataset.renderedFor;
+    const mode = isTouchDevice ? "mobile" : "desktop";
+    if (rendered !== mode) {
+      countdownControlsTextEl.innerHTML = isTouchDevice
+        ? buildMobileControlsHtml()
+        : buildDesktopControlsHtml();
+      countdownControlsTextEl.dataset.renderedFor = mode;
+    }
   }
 
   // Show join button when the player is in lobby (watching countdown) but not

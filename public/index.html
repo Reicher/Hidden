@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hidden</title>
     <link rel="icon" type="image/svg+xml" href="/assets/hidden-face.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body class="overlay-active">
@@ -23,7 +29,10 @@
               maxlength="20"
               autocomplete="off"
             />
-            <label class="connect-fullscreen-option" for="startFullscreenCheckbox">
+            <label
+              class="connect-fullscreen-option"
+              for="startFullscreenCheckbox"
+            >
               <input id="startFullscreenCheckbox" type="checkbox" />
               <span>Starta i fullskärm</span>
             </label>
@@ -216,16 +225,17 @@
     </div>
     <div id="countdownOverlay" class="hidden" aria-live="polite">
       <div id="countdownContent">
+        <p id="countdownHeading">Matchen börjar om</p>
         <div id="countdownTopRow">
           <div id="countdownText"></div>
           <div id="countdownCharacterCard">
-            <span id="countdownCharacterLabel">Din karaktär</span>
             <canvas
               id="countdownCharacterCanvas"
               width="164"
               height="164"
               aria-label="Karaktärspreview"
             ></canvas>
+            <span id="countdownCharacterLabel">Din karaktär</span>
           </div>
         </div>
         <button id="countdownJoinBtn" type="button" class="hidden">
@@ -233,7 +243,7 @@
         </button>
         <div id="countdownControlsCard">
           <h3 id="countdownControlsTitle">Kontroller</h3>
-          <p id="countdownControlsText"></p>
+          <div id="countdownControlsText"></div>
         </div>
       </div>
     </div>

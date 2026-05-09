@@ -21,6 +21,12 @@
   --action-border: #5d8c4d;
   --action-bg: #243226;
   --accent-cool: #66ccff;
+
+  /* Radier – används konsekvent överallt */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-pill: 999px;
 }
 
 html,
@@ -32,7 +38,7 @@ body {
   overscroll-behavior: none;
   background: var(--bg);
   color: var(--fg);
-  font-family: "JetBrains Mono", "Fira Code", Menlo, monospace;
+  font-family: "Nunito", system-ui, sans-serif;
 }
 
 #game {
@@ -105,14 +111,14 @@ body.overlay-active #game {
   gap: 10px;
   background: var(--surface-1);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 18px;
   box-sizing: border-box;
 }
 
 .news-card {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--surface-2);
   padding: 14px;
   box-sizing: border-box;
@@ -142,9 +148,16 @@ body.overlay-active #game {
   overflow-wrap: anywhere;
 }
 
+h1, h2, h3 {
+  font-family: "Nunito", system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
 .card h1 {
   margin: 0 0 6px;
-  font-size: 26px;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
 }
 
 .login-card {
@@ -155,6 +168,7 @@ body.overlay-active #game {
   background: rgba(26, 31, 41, 0.92);
   border-color: rgba(104, 120, 147, 0.42);
   box-shadow: 0 18px 46px rgba(5, 8, 13, 0.52);
+  border-radius: var(--r-lg);
 }
 
 .connect-tagline {
@@ -210,18 +224,41 @@ button {
 
 input {
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   background: var(--surface-3);
   color: var(--fg);
   padding: 9px 10px;
+  font-weight: 600;
 }
 
 button {
   border: 1px solid var(--action-border);
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   background: var(--action-bg);
   color: var(--fg);
   padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* ── Glassknappar: delade av spectator, vinna, nerslagen, chatt ── */
+.glass-btn,
+#spectatorLobbyBtn,
+#spectatorCycleButtons button,
+#winLobbyBtn,
+#downedLobbyBtn,
+#gameChatSendBtn {
+  pointer-events: auto;
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-soft);
+  background: var(--surface-glass);
+  color: var(--fg-strong);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
   cursor: pointer;
 }
 
@@ -252,7 +289,7 @@ button:disabled {
   min-height: 0;
   min-width: 0;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--surface-2);
   overflow: auto;
   flex: 0 1 auto;
@@ -346,7 +383,7 @@ button:disabled {
   min-height: 0;
   min-width: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: rgba(14, 18, 25, 0.62);
   padding: 6px 10px;
   display: grid;
@@ -386,60 +423,77 @@ button:disabled {
 }
 
 #countdownContent {
-  width: min(920px, calc(100vw - 32px));
+  width: min(860px, calc(100vw - 32px));
   display: grid;
-  gap: 14px;
+  gap: 12px;
+}
+
+#countdownHeading {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(13px, 2vw, 16px);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 #countdownTopRow {
-  position: relative;
-  min-height: 196px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
 }
 
 #countdownText {
-  position: absolute;
-  left: 33.333%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  font-size: clamp(84px, 20vw, 210px);
-  font-weight: 800;
+  font-size: clamp(100px, 22vw, 220px);
+  font-weight: 900;
   line-height: 1;
-  letter-spacing: 0.04em;
+  letter-spacing: -0.02em;
   color: var(--fg-strong);
-  text-shadow: 0 8px 22px rgba(0, 0, 0, 0.72);
-  width: 2ch;
+  text-shadow: 0 8px 32px rgba(0, 0, 0, 0.72);
   font-variant-numeric: tabular-nums;
   text-align: center;
+  width: 2ch;
+  flex: 0 0 auto;
 }
 
+/* ── Karaktärskort – sömlöst, canvas fyller ytan ── */
 #countdownCharacterCard {
-  position: absolute;
-  left: 66.667%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  position: relative;
+  flex: 0 0 auto;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 16px 40px rgba(0, 0, 0, 0.56);
   pointer-events: auto;
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  background: var(--surface-glass);
-  border: 1px solid var(--line-soft);
-  border-radius: 10px;
-  padding: 10px 10px 9px;
-  min-width: 186px;
-}
-
-#countdownCharacterLabel {
-  color: var(--fg);
-  font-size: 12px;
-  letter-spacing: 0.02em;
 }
 
 #countdownCharacterCanvas {
-  width: 164px;
-  height: 164px;
-  border-radius: 8px;
-  border: 1px solid var(--line-soft);
+  display: block;
+  width: 148px;
+  height: 148px;
   background: var(--surface-3);
+  border: none;
+  border-radius: 0;
+}
+
+/* Label som overlay längst ner i kortet */
+#countdownCharacterLabel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 8px 7px;
+  background: linear-gradient(transparent, rgba(6, 8, 14, 0.82));
+  color: rgba(220, 228, 244, 0.92);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
 }
 
 #countdownJoinBtn {
@@ -448,8 +502,8 @@ button:disabled {
   justify-self: center;
   padding: 14px 36px;
   font-size: 18px;
-  font-weight: 700;
-  border-radius: 10px;
+  font-weight: 800;
+  border-radius: var(--r-md);
   border: none;
   background: var(--accent, #4f8ef7);
   color: #fff;
@@ -473,22 +527,107 @@ button:disabled {
   pointer-events: auto;
   background: var(--surface-glass);
   border: 1px solid var(--line-soft);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: var(--r-md);
+  padding: 12px 14px;
 }
 
 #countdownControlsTitle {
-  margin: 0 0 6px;
-  font-size: 14px;
-  color: var(--fg-strong);
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
-#countdownControlsText {
-  margin: 0;
-  color: var(--muted-soft);
+/* ── Kontroller-grid ── */
+.ctrl-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: center;
+}
+
+.ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.ctrl-label {
   font-size: 13px;
-  line-height: 1.42;
-  white-space: pre-line;
+  font-weight: 600;
+  color: var(--muted-soft);
+  white-space: nowrap;
+}
+
+/* Tangent-cluster */
+.ctrl-keys {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.ctrl-key-row {
+  display: flex;
+  gap: 3px;
+}
+
+/* Keyboard-tangenter */
+.key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-bottom: 3px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--fg-strong);
+  font-family: "Nunito", system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  font-style: normal;
+  letter-spacing: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  white-space: nowrap;
+}
+
+.key-wide {
+  min-width: 68px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Mus-ikon */
+.ctrl-mouse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 36px;
+  color: var(--fg-strong);
+  flex: 0 0 auto;
+}
+
+.ctrl-mouse svg {
+  width: 20px;
+  height: 28px;
+}
+
+/* Mobil-badges */
+.ctrl-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  flex: 0 0 auto;
 }
 
 #chatPanel {
@@ -496,7 +635,7 @@ button:disabled {
   min-height: 0;
   min-width: 0;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: var(--surface-3);
   display: flex;
   flex-direction: column;
@@ -536,9 +675,11 @@ button:disabled {
 }
 
 #connectBtn {
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.02em;
   border-color: #7dcf96;
+  border-radius: var(--r-sm);
   background: linear-gradient(180deg, #3f7f53 0%, #2c613f 100%);
   box-shadow:
     0 0 0 1px rgba(96, 191, 130, 0.3),
@@ -562,13 +703,13 @@ button:disabled {
   width: clamp(170px, 26vw, 280px);
   min-height: 40px;
   font-size: clamp(14px, 1.8vw, 17px);
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-weight: 800;
+  letter-spacing: 0.02em;
   line-height: 1.1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   padding: 8px 12px;
   background: linear-gradient(180deg, #2f4d64 0%, #1f3445 100%);
   border-color: #7cb0d1;
@@ -668,7 +809,7 @@ button:disabled {
   height: 34px;
   min-width: 34px;
   border: 1px solid var(--menu-button-border);
-  border-radius: 7px;
+  border-radius: var(--r-sm);
   background: var(--menu-button-bg);
   color: var(--menu-button-fg);
   font-size: 20px;
@@ -698,9 +839,9 @@ button:disabled {
 
 #lobbyDialogCard {
   width: min(540px, calc(100vw - 20px));
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--surface-glass);
   padding: 16px;
   box-sizing: border-box;
   max-height: calc(100dvh - max(20px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
@@ -711,6 +852,7 @@ button:disabled {
 #lobbyDialogTitle {
   margin: 0 0 8px;
   font-size: 20px;
+  font-weight: 800;
 }
 
 #lobbyDialogText {
@@ -988,10 +1130,11 @@ button:disabled {
   top: 28px;
   left: 12px;
   padding: 7px 9px;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--line-soft);
   background: rgba(9, 11, 16, 0.72);
   color: var(--fg-strong);
+  font-family: "JetBrains Mono", "Fira Code", Menlo, monospace;
   font-size: 11px;
   line-height: 1.32;
   letter-spacing: 0.2px;
@@ -1025,12 +1168,6 @@ button:disabled {
 #spectatorCycleButtons button {
   pointer-events: auto;
   min-width: 42px;
-  min-height: 30px;
-  padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--line-soft);
-  background: var(--surface-glass);
-  color: var(--fg-strong);
 }
 
 #spectatorActionRow {
@@ -1043,16 +1180,7 @@ button:disabled {
   pointer-events: auto;
 }
 
-#spectatorLobbyBtn {
-  min-height: 30px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--line-soft);
-  background: var(--surface-glass);
-  color: var(--fg-strong);
-  font-size: 12px;
-  line-height: 1.2;
-}
+/* #spectatorLobbyBtn inherits from the unified glass-btn rule above */
 
 #knockdownToast {
   position: absolute;
@@ -1061,13 +1189,13 @@ button:disabled {
   transform: translateX(-50%);
   max-width: min(86vw, 560px);
   padding: 12px 18px;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   border: 1px solid rgba(141, 225, 111, 0.46);
   background: rgba(14, 24, 20, 0.9);
   color: var(--fg-strong);
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.42);
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 900;
   line-height: 1.1;
   text-align: center;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.78);
@@ -1095,13 +1223,13 @@ button:disabled {
   margin: 0;
   max-width: min(90vw, 760px);
   padding: 14px 22px;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   border: 1px solid rgba(141, 225, 111, 0.42);
   background: rgba(8, 14, 13, 0.72);
   box-shadow: 0 18px 56px rgba(0, 0, 0, 0.38);
   font-size: 64px;
   line-height: 0.98;
-  font-weight: 800;
+  font-weight: 900;
   color: var(--fg-strong);
   text-align: center;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.88);
@@ -1118,15 +1246,6 @@ button:disabled {
 
 #winLobbyBtn {
   align-self: end;
-  pointer-events: auto;
-  min-height: 34px;
-  padding: 7px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--line-soft);
-  background: var(--surface-glass);
-  color: var(--fg-strong);
-  font-size: 12px;
-  line-height: 1.2;
 }
 
 #downedOverlay {
@@ -1151,13 +1270,13 @@ button:disabled {
   margin: 0;
   max-width: min(90vw, 720px);
   padding: 13px 18px;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   border: 1px solid rgba(255, 106, 112, 0.4);
   background: rgba(18, 12, 15, 0.74);
   box-shadow: 0 18px 52px rgba(0, 0, 0, 0.38);
   font-size: 52px;
   line-height: 1;
-  font-weight: 800;
+  font-weight: 900;
   color: var(--fg-strong);
   text-align: center;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.88);
@@ -1179,18 +1298,7 @@ button:disabled {
   pointer-events: auto;
 }
 
-#downedLobbyBtn,
-#downedLobbyBtn {
-  pointer-events: auto;
-  min-height: 34px;
-  padding: 7px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--line-soft);
-  background: var(--surface-glass);
-  color: var(--fg-strong);
-  font-size: 12px;
-  line-height: 1.2;
-}
+/* #downedLobbyBtn inherits from the unified glass-btn rule above */
 
 #gameChatNotice {
   position: absolute;
@@ -1232,8 +1340,8 @@ button:disabled {
   width: min(320px, calc(100vw - 28px));
   background: var(--surface-glass);
   border: 1px solid var(--line-soft);
-  border-radius: 10px;
-  padding: 14px;
+  border-radius: var(--r-md);
+  padding: 16px;
   display: grid;
   gap: 8px;
   max-height: calc(100dvh - max(20px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
@@ -1241,26 +1349,21 @@ button:disabled {
   -webkit-overflow-scrolling: touch;
 }
 
-#lobbyMenuTitle {
+#lobbyMenuTitle,
+#gameMenuTitle {
   margin: 0 0 4px;
-  font-size: 17px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
-#lobbyMenuCard button {
+#lobbyMenuCard button,
+#gameMenuCard button {
   width: 100%;
 }
 
 #gameMenuBackdrop {
   pointer-events: auto;
-}
-
-#gameMenuTitle {
-  margin: 0 0 4px;
-  font-size: 17px;
-}
-
-#gameMenuCard button {
-  width: 100%;
 }
 
 #gameChatBox {
@@ -1270,7 +1373,7 @@ button:disabled {
   width: min(420px, calc(100vw - 24px));
   max-height: min(70vh, 520px);
   border: 1px solid var(--line-faint);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: rgba(9, 11, 16, 0.58);
   backdrop-filter: blur(2px);
   pointer-events: auto;
@@ -1312,16 +1415,7 @@ button:disabled {
   padding: 7px 8px;
 }
 
-#gameChatSendBtn {
-  min-height: 32px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--line-soft);
-  background: var(--surface-glass);
-  color: var(--fg-strong);
-  font-size: 12px;
-  line-height: 1.2;
-}
+/* #gameChatSendBtn inherits from the unified glass-btn rule above */
 
 #gameChatBox.open #gameChatMessages {
   max-height: min(52vh, 380px);
@@ -1355,10 +1449,11 @@ button:disabled {
 #mobileLandscapePromptCard {
   width: min(360px, calc(100vw - 40px));
   border: 1px solid var(--line-soft);
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   background: rgba(12, 16, 24, 0.94);
   color: var(--fg-strong);
   font-size: clamp(18px, 5vw, 24px);
+  font-weight: 700;
   line-height: 1.35;
   text-align: center;
   padding: 20px 18px;
@@ -1371,12 +1466,12 @@ button:disabled {
   user-select: none;
   -webkit-user-select: none;
   border: 1px solid var(--line-soft);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   background: rgba(12, 16, 24, 0.86);
   color: var(--fg);
   min-height: 36px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   padding: 6px 8px;
 }
 
@@ -1441,11 +1536,12 @@ button:disabled {
   user-select: none;
   -webkit-user-select: none;
   border: 1px solid var(--line-soft);
-  border-radius: 12px;
+  border-radius: var(--r-md);
   background: rgba(12, 16, 24, 0.8);
   color: rgba(233, 238, 248, 0.78);
   min-height: 92px;
   font-size: 12px;
+  font-weight: 600;
   display: grid;
   place-items: center;
   text-align: center;
@@ -1468,7 +1564,8 @@ body.mobile-controls-enabled #gameChatNotice {
   }
 }
 
-@media (max-width: 900px), (max-height: 740px) {
+@media (max-width: 900px) and (orientation: portrait),
+       (max-height: 740px) {
 
   .card {
     width: 100%;
@@ -1495,15 +1592,15 @@ body.mobile-controls-enabled #gameChatNotice {
   }
 
   #countdownTopRow {
-    min-height: 166px;
+    gap: 14px;
   }
 
   #countdownCharacterCanvas {
-    width: 136px;
-    height: 136px;
+    width: 120px;
+    height: 120px;
   }
 
-  #countdownControlsText {
+  .ctrl-label {
     font-size: 12px;
   }
 
@@ -1636,36 +1733,18 @@ body.mobile-controls-enabled #gameChatNotice {
   }
 
   #countdownTopRow {
-    position: static;
-    min-height: 0;
-    display: grid;
-    justify-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 10px;
   }
 
   #countdownText {
-    position: static;
-    left: auto;
-    top: auto;
-    width: auto;
-    transform: none;
     font-size: clamp(74px, 26vw, 150px);
   }
 
-  #countdownCharacterCard {
-    position: static;
-    left: auto;
-    top: auto;
-    transform: none;
-  }
-
   #countdownCharacterCanvas {
-    width: 124px;
-    height: 124px;
-  }
-
-  #countdownControlsText {
-    font-size: 11px;
+    width: 110px;
+    height: 110px;
   }
 
   #playBtn {
