@@ -15,12 +15,36 @@ export function hashString(str) {
   return h >>> 0;
 }
 
+const PLAYER_NAME_PALETTE = Object.freeze([
+  "#ff6b6b",
+  "#4ecdc4",
+  "#ffe66d",
+  "#5aa9e6",
+  "#f7a072",
+  "#9bde7e",
+  "#c792ea",
+  "#ffd166",
+  "#06d6a0",
+  "#7bdff2",
+  "#ff9f1c",
+  "#8ecae6",
+  "#b8f2e6",
+  "#ff8fab",
+  "#adb5ff",
+  "#95d5b2",
+  "#ffadad",
+  "#90dbf4",
+  "#d0f4de",
+  "#f4acb7",
+  "#a0c4ff",
+  "#caffbf",
+  "#fdffb6",
+  "#ffc6ff"
+]);
+
 export function colorForName(name) {
   const h = hashString(String(name || "").toLowerCase());
-  const hue = h % 360;
-  const sat = 60 + ((h >>> 9) % 20);
-  const light = 62 + ((h >>> 16) % 10);
-  return `hsl(${hue} ${sat}% ${light}%)`;
+  return PLAYER_NAME_PALETTE[h % PLAYER_NAME_PALETTE.length];
 }
 
 export function seededRandom(seed) {

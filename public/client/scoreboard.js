@@ -11,6 +11,17 @@ export function renderScoreboard(scoreBodyEl, players, colorForName) {
   scoreBodyEl.textContent = "";
   if (!Array.isArray(players)) return [];
 
+  const compactStatusLabel = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "-";
+    const lower = raw.toLowerCase();
+    if (lower.includes("lobby")) return "Lobbyn";
+    if (lower.includes("åsk") || lower.includes("spect")) return "Åsk";
+    if (lower.includes("spel") || lower.includes("alive") || lower.includes("won") || lower.includes("downed")) return "Spel";
+    if (raw.length <= 8) return raw;
+    return `${raw.slice(0, 7)}…`;
+  };
+
   for (const p of players) {
     const tr = document.createElement("tr");
 
@@ -42,7 +53,7 @@ export function renderScoreboard(scoreBodyEl, players, colorForName) {
     statusCell.className = "status-cell";
     const statusText = document.createElement("span");
     statusText.className = "status-label";
-    statusText.textContent = p.status || "-";
+    statusText.textContent = compactStatusLabel(p.status);
     statusCell.appendChild(statusText);
     tr.appendChild(statusCell);
 

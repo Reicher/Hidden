@@ -29,6 +29,9 @@ export const chatSendBtnEl           = document.getElementById("chatSendBtn");
 export const playBtnEl               = document.getElementById("playBtn");
 export const lobbyMatchStatusEl      = document.getElementById("lobbyMatchStatus");
 export const lobbyMatchStatusTitleEl = document.getElementById("lobbyMatchStatusTitle");
+export const lobbyStatusRowEl        = document.getElementById("lobbyStatusRow");
+export const lobbyStatusTextEl       = document.getElementById("lobbyStatusText");
+export const lobbyPlayersMetaEl      = document.getElementById("lobbyPlayersMeta");
 
 // ─── Lobby menu / settings ────────────────────────────────────────────────────
 export const lobbySettingsBtnEl      = document.getElementById("lobbySettingsBtn");

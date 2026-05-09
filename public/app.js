@@ -43,7 +43,7 @@ import {
   connectViewEl, connectErrorEl, roomInfoEl, nameInputEl, connectBtnEl, createPrivateRoomBtnEl,
   newsCardEl, newsVersionEl, newsPublishedAtEl, newsNotesEl,
   lobbyViewEl, scoreBodyEl, chatMessagesEl, chatInputEl, chatSendBtnEl, playBtnEl,
-  lobbyMatchStatusEl, lobbyMatchStatusTitleEl,
+  lobbyMatchStatusEl, lobbyMatchStatusTitleEl, lobbyStatusRowEl, lobbyStatusTextEl, lobbyPlayersMetaEl,
   lobbySettingsBtnEl, lobbyMenuBackdropEl, lobbyMenuSettingsBtnEl, lobbyMenuCreditsBtnEl, lobbyMenuCloseBtnEl,
   lobbyDialogBackdropEl, lobbyDialogTitleEl, lobbyDialogTextEl, lobbyDialogCloseBtnEl, settingsPanelEl,
   countdownOverlayEl, countdownTextEl, countdownCharacterCanvasEl, countdownControlsTextEl,
@@ -242,6 +242,12 @@ function roomInfoText({ roomCode = null, maxPlayers = ROOM_INFO_DEFAULTS.maxPlay
   return `${scopeText} · Max ${maxPlayers} spelare av ${totalCharacters} karaktärer`;
 }
 
+function lobbyRoomNameFromPath() {
+  const roomCode = activeRoomCodeFromPath();
+  if (!roomCode) return "Offentligt rum";
+  return roomCode;
+}
+
 function scoreboardSignature(players) {
   if (!Array.isArray(players) || players.length <= 0) return "";
   return players.map((p) => [
@@ -378,13 +384,13 @@ function setFullscreenHelpText() {
   if (!settingsFullscreenHelpEl) return;
   if (isFullscreenSupported()) {
     settingsFullscreenHelpEl.textContent = isFullscreenActive()
-      ? "Fullscreen är aktivt. Avmarkera rutan för att lämna."
-      : "Markera rutan för att gå in i fullscreen.";
+      ? "Helskärm är aktivt. Avmarkera rutan för att lämna."
+      : "";
     return;
   }
   settingsFullscreenHelpEl.textContent = IS_TOUCH_DEVICE
-    ? "Fullscreen stöds inte här (vanligt på iPhone/iPad Safari)."
-    : "Fullscreen stöds inte i den här webbläsaren.";
+    ? "Helskärm stöds inte här (vanligt på iPhone/iPad Safari)."
+    : "Helskärm stöds inte i den här webbläsaren.";
 }
 
 async function setFullscreenEnabled(enabled) {
@@ -662,50 +668,54 @@ function setLobbyMenuOpen(open) {
 }
 
 function updateLobbyMatchStatus() {
-  if (!lobbyMatchStatusEl || !lobbyMatchStatusTitleEl) return;
+  if (!lobbyMatchStatusEl || !lobbyMatchStatusTitleEl || !lobbyStatusRowEl || !lobbyStatusTextEl || !lobbyPlayersMetaEl) return;
   const show = appMode === "lobby";
   lobbyMatchStatusEl.classList.toggle("hidden", !show);
+  lobbyStatusRowEl.classList.toggle("hidden", !show);
   if (!show) return;
+
+  lobbyMatchStatusTitleEl.textContent = lobbyRoomNameFromPath();
+
+  const players = Array.isArray(lobbyScoreboard) ? lobbyScoreboard : [];
+  const playerCount = players.length;
+  const maxPlayers = Math.max(playerCount, Number(lobbyMaxPlayers || 0));
+  lobbyPlayersMetaEl.textContent = `${playerCount}/${maxPlayers} spelare`;
 
   if (currentMatch.inProgress) {
     const elapsedMinutes = Math.floor(Math.max(0, Number(currentMatch.elapsedMs || 0)) / 60000);
-    lobbyMatchStatusTitleEl.textContent = `Match pågår (${elapsedMinutes} min) - Du väntar på nästa runda`;
+    lobbyStatusTextEl.textContent = `Match pågår (${elapsedMinutes} min)`;
     return;
   }
 
   const minPlayers = Math.max(1, Number(lobbyMinPlayersToStart || 2));
-  const players = Array.isArray(lobbyScoreboard) ? lobbyScoreboard : [];
-  const playerCount = players.length;
-  const maxPlayers = Math.max(playerCount, Number(lobbyMaxPlayers || 0));
   const readyCount = players.reduce((acc, player) => acc + (player?.ready ? 1 : 0), 0);
   const readyEligibleCount = players.reduce((acc, player) => {
     const status = String(player?.status || "").toLowerCase();
-    const canReady = status === "i lobby";
+    const canReady = status === "i lobby" || status === "lobbyn" || status === "lobby";
     return acc + (canReady ? 1 : 0);
   }, 0);
-  const playersText = `Spelare ${playerCount}/${maxPlayers}`;
   const readyText = `Redo ${readyCount}/${readyEligibleCount}`;
   const countdownRunning =
     lobbyCountdownMsRemaining > 0 ||
     sessionState === "countdown";
 
   if (countdownRunning) {
-    lobbyMatchStatusTitleEl.textContent = `${playersText} - Startar match`;
+    lobbyStatusTextEl.textContent = "Startar match";
     return;
   }
   if (playerCount < minPlayers) {
-    lobbyMatchStatusTitleEl.textContent = `${playersText} - Väntar på fler spelare`;
+    lobbyStatusTextEl.textContent = "Väntar på spelare";
     return;
   }
   if (readyEligibleCount === 0) {
-    lobbyMatchStatusTitleEl.textContent = `${playersText} - Väntar på nästa runda`;
+    lobbyStatusTextEl.textContent = "Väntar på spelare";
     return;
   }
   if (readyCount < readyEligibleCount) {
-    lobbyMatchStatusTitleEl.textContent = `${playersText} - Väntar på att spelare ska bli redo (${readyText})`;
+    lobbyStatusTextEl.textContent = `Väntar på redo (${readyText})`;
     return;
   }
-  lobbyMatchStatusTitleEl.textContent = `${playersText} - Startar match`;
+  lobbyStatusTextEl.textContent = "Startar match";
 }
 
 function updateReadyButton() {

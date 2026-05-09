@@ -32,7 +32,7 @@
 
       <section id="lobbyView" class="view hidden">
         <div id="lobbyMatchStatus" aria-live="polite">
-          <span id="lobbyMatchStatusTitle">Väntar på fler spelare</span>
+          <span id="lobbyMatchStatusTitle">Offentligt rum</span>
           <button id="playBtn" type="button" data-ready-state="not-ready" aria-pressed="false">Redo</button>
           <button id="lobbySettingsBtn" type="button" aria-label="Inställningar">⚙</button>
         </div>
@@ -42,17 +42,21 @@
             <table id="scoreTable">
               <thead>
                 <tr>
-                  <th>Namn</th>
-                  <th>Vinster</th>
-                  <th>Nedslagningar</th>
-                  <th>Streak</th>
-                  <th>Nedslagen</th>
-                  <th>Oskyldiga</th>
-                  <th>Status</th>
+                  <th><span class="th-full">Namn</span><span class="th-short"></span></th>
+                  <th><span class="th-full">Vinster</span><span class="th-short">V</span></th>
+                  <th><span class="th-full">Nedslagningar</span><span class="th-short">K</span></th>
+                  <th><span class="th-full">Streak</span><span class="th-short">S</span></th>
+                  <th><span class="th-full">Nedslagen</span><span class="th-short">D</span></th>
+                  <th><span class="th-full">Oskyldiga</span><span class="th-short">O</span></th>
+                  <th><span class="th-full">Status</span><span class="th-short">St</span></th>
                 </tr>
               </thead>
               <tbody id="scoreBody"></tbody>
             </table>
+          </div>
+          <div id="lobbyStatusRow" aria-live="polite">
+            <span id="lobbyStatusText">Väntar på spelare</span>
+            <span id="lobbyPlayersMeta">0/0 spelare</span>
           </div>
           <div id="chatPanel">
             <div id="chatMessages"></div>
@@ -76,35 +80,35 @@
           <h2 id="lobbyDialogTitle"></h2>
           <p id="lobbyDialogText"></p>
           <div id="settingsPanel" class="hidden">
-            <div class="settingsOptionRow">
+            <div class="settingsOptionRow settingsMobileControlsRow">
               <span>Mobilkontroller</span>
               <button id="mobileControlsModeBtn" type="button">Auto</button>
             </div>
-            <div class="settingsOptionRow">
-              <span>Fullscreen</span>
-              <span class="settingsInlineHint">kanske inte funkar</span>
-              <input id="fullscreenModeCheckbox" type="checkbox" aria-label="Fullscreenläge" />
+            <div class="settingsOptionRow settingsFullscreenRow">
+              <span>Helskärm</span>
+              <span class="settingsInlineHint">kan saknas</span>
+              <input id="fullscreenModeCheckbox" type="checkbox" aria-label="Helskärmsläge" />
             </div>
-            <p id="settingsFullscreenHelp">Fullscreen stöds inte i den här webbläsaren.</p>
-            <p id="settingsTrackpadHelp">Trackpad: prova högre sensitivity (160-220%) och stäng av smoothing.</p>
+            <p id="settingsFullscreenHelp">Helskärm stöds inte i den här webbläsaren.</p>
+            <p id="settingsTrackpadHelp">Styrplatta: prova högre känslighet (160-220%) och stäng av utjämning.</p>
             <div class="settingsAudioRow">
-              <span>Look sensitivity</span>
+              <span>Tittkänslighet</span>
               <input id="lookSensitivityInput" type="range" min="50" max="220" step="1" value="100" />
               <span id="lookSensitivityValue" class="settingsRangeValue">100%</span>
             </div>
-            <div class="settingsOptionRow">
-              <span>Look smoothing</span>
+            <div class="settingsOptionRow settingsLookSmoothingRow">
+              <span>Siktesutjämning</span>
               <button id="lookSmoothingToggleBtn" type="button">På</button>
             </div>
             <div class="settingsAudioRow">
               <span>Musikvolym</span>
               <input id="musicVolumeInput" type="range" min="0" max="100" step="1" value="80" />
-              <button id="musicMuteBtn" type="button">Muta</button>
+              <button id="musicMuteBtn" type="button">Tysta</button>
             </div>
             <div class="settingsAudioRow">
               <span>Ljudvolym</span>
               <input id="sfxVolumeInput" type="range" min="0" max="100" step="1" value="90" />
-              <button id="sfxMuteBtn" type="button">Muta</button>
+              <button id="sfxMuteBtn" type="button">Tysta</button>
             </div>
             <p id="settingsAudioHelp">Inställningarna sparas lokalt</p>
           </div>
