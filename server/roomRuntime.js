@@ -28,6 +28,7 @@ import {
   NPC_STOP_DURATION_MAX_MS,
   HEARTBEAT_INTERVAL_MS,
   IDLE_SESSION_TIMEOUT_MS,
+  LOBBY_IDLE_TIMEOUT_MS,
   MAX_MESSAGE_BYTES,
   INPUT_UPDATE_MIN_MS,
   ATTACK_MESSAGE_MIN_MS,
@@ -421,18 +422,16 @@ export function createRoomRuntime({
   } = spectator;
 
   function scoreboardSnapshot() {
-    return sortedAuthenticatedSessionsForScoreboard()
-      .map((s) => ({
-        name: s.name,
-        wins: s.stats.wins,
-        knockdowns: s.stats.knockdowns,
-        downed: s.stats.downed,
-        streak: s.stats.streak,
-        innocents: s.stats.innocents,
-        status: statusLabel(s),
-        ready: Boolean(s.ready || s.state === "countdown"),
-      }))
-      .sort((a, b) => compareScoreboardEntries(a, b));
+    return sortedAuthenticatedSessionsForScoreboard().map((s) => ({
+      name: s.name,
+      wins: s.stats.wins,
+      knockdowns: s.stats.knockdowns,
+      downed: s.stats.downed,
+      streak: s.stats.streak,
+      innocents: s.stats.innocents,
+      status: statusLabel(s),
+      ready: Boolean(s.ready || s.state === "countdown"),
+    }));
   }
 
   function closeWsSafe(ws, code, reason) {
@@ -446,6 +445,12 @@ export function createRoomRuntime({
   function send(ws, type, payload = {}) {
     if (ws.readyState !== ws.OPEN) return;
     const body = JSON.stringify({ type, ...payload });
+    ws.send(body);
+    recordOutboundBytes(Buffer.byteLength(body, "utf8"));
+  }
+
+  function sendRaw(ws, body) {
+    if (ws.readyState !== ws.OPEN) return;
     ws.send(body);
     recordOutboundBytes(Buffer.byteLength(body, "utf8"));
   }
@@ -746,10 +751,16 @@ export function createRoomRuntime({
       const ws = sockets.get(sessionId);
       if (!ws) continue;
       const idleForMs = now - session.net.lastActivityAt;
-      if (idleForMs < IDLE_SESSION_TIMEOUT_MS) continue;
+      const timeoutMs =
+        session.state === "alive" ||
+        session.state === "countdown" ||
+        session.state === "won"
+          ? IDLE_SESSION_TIMEOUT_MS
+          : LOBBY_IDLE_TIMEOUT_MS;
+      if (idleForMs < timeoutMs) continue;
       logWarn(
         "anslutning",
-        `idle-timeout sid=${shortSessionId(sessionId)} idleMs=${idleForMs}`,
+        `idle-timeout sid=${shortSessionId(sessionId)} state=${session.state} idleMs=${idleForMs}`,
       );
       closeWsSafe(ws, 1001, "idle timeout");
     }
@@ -804,6 +815,7 @@ export function createRoomRuntime({
     scoreboardSnapshot,
     countdownMsRemaining,
     send,
+    sendRaw,
     onTick: ({ durationMs }) => {
       recordTickDuration(durationMs);
     },

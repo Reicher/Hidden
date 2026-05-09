@@ -30,10 +30,13 @@ export function createRoomTickLoop({
   scoreboardSnapshot,
   countdownMsRemaining,
   send,
+  sendRaw,
   onTick = null,
 }) {
   const KNOCKDOWN_RISE_LOCK_MS = 420;
+  const LOBBY_BROADCAST_INTERVAL_MS = 250; // 4 Hz when no active match
   let lastTickAt = Date.now();
+  let lastBroadcastAt = 0;
   let cachedScoreboard = [];
   let nextScoreboardRefreshAt = 0;
 
@@ -46,12 +49,13 @@ export function createRoomTickLoop({
   }
 
   function serializeCharacter(c, now) {
+    const r = (v) => Math.round(v * 1000) / 1000;
     return {
       id: c.id,
-      x: Number(c.x.toFixed(3)),
-      z: Number(c.z.toFixed(3)),
-      yaw: Number(c.yaw.toFixed(3)),
-      pitch: Number((c.pitch || 0).toFixed(3)),
+      x: r(c.x),
+      z: r(c.z),
+      yaw: r(c.yaw),
+      pitch: r(c.pitch || 0),
       inspectDownedTargetId: Number.isFinite(c.ai?.inspectDownedTargetId)
         ? Number(c.ai.inspectDownedTargetId)
         : -1,
@@ -70,8 +74,8 @@ export function createRoomTickLoop({
       ),
       downedMsRemaining: Math.max(0, c.downedUntil - now),
       downedDurationMs: constants.NPC_DOWNED_RESPAWN_MS,
-      fallAwayX: Number((c.fallAwayX || 0).toFixed(3)),
-      fallAwayZ: Number((c.fallAwayZ || 1).toFixed(3)),
+      fallAwayX: r(c.fallAwayX || 0),
+      fallAwayZ: r(c.fallAwayZ || 1),
     };
   }
 
@@ -249,6 +253,20 @@ export function createRoomTickLoop({
       activeMatchStartedAt = 0;
     }
 
+    // Throttle broadcasts to 4 Hz when no match or countdown is active.
+    // During gameplay the full 20 Hz is preserved.
+    const needsFullRate = alivePlayers > 0 || getLobbyCountdown() != null;
+    if (!needsFullRate && now - lastBroadcastAt < LOBBY_BROADCAST_INTERVAL_MS) {
+      if (typeof onTick === "function") {
+        onTick({
+          at: now,
+          durationMs: Math.max(0, Date.now() - tickStartedAt),
+        });
+      }
+      return;
+    }
+    lastBroadcastAt = now;
+
     for (const session of sessions.values())
       maintainSpectatorTarget(session, now);
 
@@ -266,7 +284,10 @@ export function createRoomTickLoop({
     const scoreboard = cachedScoreboard;
     const spectatorCandidates = aliveSpectatorCandidates(now);
 
-    const worldState = {
+    // Serialize the shared world data once; only the per-client session differs.
+    // This avoids re-serializing the full characters array for every connected client.
+    const sharedJson = JSON.stringify({
+      type: "world",
       worldSizeMeters: constants.WORLD_SIZE_METERS,
       worldWidthMeters: constants.WORLD_WIDTH_METERS,
       worldHeightMeters: constants.WORLD_HEIGHT_METERS,
@@ -275,18 +296,17 @@ export function createRoomTickLoop({
       freezers: constants.FREEZERS,
       scoreboard,
       characters: characters.map((c) => serializeCharacter(c, now)),
-    };
+      match,
+    });
 
     for (const [sessionId, ws] of sockets.entries()) {
       const session = sessions.get(sessionId);
-      send(ws, "world", {
-        ...worldState,
-        match,
-        session: serializeSession(session, now, {
-          alivePlayers,
-          spectatorCandidates,
-        }),
-      });
+      const sessionJson = JSON.stringify(
+        serializeSession(session, now, { alivePlayers, spectatorCandidates }),
+      );
+      // Strip the trailing '}' from sharedJson and append the per-client session.
+      const body = sharedJson.slice(0, -1) + ',"session":' + sessionJson + "}";
+      sendRaw(ws, body);
     }
 
     if (typeof onTick === "function") {

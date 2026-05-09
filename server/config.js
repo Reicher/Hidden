@@ -764,6 +764,10 @@ export const IDLE_SESSION_TIMEOUT_MS = envPositiveInt(
   "IDLE_SESSION_TIMEOUT_MS",
   30 * 60 * 1000,
 );
+export const LOBBY_IDLE_TIMEOUT_MS = envPositiveInt(
+  "LOBBY_IDLE_TIMEOUT_MS",
+  10 * 60 * 1000, // 10 minutes for unauthenticated / lobby / spectating sessions
+);
 export const MAX_MESSAGE_BYTES = envPositiveInt("MAX_MESSAGE_BYTES", 2048);
 export const INPUT_UPDATE_MIN_MS = envInt("INPUT_UPDATE_MIN_MS", 20);
 export const ATTACK_MESSAGE_MIN_MS = envInt("ATTACK_MESSAGE_MIN_MS", 60);
