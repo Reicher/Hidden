@@ -11,8 +11,13 @@ import {
   updateDownedOverlay as updateDownedOverlayUi,
   updateInGameHud as updateInGameHudUi,
   updateKnockdownToast as updateKnockdownToastUi,
+  updateSpectatorHud as updateSpectatorHudUi,
   updateWinOverlay as updateWinOverlayUi,
 } from "./client/hudUi.js";
+import {
+  updateLobbyMatchStatus as updateLobbyMatchStatusUi,
+  updateReadyButton as updateReadyButtonUi,
+} from "./client/lobbyUi.js";
 import { GAME_CREDITS_TEXT } from "./client/about.js";
 import { createInputController } from "./client/inputControls.js";
 import { handleSocketMessage } from "./client/socketMessages.js";
@@ -21,7 +26,10 @@ import { createSocketMessageContext } from "./client/socketContext.js";
 import { createConnectScreen } from "./client/connectScreen.js";
 import { createSettingsController } from "./client/settingsController.js";
 import { createDebugOverlay } from "./client/debugOverlay.js";
-import { createClientState, DEFAULT_MATCH_STATE } from "./client/clientState.js";
+import {
+  createClientState,
+  DEFAULT_MATCH_STATE,
+} from "./client/clientState.js";
 import { bindAppEventHandlers } from "./client/appBindings.js";
 import { normalizeAngle, colorForName } from "./client/utils.js";
 import { renderScoreboard as renderScoreboardFn } from "./client/scoreboard.js";
@@ -34,10 +42,7 @@ import {
   normalizeMobileControlsPreference,
   mobileControlsLabel,
 } from "./client/appHelpers.js";
-import {
-  clampVolume,
-  persistAudioSettings,
-} from "./client/audioSettings.js";
+import { clampVolume, persistAudioSettings } from "./client/audioSettings.js";
 import { persistLookSettings } from "./client/lookSettings.js";
 import {
   canvas,
@@ -430,7 +435,8 @@ function updateConnectButton() {
 function updateDocumentTitle() {
   const othersPlaying = Math.max(
     0,
-    clientState.activePlayersInGame - (clientState.sessionState === "alive" ? 1 : 0),
+    clientState.activePlayersInGame -
+      (clientState.sessionState === "alive" ? 1 : 0),
   );
   if (othersPlaying <= 0) {
     document.title = "Hidden";
@@ -511,7 +517,8 @@ function updateMobileControlsVisibility() {
   const show =
     mobileControlsEnabledByPreference() &&
     clientState.appMode === "playing" &&
-    (clientState.sessionState === "alive" || clientState.sessionState === "won") &&
+    (clientState.sessionState === "alive" ||
+      clientState.sessionState === "won") &&
     !clientState.gameChatOpen &&
     !clientState.gameMenuOpen &&
     !lobbyDialogOpen &&
@@ -606,109 +613,32 @@ function setLobbyMenuOpen(open) {
 }
 
 function updateLobbyMatchStatus() {
-  if (
-    !lobbyMatchStatusEl ||
-    !lobbyMatchStatusTitleEl ||
-    !lobbyStatusRowEl ||
-    !lobbyStatusTextEl ||
-    !lobbyPlayersMetaEl
-  )
-    return;
-  const show = clientState.appMode === "lobby";
-  lobbyMatchStatusEl.classList.toggle("hidden", !show);
-  lobbyStatusRowEl.classList.toggle("hidden", !show);
-  if (!show) return;
-
-  lobbyMatchStatusTitleEl.textContent = lobbyRoomNameFromPath();
-
-  const players = Array.isArray(clientState.lobbyScoreboard) ? clientState.lobbyScoreboard : [];
-  const playerCount = players.length;
-  const maxPlayers = Math.max(playerCount, Number(clientState.lobbyMaxPlayers || 0));
-  lobbyPlayersMetaEl.textContent = `${playerCount}/${maxPlayers} spelare`;
-
-  if (clientState.currentMatch.inProgress) {
-    const elapsedMinutes = Math.floor(
-      Math.max(0, Number(clientState.currentMatch.elapsedMs || 0)) / 60000,
-    );
-    lobbyStatusTextEl.textContent = `Match pågår (${elapsedMinutes} min)`;
-    return;
-  }
-
-  const minPlayers = Math.max(1, Number(clientState.lobbyMinPlayersToStart || 2));
-  const readyCount = players.reduce(
-    (acc, player) => acc + (player?.ready ? 1 : 0),
-    0,
-  );
-  const readyEligibleCount = players.reduce((acc, player) => {
-    const status = String(player?.status || "").toLowerCase();
-    const canReady =
-      status === "i lobby" || status === "lobbyn" || status === "lobby";
-    return acc + (canReady ? 1 : 0);
-  }, 0);
-  const readyText = `Redo ${readyCount}/${readyEligibleCount}`;
-  const countdownRunning =
-    clientState.lobbyCountdownMsRemaining > 0 || clientState.sessionState === "countdown";
-
-  if (countdownRunning) {
-    lobbyStatusTextEl.textContent = "Startar match";
-    return;
-  }
-  if (playerCount < minPlayers) {
-    lobbyStatusTextEl.textContent = "Väntar på spelare";
-    return;
-  }
-  if (readyEligibleCount === 0) {
-    lobbyStatusTextEl.textContent = "Väntar på spelare";
-    return;
-  }
-  if (readyCount < readyEligibleCount) {
-    lobbyStatusTextEl.textContent = `Väntar på redo (${readyText})`;
-    return;
-  }
-  lobbyStatusTextEl.textContent = "Startar match";
+  updateLobbyMatchStatusUi({
+    lobbyMatchStatusEl,
+    lobbyMatchStatusTitleEl,
+    lobbyStatusRowEl,
+    lobbyStatusTextEl,
+    lobbyPlayersMetaEl,
+    appMode: clientState.appMode,
+    roomName: lobbyRoomNameFromPath(),
+    lobbyScoreboard: clientState.lobbyScoreboard,
+    lobbyMaxPlayers: clientState.lobbyMaxPlayers,
+    currentMatch: clientState.currentMatch,
+    lobbyMinPlayersToStart: clientState.lobbyMinPlayersToStart,
+    lobbyCountdownMsRemaining: clientState.lobbyCountdownMsRemaining,
+    sessionState: clientState.sessionState,
+  });
 }
 
 function updateReadyButton() {
-  if (!playBtnEl) return;
-  let buttonReadyState = "inactive";
-  if (!clientState.authenticated) {
-    playBtnEl.disabled = true;
-    playBtnEl.textContent = "Redo";
-  } else if (clientState.sessionState === "alive") {
-    playBtnEl.disabled = true;
-    playBtnEl.textContent = "Du spelar";
-  } else if (clientState.sessionState === "spectating") {
-    playBtnEl.disabled = true;
-    playBtnEl.textContent = "Åskådar";
-  } else if (clientState.currentMatch.pendingReset) {
-    playBtnEl.disabled = true;
-    playBtnEl.textContent = "Avslutar match...";
-  } else if (clientState.currentMatch.inProgress) {
-    playBtnEl.disabled = false;
-    playBtnEl.textContent = "Åskåda";
-  } else if (clientState.sessionState === "countdown" && clientState.sessionReady) {
-    playBtnEl.disabled = true;
-    playBtnEl.textContent = "Match startar...";
-  } else if (clientState.sessionReady) {
-    playBtnEl.disabled = false;
-    playBtnEl.textContent = "Inte redo";
-    buttonReadyState = "ready";
-  } else if (clientState.lobbyCountdownMsRemaining > 0) {
-    // Player is in lobby watching an active countdown – join button is shown in overlay,
-    // but keep lobby button usable as backup (labelled clearly).
-    playBtnEl.disabled = false;
-    playBtnEl.textContent = "Gå med";
-    buttonReadyState = "not-ready";
-  } else {
-    playBtnEl.disabled = false;
-    playBtnEl.textContent = "Redo";
-    buttonReadyState = "not-ready";
-  }
-  playBtnEl.dataset.readyState = buttonReadyState;
-  playBtnEl.setAttribute(
-    "aria-pressed",
-    buttonReadyState === "ready" ? "true" : "false",
-  );
+  updateReadyButtonUi({
+    playBtnEl,
+    authenticated: clientState.authenticated,
+    sessionState: clientState.sessionState,
+    currentMatch: clientState.currentMatch,
+    sessionReady: clientState.sessionReady,
+    lobbyCountdownMsRemaining: clientState.lobbyCountdownMsRemaining,
+  });
 }
 
 function resetDownedState() {
@@ -774,7 +704,8 @@ function updateInGameHud() {
     activePlayersInGame: clientState.activePlayersInGame,
     sessionState: clientState.sessionState,
   });
-  if (clientState.gameChatOpen && gameChatNoticeEl) gameChatNoticeEl.textContent = "Chatt";
+  if (clientState.gameChatOpen && gameChatNoticeEl)
+    gameChatNoticeEl.textContent = "Chatt";
 }
 
 function updateDownedOverlay() {
@@ -808,19 +739,18 @@ function updateWinOverlay() {
 }
 
 function updateSpectatorHud() {
-  if (!spectatorHudEl || !spectatorTargetTextEl) return;
-  const spectating = clientState.appMode === "playing" && clientState.sessionState === "spectating";
-  spectatorHudEl.classList.toggle("hidden", !spectating);
-  if (!spectating) return;
-  const targetName = clientState.spectatorTargetName
-    ? String(clientState.spectatorTargetName)
-    : "ingen";
-  spectatorTargetTextEl.textContent = `Åskådar ${targetName}`;
-  const canCycle =
-    Array.isArray(clientState.spectatorCandidates) && clientState.spectatorCandidates.length > 1;
-  if (spectatorPrevBtnEl) spectatorPrevBtnEl.disabled = !canCycle;
-  if (spectatorNextBtnEl) spectatorNextBtnEl.disabled = !canCycle;
-  spectatorActionRowEl?.classList.toggle("hidden", Boolean(clientState.downedByName));
+  updateSpectatorHudUi({
+    spectatorHudEl,
+    spectatorTargetTextEl,
+    spectatorPrevBtnEl,
+    spectatorNextBtnEl,
+    spectatorActionRowEl,
+    appMode: clientState.appMode,
+    sessionState: clientState.sessionState,
+    spectatorTargetName: clientState.spectatorTargetName,
+    spectatorCandidates: clientState.spectatorCandidates,
+    downedByName: clientState.downedByName,
+  });
 }
 
 function updateKnockdownToast() {
@@ -1136,7 +1066,11 @@ function updateSpectatorCamera(deltaSec) {
   );
   if (!target) return;
 
-  if (clientState.downedByName && clientState.spectatorTargetName && clientState.spectatorTargetName === clientState.myName) {
+  if (
+    clientState.downedByName &&
+    clientState.spectatorTargetName &&
+    clientState.spectatorTargetName === clientState.myName
+  ) {
     const posSmooth = 1 - Math.exp(-deltaSec * DOWNED_CAMERA_POS_SMOOTH_RATE);
     camera.position.x += (target.x - camera.position.x) * posSmooth;
     camera.position.z += (target.z - camera.position.z) * posSmooth;
@@ -1252,7 +1186,11 @@ bindAppEventHandlers({
     requestJoinCountdown: () => {
       const activeSocket = socketConnection?.getSocket();
       if (!activeSocket || !clientState.authenticated) return;
-      if (clientState.sessionState !== "lobby" || clientState.lobbyCountdownMsRemaining <= 0) return;
+      if (
+        clientState.sessionState !== "lobby" ||
+        clientState.lobbyCountdownMsRemaining <= 0
+      )
+        return;
       activeSocket.sendJson({ type: "ready", ready: true });
       clientState.sessionReady = true;
       updateReadyButton();
@@ -1298,7 +1236,9 @@ function animate() {
   const viewSmooth =
     smoothingRate > 0 ? 1 - Math.exp(-deltaSec * smoothingRate) : 1;
   const yawDelta = normalizeAngle(yaw - clientState.viewYaw);
-  clientState.viewYaw = normalizeAngle(clientState.viewYaw + yawDelta * viewSmooth);
+  clientState.viewYaw = normalizeAngle(
+    clientState.viewYaw + yawDelta * viewSmooth,
+  );
   clientState.viewPitch += (pitch - clientState.viewPitch) * viewSmooth;
 
   camera.rotation.y = clientState.viewYaw;
@@ -1310,11 +1250,19 @@ function animate() {
       ? clientState.myCharacterId
       : null;
   avatarSystem.animate(deltaSec, controlledCharacterId);
-  if (clientState.appMode === "playing" && clientState.sessionState === "spectating") {
+  if (
+    clientState.appMode === "playing" &&
+    clientState.sessionState === "spectating"
+  ) {
     updateSpectatorCamera(deltaSec);
   }
-  if (clientState.appMode === "playing" && clientState.sessionState === "downed") {
-    const corpsePos = avatarSystem.getCharacterPosition(clientState.myCharacterId);
+  if (
+    clientState.appMode === "playing" &&
+    clientState.sessionState === "downed"
+  ) {
+    const corpsePos = avatarSystem.getCharacterPosition(
+      clientState.myCharacterId,
+    );
     if (corpsePos) {
       const posSmooth = 1 - Math.exp(-deltaSec * DOWNED_CAMERA_POS_SMOOTH_RATE);
       camera.position.x += (corpsePos.x - camera.position.x) * posSmooth;

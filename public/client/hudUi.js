@@ -93,6 +93,47 @@ export function updateKnockdownToast({
   if (visible) knockdownToastEl.textContent = knockdownToastText;
 }
 
+/**
+ * @param {{
+ *   spectatorHudEl: Element|null,
+ *   spectatorTargetTextEl: Element|null,
+ *   spectatorPrevBtnEl: HTMLButtonElement|null,
+ *   spectatorNextBtnEl: HTMLButtonElement|null,
+ *   spectatorActionRowEl: Element|null,
+ *   appMode: string,
+ *   sessionState: string,
+ *   spectatorTargetName: string,
+ *   spectatorCandidates: Array,
+ *   downedByName: string,
+ * }} opts
+ */
+export function updateSpectatorHud({
+  spectatorHudEl,
+  spectatorTargetTextEl,
+  spectatorPrevBtnEl,
+  spectatorNextBtnEl,
+  spectatorActionRowEl,
+  appMode,
+  sessionState,
+  spectatorTargetName,
+  spectatorCandidates,
+  downedByName,
+}) {
+  if (!spectatorHudEl || !spectatorTargetTextEl) return;
+  const spectating = appMode === "playing" && sessionState === "spectating";
+  spectatorHudEl.classList.toggle("hidden", !spectating);
+  if (!spectating) return;
+  const targetName = spectatorTargetName
+    ? String(spectatorTargetName)
+    : "ingen";
+  spectatorTargetTextEl.textContent = `Åskådar ${targetName}`;
+  const canCycle =
+    Array.isArray(spectatorCandidates) && spectatorCandidates.length > 1;
+  if (spectatorPrevBtnEl) spectatorPrevBtnEl.disabled = !canCycle;
+  if (spectatorNextBtnEl) spectatorNextBtnEl.disabled = !canCycle;
+  spectatorActionRowEl?.classList.toggle("hidden", Boolean(downedByName));
+}
+
 export function updateCrosshairHud({
   crosshairHudEl,
   crosshairCooldownArcEl,
