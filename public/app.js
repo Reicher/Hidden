@@ -52,6 +52,7 @@ import {
   roomInfoEl,
   nameInputEl,
   connectBtnEl,
+  startFullscreenCheckboxEl,
   createPrivateRoomBtnEl,
   newsCardEl,
   newsVersionEl,
@@ -570,15 +571,22 @@ async function setFullscreenEnabled(enabled) {
 }
 
 function refreshAudioSettingsUi() {
+  const fullscreenSupported = isFullscreenSupported();
+  const fullscreenActive = fullscreenSupported && isFullscreenActive();
+  if (startFullscreenCheckboxEl) {
+    startFullscreenCheckboxEl.disabled = !fullscreenSupported;
+    if (!fullscreenSupported || fullscreenActive) {
+      startFullscreenCheckboxEl.checked = fullscreenActive;
+    }
+  }
   if (mobileControlsModeBtnEl) {
     mobileControlsModeBtnEl.textContent = mobileControlsLabel(
       mobileControlsPreference,
     );
   }
   if (fullscreenModeCheckboxEl) {
-    const supported = isFullscreenSupported();
-    fullscreenModeCheckboxEl.disabled = !supported;
-    fullscreenModeCheckboxEl.checked = supported && isFullscreenActive();
+    fullscreenModeCheckboxEl.disabled = !fullscreenSupported;
+    fullscreenModeCheckboxEl.checked = fullscreenActive;
   }
   setFullscreenHelpText();
   if (lookSensitivityInputEl)
@@ -1547,11 +1555,18 @@ socketConnection = createSocketConnectionController({
   },
 });
 
-function connectAndLogin() {
+async function connectAndLogin() {
   if (!nameInputEl) return;
   const rawName = String(nameInputEl.value ?? "");
   const trimmedName = rawName.trim();
   const wsUrl = `${wsScheme()}://${location.host}${activeRoomPath()}`;
+  if (trimmedName.length < 2) {
+    setConnectError("Namn måste vara minst 2 tecken.");
+    return;
+  }
+  if (startFullscreenCheckboxEl?.checked) {
+    await setFullscreenEnabled(true);
+  }
 
   const started = socketConnection?.connectAndLogin({
     rawName: trimmedName,
@@ -1631,6 +1646,7 @@ bindAppEventHandlers({
   elements: {
     canvas,
     connectBtnEl,
+    startFullscreenCheckboxEl,
     createPrivateRoomBtnEl,
     nameInputEl,
     playBtnEl,

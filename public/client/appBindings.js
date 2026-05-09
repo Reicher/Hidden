@@ -15,6 +15,7 @@ export function bindAppEventHandlers({
   const {
     canvas,
     connectBtnEl,
+    startFullscreenCheckboxEl,
     createPrivateRoomBtnEl,
     nameInputEl,
     playBtnEl,
@@ -109,6 +110,9 @@ export function bindAppEventHandlers({
   }
 
   connectBtnEl?.addEventListener("click", connectAndLogin);
+  startFullscreenCheckboxEl?.addEventListener("change", () => {
+    refreshAudioSettingsUi();
+  });
   countdownJoinBtnEl?.addEventListener("click", () => {
     requestJoinCountdown?.();
   });

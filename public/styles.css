@@ -164,6 +164,32 @@ body.overlay-active #game {
   line-height: 1.45;
 }
 
+.connect-fullscreen-option {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  cursor: pointer;
+  user-select: none;
+}
+
+.connect-fullscreen-option input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--ok-strong);
+}
+
+.connect-fullscreen-option:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .room-info {
   margin: auto 0 0;
   padding-top: 8px;

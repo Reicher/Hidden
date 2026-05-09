@@ -14,6 +14,9 @@ export const connectErrorEl = document.getElementById("connectError");
 export const roomInfoEl = document.getElementById("roomInfo");
 export const nameInputEl = document.getElementById("nameInput");
 export const connectBtnEl = document.getElementById("connectBtn");
+export const startFullscreenCheckboxEl = document.getElementById(
+  "startFullscreenCheckbox",
+);
 export const createPrivateRoomBtnEl = document.getElementById(
   "createPrivateRoomBtn",
 );
