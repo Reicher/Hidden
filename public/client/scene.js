@@ -101,6 +101,50 @@ export function createSceneSystem(canvas) {
   resize({ preferWindow: true });
   requestAnimationFrame(() => resize());
 
+  let _smoothFrameMs = 16.7;
+  let _lastQualityAdjustAt = 0;
+
+  /**
+   * Dynamically adjust render scale on touch devices based on frame time.
+   * Call once per frame with the current timestamp and frame duration.
+   *
+   * @param {number} nowMs
+   * @param {number} frameMs
+   * @param {{
+   *   isTouchDevice: boolean,
+   *   isPlaying: boolean,
+   *   degradeThreshold: number,
+   *   upgradeThreshold: number,
+   *   scaleMin: number,
+   *   scaleMax: number,
+   *   stepDown: number,
+   *   stepUp: number,
+   *   cooldownMs: number,
+   * }} opts
+   */
+  function adaptRenderScale(nowMs, frameMs, opts) {
+    if (!opts.isTouchDevice || !opts.isPlaying) return;
+    _smoothFrameMs += (frameMs - _smoothFrameMs) * 0.06;
+    if (nowMs - _lastQualityAdjustAt < opts.cooldownMs) return;
+
+    const currentScale = getRenderScale();
+    if (
+      _smoothFrameMs >= opts.degradeThreshold &&
+      currentScale > opts.scaleMin
+    ) {
+      const next = Math.max(opts.scaleMin, currentScale - opts.stepDown);
+      if (setRenderScale(next)) _lastQualityAdjustAt = nowMs;
+      return;
+    }
+    if (
+      _smoothFrameMs <= opts.upgradeThreshold &&
+      currentScale < opts.scaleMax
+    ) {
+      const next = Math.min(opts.scaleMax, currentScale + opts.stepUp);
+      if (setRenderScale(next)) _lastQualityAdjustAt = nowMs;
+    }
+  }
+
   return {
     THREE,
     renderer,
@@ -109,5 +153,6 @@ export function createSceneSystem(canvas) {
     resize,
     setRenderScale,
     getRenderScale,
+    adaptRenderScale,
   };
 }

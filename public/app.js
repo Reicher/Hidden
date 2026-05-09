@@ -1,4 +1,5 @@
 import { createSceneSystem } from "./client/scene.js";
+import { createCameraController } from "./client/cameraController.js";
 import { createRoomSystem } from "./client/room.js";
 import {
   createAvatarSystem,
@@ -31,8 +32,13 @@ import {
   DEFAULT_MATCH_STATE,
 } from "./client/clientState.js";
 import { bindAppEventHandlers } from "./client/appBindings.js";
+import { createPanelState } from "./client/panelState.js";
 import { normalizeAngle, colorForName } from "./client/utils.js";
-import { renderScoreboard as renderScoreboardFn } from "./client/scoreboard.js";
+import {
+  renderScoreboard as renderScoreboardFn,
+  scoreboardSignature,
+} from "./client/scoreboard.js";
+import { updateCountdownOverlay } from "./client/countdownUi.js";
 import {
   MOBILE_CONTROLS_PREFS,
   wsScheme,
@@ -44,6 +50,7 @@ import {
 } from "./client/appHelpers.js";
 import { clampVolume, persistAudioSettings } from "./client/audioSettings.js";
 import { persistLookSettings } from "./client/lookSettings.js";
+import { createMobileControls } from "./client/mobileControls.js";
 import {
   canvas,
   screenRootEl,
@@ -142,8 +149,13 @@ const PLAYER_NAME_KEY = "hidden_player_name";
 const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
 
 const sceneSystem = createSceneSystem(canvas);
-const { renderer, scene, camera, resize, setRenderScale, getRenderScale } =
-  sceneSystem;
+const {
+  renderer,
+  scene,
+  camera,
+  resize,
+  adaptRenderScale: _adaptRenderScale,
+} = sceneSystem;
 const roomSystem = createRoomSystem({ scene, renderer });
 const avatarSystem = createAvatarSystem({ scene, camera });
 
@@ -205,21 +217,55 @@ const IS_TOUCH_DEVICE = (() => {
 })();
 
 let lastFrameAt = performance.now();
-let mobileControlsPreference = normalizeMobileControlsPreference(
-  localStorage.getItem(MOBILE_CONTROLS_PREF_KEY),
-);
-let smoothFrameMs = 16.7;
-let lastQualityAdjustAt = 0;
 let lastOverlayUiUpdateAt = 0;
 let cachedCrosshairAimingAtCharacter = false;
 let lastCrosshairAimCheckAt = 0;
 let lastScoreboardSignature = "";
+
+const { updateSpectatorCamera, updateDownedCamera } = createCameraController({
+  camera,
+  avatarSystem,
+  constants: {
+    SPECTATOR_CAMERA_DISTANCE,
+    SPECTATOR_CAMERA_HEIGHT_OFFSET,
+    SPECTATOR_CAMERA_TARGET_HEIGHT_OFFSET,
+    SPECTATOR_CAMERA_POS_SMOOTH_RATE,
+    DOWNED_CAMERA_HEIGHT,
+    DOWNED_CAMERA_POS_SMOOTH_RATE,
+  },
+});
+let lastCountdownPreviewCharacterId = null;
+
 const GAMEPLAY_SUMMARY_TEXT = "Håll dig gömd, hitta spelare och slå ner dem.";
 const DESKTOP_CONTROLS_TEXT =
   "Desktop: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack.";
 const MOBILE_CONTROLS_TEXT =
   "Mobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta.";
-let lastCountdownPreviewCharacterId = null;
+
+const mobileControls = createMobileControls(
+  { mobileControlsEl, mobileLandscapePromptEl, lobbyDialogBackdropEl },
+  {
+    isTouchDevice: IS_TOUCH_DEVICE,
+    initialPreference: normalizeMobileControlsPreference(
+      localStorage.getItem(MOBILE_CONTROLS_PREF_KEY),
+    ),
+    normalizePreference: normalizeMobileControlsPreference,
+    gameplaySummaryText: GAMEPLAY_SUMMARY_TEXT,
+    desktopControlsText: DESKTOP_CONTROLS_TEXT,
+    mobileControlsText: MOBILE_CONTROLS_TEXT,
+    getAppMode: () => clientState.appMode,
+    getSessionState: () => clientState.sessionState,
+    getGameChatOpen: () => clientState.gameChatOpen,
+    getGameMenuOpen: () => clientState.gameMenuOpen,
+    resetJoystickState: () => inputController?.resetJoystickState?.(),
+  },
+);
+const {
+  controlsTextForCurrentMode,
+  getMobileControlsPreference,
+  persistMobileControlsPreference,
+  updateMobileControlsVisibility,
+} = mobileControls;
 
 const chatUi = createChatUi({
   lobbyMessagesEl: chatMessagesEl,
@@ -252,7 +298,7 @@ const settingsController = createSettingsController({
   },
   camera,
   getAppMode: () => clientState.appMode,
-  getMobileControlsPreference: () => mobileControlsPreference,
+  getMobileControlsPreference,
   isTouchDevice: IS_TOUCH_DEVICE,
   mobileControlsLabel,
 });
@@ -292,7 +338,7 @@ const inputController = createInputController({
   getSessionState: () => clientState.sessionState,
   getGameMenuOpen: () => clientState.gameMenuOpen,
   getGameChatOpen: () => clientState.gameChatOpen,
-  isGameChatFocused,
+  isGameChatFocused: () => isGameChatFocused(),
   requestPointerLock: requestPointerLockSafe,
 });
 
@@ -346,74 +392,6 @@ function lobbyRoomNameFromPath() {
   return roomCode;
 }
 
-function scoreboardSignature(players) {
-  if (!Array.isArray(players) || players.length <= 0) return "";
-  return players
-    .map((p) =>
-      [
-        p?.name || "",
-        p?.ready ? 1 : 0,
-        p?.wins ?? 0,
-        p?.knockdowns ?? 0,
-        p?.streak ?? 0,
-        p?.downed ?? 0,
-        p?.innocents ?? 0,
-        p?.status || "",
-      ].join(":"),
-    )
-    .join("|");
-}
-
-function adaptRenderScale(nowMs, frameMs) {
-  if (!IS_TOUCH_DEVICE || clientState.appMode !== "playing") return;
-  smoothFrameMs += (frameMs - smoothFrameMs) * 0.06;
-  if (nowMs - lastQualityAdjustAt < MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS)
-    return;
-
-  const currentScale = getRenderScale?.() ?? MOBILE_RENDER_SCALE_MAX;
-  if (
-    smoothFrameMs >= MOBILE_FRAME_MS_DEGRADE_THRESHOLD &&
-    currentScale > MOBILE_RENDER_SCALE_MIN
-  ) {
-    const next = Math.max(
-      MOBILE_RENDER_SCALE_MIN,
-      currentScale - MOBILE_RENDER_SCALE_STEP_DOWN,
-    );
-    if (setRenderScale?.(next)) lastQualityAdjustAt = nowMs;
-    return;
-  }
-  if (
-    smoothFrameMs <= MOBILE_FRAME_MS_UPGRADE_THRESHOLD &&
-    currentScale < MOBILE_RENDER_SCALE_MAX
-  ) {
-    const next = Math.min(
-      MOBILE_RENDER_SCALE_MAX,
-      currentScale + MOBILE_RENDER_SCALE_STEP_UP,
-    );
-    if (setRenderScale?.(next)) lastQualityAdjustAt = nowMs;
-  }
-}
-
-function persistMobileControlsPreference(value) {
-  const normalized = normalizeMobileControlsPreference(value);
-  mobileControlsPreference = normalized;
-  localStorage.setItem(MOBILE_CONTROLS_PREF_KEY, normalized);
-}
-
-function mobileControlsEnabledByPreference() {
-  if (mobileControlsPreference === "on") return true;
-  if (mobileControlsPreference === "off") return false;
-  return IS_TOUCH_DEVICE;
-}
-
-function controlsTextForCurrentMode() {
-  return `${GAMEPLAY_SUMMARY_TEXT}\n${
-    mobileControlsEnabledByPreference()
-      ? MOBILE_CONTROLS_TEXT
-      : DESKTOP_CONTROLS_TEXT
-  }`;
-}
-
 function requestPointerLockSafe(targetEl = canvas) {
   try {
     const maybePromise = targetEl?.requestPointerLock?.();
@@ -443,173 +421,6 @@ function updateDocumentTitle() {
     return;
   }
   document.title = `Hidden - ${othersPlaying} spelare`;
-}
-
-function openLobbyDialog(title, text, { showSettings = false } = {}) {
-  if (
-    !lobbyDialogBackdropEl ||
-    !lobbyDialogTitleEl ||
-    !lobbyDialogTextEl ||
-    !lobbyDialogCloseBtnEl
-  )
-    return;
-  setLobbyMenuOpen(false);
-  lobbyDialogTitleEl.textContent = title;
-  lobbyDialogTextEl.textContent = text;
-  lobbyDialogTextEl.classList.toggle("hidden", showSettings);
-  if (settingsPanelEl)
-    settingsPanelEl.classList.toggle("hidden", !showSettings);
-  if (showSettings) refreshAudioSettingsUi();
-  lobbyDialogBackdropEl.classList.remove("hidden");
-  const dialogCardEl = document.getElementById("lobbyDialogCard");
-  if (dialogCardEl) dialogCardEl.scrollTop = 0;
-  updateScreenRootPointerEvents();
-  updateMobileControlsVisibility();
-  if (showSettings && musicVolumeInputEl && !IS_TOUCH_DEVICE) {
-    musicVolumeInputEl.focus();
-  } else {
-    lobbyDialogCloseBtnEl.focus();
-  }
-}
-
-function closeLobbyDialog() {
-  if (!lobbyDialogBackdropEl) return;
-  lobbyDialogBackdropEl.classList.add("hidden");
-  if (settingsPanelEl) settingsPanelEl.classList.add("hidden");
-  lobbyDialogTextEl?.classList.remove("hidden");
-  updateScreenRootPointerEvents();
-  updateMobileControlsVisibility();
-  if (
-    clientState.appMode === "playing" &&
-    (clientState.sessionState === "alive" || clientState.sessionState === "won")
-  ) {
-    requestPointerLockSafe(canvas);
-  }
-}
-
-function isGameChatFocused() {
-  return document.activeElement === gameChatInputEl;
-}
-
-function canOpenInGameChat() {
-  if (clientState.appMode !== "playing") return false;
-  if (clientState.winReturnToLobbyMsRemaining > 0) return false;
-  return (
-    clientState.sessionState === "downed" ||
-    clientState.sessionState === "spectating" ||
-    clientState.sessionState === "won"
-  );
-}
-
-function updateMobileControlsVisibility() {
-  if (!mobileControlsEl) return;
-  const isPortrait =
-    (window.matchMedia &&
-      window.matchMedia("(orientation: portrait)").matches) ||
-    window.innerHeight > window.innerWidth;
-  const showLandscapePrompt =
-    IS_TOUCH_DEVICE && clientState.appMode === "playing" && isPortrait;
-  const wasShown = !mobileControlsEl.classList.contains("hidden");
-  const lobbyDialogOpen =
-    clientState.appMode === "playing" &&
-    lobbyDialogBackdropEl &&
-    !lobbyDialogBackdropEl.classList.contains("hidden");
-  const show =
-    mobileControlsEnabledByPreference() &&
-    clientState.appMode === "playing" &&
-    (clientState.sessionState === "alive" ||
-      clientState.sessionState === "won") &&
-    !clientState.gameChatOpen &&
-    !clientState.gameMenuOpen &&
-    !lobbyDialogOpen &&
-    !showLandscapePrompt;
-  mobileControlsEl.classList.toggle("hidden", !show);
-  document.body.classList.toggle("mobile-controls-enabled", show);
-  mobileLandscapePromptEl?.classList.toggle("hidden", !showLandscapePrompt);
-  if (mobileLandscapePromptEl)
-    mobileLandscapePromptEl.setAttribute(
-      "aria-hidden",
-      showLandscapePrompt ? "false" : "true",
-    );
-  if (wasShown && !show) inputController.resetJoystickState?.();
-}
-
-function updateGameChatAvailability() {
-  const available = clientState.appMode === "playing" && canOpenInGameChat();
-  gameChatBoxEl?.classList.toggle("hidden", !available);
-  gameChatNoticeEl?.classList.toggle("hidden", !available);
-  if (available) {
-    // Show full chat history so messages sent while the player was alive are visible.
-    chatUi.setGameLineLimit(null);
-    return;
-  }
-  clientState.gameChatOpen = false;
-  gameChatBoxEl?.classList.remove("open");
-  gameChatInputRowEl?.classList.add("hidden");
-  gameChatInputEl?.blur();
-  chatUi.setGameLineLimit(GAME_CHAT_MAX_LINES);
-}
-
-function setGameChatOpen(open, { restorePointerLock = false } = {}) {
-  if (!gameChatInputRowEl || !gameChatBoxEl || !gameChatNoticeEl) return;
-  updateGameChatAvailability();
-  const canOpen = Boolean(open) && canOpenInGameChat();
-  clientState.gameChatOpen = canOpen;
-  gameChatBoxEl.classList.toggle("open", canOpen);
-  gameChatInputRowEl.classList.toggle("hidden", !canOpen);
-  gameChatNoticeEl.textContent =
-    canOpen || clientState.sessionState === "won" ? "Chatt" : "Systemhändelser";
-  chatUi.setGameLineLimit(canOpen ? null : GAME_CHAT_MAX_LINES);
-  if (canOpen) {
-    if (document.pointerLockElement) document.exitPointerLock?.();
-    gameChatInputEl?.focus();
-  } else {
-    gameChatInputEl?.blur();
-  }
-  if (!canOpenInGameChat()) clientState.gameChatOpen = false;
-  if (
-    restorePointerLock &&
-    clientState.appMode === "playing" &&
-    (clientState.sessionState === "alive" || clientState.sessionState === "won")
-  ) {
-    requestPointerLockSafe(canvas);
-  }
-  updateMobileControlsVisibility();
-  updateDownedOverlay();
-  updateSpectatorHud();
-}
-
-function setGameMenuOpen(open, { restorePointerLock = false } = {}) {
-  if (!gameMenuBackdropEl) return;
-  clientState.gameMenuOpen = Boolean(open);
-  gameMenuBackdropEl.classList.toggle("hidden", !clientState.gameMenuOpen);
-  if (clientState.gameMenuOpen) {
-    resetInputState();
-    inputController.sendInput();
-    if (document.pointerLockElement) document.exitPointerLock?.();
-    gameMenuSettingsBtnEl?.focus();
-    updateMobileControlsVisibility();
-    return;
-  }
-  if (
-    restorePointerLock &&
-    clientState.appMode === "playing" &&
-    (clientState.sessionState === "alive" || clientState.sessionState === "won")
-  ) {
-    requestPointerLockSafe(canvas);
-  }
-  updateMobileControlsVisibility();
-}
-
-function setLobbyMenuOpen(open) {
-  if (!lobbyMenuBackdropEl) return;
-  clientState.lobbyMenuOpen = Boolean(open);
-  lobbyMenuBackdropEl.classList.toggle("hidden", !clientState.lobbyMenuOpen);
-  if (clientState.lobbyMenuOpen) {
-    lobbyMenuSettingsBtnEl?.focus();
-  } else if (clientState.appMode === "lobby") {
-    lobbySettingsBtnEl?.focus();
-  }
 }
 
 function updateLobbyMatchStatus() {
@@ -769,6 +580,61 @@ function requestSpectate() {
   activeSocket.sendJson({ type: "spectate" });
 }
 
+const {
+  canOpenInGameChat,
+  closeLobbyDialog,
+  isGameChatFocused,
+  openLobbyDialog,
+  setGameChatOpen,
+  setGameMenuOpen,
+  setLobbyMenuOpen,
+  updateGameChatAvailability,
+} = createPanelState(
+  {
+    gameChatBoxEl,
+    gameChatNoticeEl,
+    gameChatInputRowEl,
+    gameChatInputEl,
+    gameMenuBackdropEl,
+    gameMenuSettingsBtnEl,
+    lobbyMenuBackdropEl,
+    lobbyMenuSettingsBtnEl,
+    lobbySettingsBtnEl,
+    lobbyDialogBackdropEl,
+    lobbyDialogTitleEl,
+    lobbyDialogTextEl,
+    lobbyDialogCloseBtnEl,
+    settingsPanelEl,
+    musicVolumeInputEl,
+  },
+  {
+    getAppMode: () => clientState.appMode,
+    getSessionState: () => clientState.sessionState,
+    getWinReturnToLobbyMsRemaining: () =>
+      clientState.winReturnToLobbyMsRemaining,
+    setGameChatOpen: (v) => {
+      clientState.gameChatOpen = v;
+    },
+    setGameMenuOpen: (v) => {
+      clientState.gameMenuOpen = v;
+    },
+    setLobbyMenuOpen: (v) => {
+      clientState.lobbyMenuOpen = v;
+    },
+    chatUi,
+    gameChatMaxLines: GAME_CHAT_MAX_LINES,
+    isTouchDevice: IS_TOUCH_DEVICE,
+    requestPointerLockSafe: () => requestPointerLockSafe(canvas),
+    resetInputState,
+    sendInput: () => inputController.sendInput(),
+    updateMobileControlsVisibility,
+    updateDownedOverlay,
+    updateSpectatorHud,
+    updateScreenRootPointerEvents,
+    refreshAudioSettingsUi,
+  },
+);
+
 function requestSpectatorCycle(direction) {
   const activeSocket = socketConnection?.getSocket();
   if (!activeSocket || clientState.sessionState !== "spectating") return;
@@ -886,35 +752,22 @@ function updateScreenRootPointerEvents() {
 }
 
 function setCountdownTextFromSession(state) {
-  if (!countdownTextEl || !countdownOverlayEl) return;
   const ms = Number(state?.countdownMsRemaining || 0);
   clientState.lobbyCountdownMsRemaining = ms;
-  if (countdownControlsTextEl)
-    countdownControlsTextEl.textContent = controlsTextForCurrentMode();
-  // Show join button when the player is in lobby (watching countdown) but not yet participating
-  const canJoin =
-    ms > 0 && state?.state === "lobby" && Boolean(state?.authenticated);
-  countdownJoinBtnEl?.classList.toggle("hidden", !canJoin);
-  if (ms > 0) {
-    const sec = Math.max(1, Math.ceil(ms / 1000));
-    countdownTextEl.textContent = String(sec);
-    const characterId = state?.characterId ?? clientState.myCharacterId;
-    if (countdownCharacterCanvasEl && characterId != null) {
-      if (characterId !== lastCountdownPreviewCharacterId) {
-        drawCountdownCharacterPreview(countdownCharacterCanvasEl, characterId);
-        lastCountdownPreviewCharacterId = characterId;
-      }
-    } else {
-      lastCountdownPreviewCharacterId = null;
-    }
-    countdownOverlayEl.classList.remove("hidden");
-    updateLobbyMatchStatus();
-    updateReadyButton();
-    return;
-  }
-  lastCountdownPreviewCharacterId = null;
-  countdownTextEl.textContent = "";
-  countdownOverlayEl.classList.add("hidden");
+  ({ lastCountdownPreviewCharacterId } = updateCountdownOverlay({
+    countdownTextEl,
+    countdownOverlayEl,
+    countdownControlsTextEl,
+    countdownCharacterCanvasEl,
+    countdownJoinBtnEl,
+    countdownMsRemaining: ms,
+    sessionState: state?.state ?? clientState.sessionState,
+    authenticated: state?.authenticated ?? clientState.authenticated,
+    characterId: state?.characterId ?? clientState.myCharacterId,
+    lastCountdownPreviewCharacterId,
+    controlsText: controlsTextForCurrentMode(),
+    drawCharacterPreview: drawCountdownCharacterPreview,
+  }));
   updateLobbyMatchStatus();
   updateReadyButton();
 }
@@ -1059,41 +912,6 @@ function requestReturnToLobby() {
   setGameMenuOpen(false);
 }
 
-function updateSpectatorCamera(deltaSec) {
-  if (clientState.sessionState !== "spectating") return;
-  const target = avatarSystem.getCharacterCameraState(
-    clientState.spectatorTargetCharacterId,
-  );
-  if (!target) return;
-
-  if (
-    clientState.downedByName &&
-    clientState.spectatorTargetName &&
-    clientState.spectatorTargetName === clientState.myName
-  ) {
-    const posSmooth = 1 - Math.exp(-deltaSec * DOWNED_CAMERA_POS_SMOOTH_RATE);
-    camera.position.x += (target.x - camera.position.x) * posSmooth;
-    camera.position.z += (target.z - camera.position.z) * posSmooth;
-    camera.position.y += (DOWNED_CAMERA_HEIGHT - camera.position.y) * posSmooth;
-    camera.rotation.set(-Math.PI / 2 + 0.0001, 0, 0);
-    return;
-  }
-
-  const desiredX = target.x - Math.sin(target.yaw) * SPECTATOR_CAMERA_DISTANCE;
-  const desiredZ = target.z - Math.cos(target.yaw) * SPECTATOR_CAMERA_DISTANCE;
-  const desiredY = target.eyeHeight + SPECTATOR_CAMERA_HEIGHT_OFFSET;
-  const posSmooth = 1 - Math.exp(-deltaSec * SPECTATOR_CAMERA_POS_SMOOTH_RATE);
-  camera.position.x += (desiredX - camera.position.x) * posSmooth;
-  camera.position.z += (desiredZ - camera.position.z) * posSmooth;
-  camera.position.y += (desiredY - camera.position.y) * posSmooth;
-
-  camera.lookAt(
-    target.x,
-    target.eyeHeight + SPECTATOR_CAMERA_TARGET_HEIGHT_OFFSET,
-    target.z,
-  );
-}
-
 const savedName = localStorage.getItem(PLAYER_NAME_KEY);
 if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
 if (IS_TOUCH_DEVICE) document.body.classList.add("touch-device");
@@ -1211,7 +1029,7 @@ bindAppEventHandlers({
     canOpenInGameChat,
     getAudioSettings,
     getLookSettings,
-    getMobileControlsPreference: () => mobileControlsPreference,
+    getMobileControlsPreference,
   },
 });
 
@@ -1228,7 +1046,17 @@ function animate() {
   recordDebugFrame(frameMs);
   if (clientState.appMode !== "playing") return;
   sendDebugPing(now);
-  adaptRenderScale(now, frameMs);
+  _adaptRenderScale(now, frameMs, {
+    isTouchDevice: IS_TOUCH_DEVICE,
+    isPlaying: clientState.appMode === "playing",
+    degradeThreshold: MOBILE_FRAME_MS_DEGRADE_THRESHOLD,
+    upgradeThreshold: MOBILE_FRAME_MS_UPGRADE_THRESHOLD,
+    scaleMin: MOBILE_RENDER_SCALE_MIN,
+    scaleMax: MOBILE_RENDER_SCALE_MAX,
+    stepDown: MOBILE_RENDER_SCALE_STEP_DOWN,
+    stepUp: MOBILE_RENDER_SCALE_STEP_UP,
+    cooldownMs: MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS,
+  });
   const yaw = inputController.getYaw();
   const pitch = inputController.getPitch();
 
@@ -1254,23 +1082,13 @@ function animate() {
     clientState.appMode === "playing" &&
     clientState.sessionState === "spectating"
   ) {
-    updateSpectatorCamera(deltaSec);
+    updateSpectatorCamera(deltaSec, clientState);
   }
   if (
     clientState.appMode === "playing" &&
     clientState.sessionState === "downed"
   ) {
-    const corpsePos = avatarSystem.getCharacterPosition(
-      clientState.myCharacterId,
-    );
-    if (corpsePos) {
-      const posSmooth = 1 - Math.exp(-deltaSec * DOWNED_CAMERA_POS_SMOOTH_RATE);
-      camera.position.x += (corpsePos.x - camera.position.x) * posSmooth;
-      camera.position.z += (corpsePos.z - camera.position.z) * posSmooth;
-      camera.position.y +=
-        (DOWNED_CAMERA_HEIGHT - camera.position.y) * posSmooth;
-    }
-    camera.rotation.set(-Math.PI / 2 + 0.0001, 0, 0);
+    updateDownedCamera(deltaSec, clientState);
   }
   if (
     clientState.appMode === "playing" &&
