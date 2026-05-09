@@ -100,6 +100,7 @@ export function attachGameRuntime({ server, rootDir }) {
         npcDownedRespawnSeconds: gameplay.npcDownedRespawnSeconds ?? currentGameplay.npcDownedRespawnSeconds,
         playerAttackCooldownSeconds:
           gameplay.playerAttackCooldownSeconds ?? currentGameplay.playerAttackCooldownSeconds,
+        attackHalfAngleDegrees: gameplay.attackHalfAngleDegrees ?? currentGameplay.attackHalfAngleDegrees,
         moveSpeedMetersPerSecond: gameplay.moveSpeedMetersPerSecond ?? currentGameplay.moveSpeedMetersPerSecond,
         playerSprintMultiplier: gameplay.playerSprintMultiplier ?? currentGameplay.playerSprintMultiplier
       });
@@ -277,6 +278,7 @@ export function attachGameRuntime({ server, rootDir }) {
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "minPlayersToStart") ||
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcDownedRespawnSeconds") ||
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "playerAttackCooldownSeconds") ||
+        Object.prototype.hasOwnProperty.call(parsedBody || {}, "attackHalfAngleDegrees") ||
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "moveSpeedMetersPerSecond") ||
         Object.prototype.hasOwnProperty.call(parsedBody || {}, "playerSprintMultiplier");
       const hasAiBehaviorPatch =
@@ -320,6 +322,12 @@ export function attachGameRuntime({ server, rootDir }) {
           )
             ? parsedBody.playerAttackCooldownSeconds
             : currentGameplay.playerAttackCooldownSeconds;
+          const nextAttackHalfAngleDegrees = Object.prototype.hasOwnProperty.call(
+            parsedBody,
+            "attackHalfAngleDegrees"
+          )
+            ? parsedBody.attackHalfAngleDegrees
+            : currentGameplay.attackHalfAngleDegrees;
           const nextMoveSpeedMetersPerSecond = Object.prototype.hasOwnProperty.call(
             parsedBody,
             "moveSpeedMetersPerSecond"
@@ -339,6 +347,7 @@ export function attachGameRuntime({ server, rootDir }) {
               minPlayersToStart: nextMinPlayersToStart,
               npcDownedRespawnSeconds: nextNpcDownedRespawnSeconds,
               playerAttackCooldownSeconds: nextPlayerAttackCooldownSeconds,
+              attackHalfAngleDegrees: nextAttackHalfAngleDegrees,
               moveSpeedMetersPerSecond: nextMoveSpeedMetersPerSecond,
               playerSprintMultiplier: nextPlayerSprintMultiplier
             }) || changed;

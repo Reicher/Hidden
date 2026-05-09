@@ -236,7 +236,7 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   }
 
   function stateSummary() {
-    return `anslutna=${sockets.size} inloggade=${authenticatedCount()} spelar=${activePlayerCount()} nedrakning=${countdownPlayerCount()}`;
+    return `anslutna=${sockets.size} spelar=${activePlayerCount()} nedrakning=${countdownPlayerCount()}`;
   }
 
   function debugStateSnapshot() {
@@ -840,7 +840,7 @@ function sanitizeSystemTextSegment(raw) {
       isPrivate,
       current: debugStateSnapshot(),
       perf: perfSnapshot(),
-      authenticatedNames: authenticatedSessions()
+      names: authenticatedSessions()
         .map((session) => session.name)
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b, "sv"))

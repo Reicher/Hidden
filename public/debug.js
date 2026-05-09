@@ -21,6 +21,7 @@ const maxPlayersInputEl = document.getElementById("maxPlayersInput");
 const minPlayersToStartInputEl = document.getElementById("minPlayersToStartInput");
 const npcDownedRespawnSecondsInputEl = document.getElementById("npcDownedRespawnSecondsInput");
 const playerAttackCooldownSecondsInputEl = document.getElementById("playerAttackCooldownSecondsInput");
+const attackHalfAngleDegreesInputEl = document.getElementById("attackHalfAngleDegreesInput");
 const moveSpeedMetersPerSecondInputEl = document.getElementById("moveSpeedMetersPerSecondInput");
 const playerSprintMultiplierInputEl = document.getElementById("playerSprintMultiplierInput");
 const npcInspectDownedChanceInputEl = document.getElementById("npcInspectDownedChanceInput");
@@ -52,6 +53,7 @@ const DEFAULT_GAMEPLAY_SETTINGS = Object.freeze({
   minPlayersToStart: 2,
   npcDownedRespawnSeconds: 8,
   playerAttackCooldownSeconds: 2,
+  attackHalfAngleDegrees: 18,
   moveSpeedMetersPerSecond: 2.9,
   playerSprintMultiplier: 1.45
 });
@@ -174,6 +176,7 @@ function resolvedGameplaySettings(input) {
   setIntIfFinite("minPlayersToStart", src.minPlayersToStart);
   setIntIfFinite("npcDownedRespawnSeconds", src.npcDownedRespawnSeconds);
   setIntIfFinite("playerAttackCooldownSeconds", src.playerAttackCooldownSeconds);
+  setNumberIfFinite("attackHalfAngleDegrees", src.attackHalfAngleDegrees, 2, 60);
   setNumberIfFinite("moveSpeedMetersPerSecond", src.moveSpeedMetersPerSecond, 0.5, 8);
   setNumberIfFinite("playerSprintMultiplier", src.playerSprintMultiplier, 1, 3);
   return out;
@@ -263,11 +266,9 @@ function renderSummary(data) {
   const cpuTempHost = host.cpuTempCelsius == null ? "-" : `${host.cpuTempCelsius}\u00b0C`;
   const rows = [
     ["Anslutna nu", fmtN(data?.current?.connected)],
-    ["Inloggade nu", fmtN(data?.current?.authenticated)],
     ["Spelar nu", fmtN(data?.current?.active)],
     ["Peak anslutna", fmtN(data?.peaks?.connected)],
     ["Totala besök", fmtN(data?.totals?.totalConnections)],
-    ["Totala logins", fmtN(data?.totals?.totalLogins)],
     ["Unika namn", fmtN(data?.totals?.uniqueNames)],
     ["Aktiva rum nu", fmtN(data?.current?.roomCountWithSessions)],
     ["Server start", fmtAt(data?.startedAt)],
@@ -317,7 +318,6 @@ function drawChart(samples) {
   const values = [];
   for (const p of points) {
     values.push(Number(p.connected || 0));
-    values.push(Number(p.authenticated || 0));
     values.push(Number(p.active || 0));
   }
   const maxY = Math.max(1, ...values);
@@ -351,7 +351,6 @@ function drawChart(samples) {
   }
 
   drawLine("connected", "#7ad8ff");
-  drawLine("authenticated", "#8de16f");
   drawLine("active", "#ffcf6a");
 }
 
@@ -375,7 +374,7 @@ function buildRoomRows(data) {
       lastEventAt: Number(room.lastEventAt || 0),
       uniqueNames: Array.isArray(room.uniqueNames) ? room.uniqueNames : [],
       hasLive: false,
-      authenticatedNames: []
+      names: []
     });
   }
 
@@ -389,12 +388,12 @@ function buildRoomRows(data) {
       lastEventAt: 0,
       uniqueNames: [],
       hasLive: false,
-      authenticatedNames: []
+      names: []
     };
     existing.roomCode = room.roomCode || existing.roomCode;
     existing.isPrivate = Boolean(room.isPrivate);
     existing.hasLive = true;
-    existing.authenticatedNames = Array.isArray(room.authenticatedNames) ? room.authenticatedNames : [];
+    existing.names = Array.isArray(room.names) ? room.names : [];
     byId.set(roomId, existing);
   }
 
@@ -421,7 +420,7 @@ function renderText(data) {
       if (activeRows.length > 0) {
         lines.push(`Aktiva (${activeRows.length}):`);
         for (const room of activeRows) {
-          const names = room.authenticatedNames.length > 0 ? room.authenticatedNames.join(", ") : "-";
+          const names = room.names.length > 0 ? room.names.join(", ") : "-";
           lines.push(`${roomLabel(room)} | namn: ${names}`);
         }
       }
@@ -504,6 +503,9 @@ function renderSettings(settings) {
   if (playerAttackCooldownSecondsInputEl && Number.isFinite(Number(gameplay.playerAttackCooldownSeconds))) {
     playerAttackCooldownSecondsInputEl.value = String(gameplay.playerAttackCooldownSeconds);
   }
+  if (attackHalfAngleDegreesInputEl && Number.isFinite(Number(gameplay.attackHalfAngleDegrees))) {
+    attackHalfAngleDegreesInputEl.value = String(gameplay.attackHalfAngleDegrees);
+  }
   if (moveSpeedMetersPerSecondInputEl && Number.isFinite(Number(gameplay.moveSpeedMetersPerSecond))) {
     moveSpeedMetersPerSecondInputEl.value = String(gameplay.moveSpeedMetersPerSecond);
   }
@@ -534,6 +536,9 @@ function renderSettings(settings) {
       : "-";
     const infoAttackCooldown = Number.isFinite(Number(gameplay.playerAttackCooldownSeconds))
       ? gameplay.playerAttackCooldownSeconds
+      : "-";
+    const infoAttackHalfAngle = Number.isFinite(Number(gameplay.attackHalfAngleDegrees))
+      ? gameplay.attackHalfAngleDegrees
       : "-";
     const infoMoveSpeed = Number.isFinite(Number(gameplay.moveSpeedMetersPerSecond))
       ? gameplay.moveSpeedMetersPerSecond
@@ -569,7 +574,7 @@ function renderSettings(settings) {
       activeWarnings.length > 0
         ? ` VARNING: ${activeWarnings.map((warning) => warning?.message || "Okänd varning").join(" | ")}`
         : "";
-    settingsInfoEl.textContent = `Aktiv karta: ${activeLabel}${activeSize ? ` (${activeSize})` : ""}. Karaktärer: ${infoChars}, max spelare: ${infoMax}, min start: ${infoMinStart}, NPC återresning: ${infoNpcRespawn}s, slag-cooldown: ${infoAttackCooldown}s, gångfart: ${infoMoveSpeed} m/s, spelar-sprintfaktor: ${infoSprintMultiplier}x, AI tid mellan beslut: ${infoMoveDecisionMin}-${infoMoveDecisionMax} ms, AI stoppchans vid beslut: ${infoStopChance}%, AI stopptid: ${infoStopDurationMin}-${infoStopDurationMax} ms, AI kolla-chans: ${infoInspectChance}%, AI sök-radie: ${infoInspectRadius}m, AI spridning: ${infoSpread}%.${warningText} Ändringar startar om aktiva rum.`;
+    settingsInfoEl.textContent = `Aktiv karta: ${activeLabel}${activeSize ? ` (${activeSize})` : ""}. Karaktärer: ${infoChars}, max spelare: ${infoMax}, min start: ${infoMinStart}, NPC återresning: ${infoNpcRespawn}s, slag-cooldown: ${infoAttackCooldown}s, träffkon: ${infoAttackHalfAngle} grader, gångfart: ${infoMoveSpeed} m/s, spelar-sprintfaktor: ${infoSprintMultiplier}x, AI tid mellan beslut: ${infoMoveDecisionMin}-${infoMoveDecisionMax} ms, AI stoppchans vid beslut: ${infoStopChance}%, AI stopptid: ${infoStopDurationMin}-${infoStopDurationMax} ms, AI kolla-chans: ${infoInspectChance}%, AI sök-radie: ${infoInspectRadius}m, AI spridning: ${infoSpread}%.${warningText} Ändringar startar om aktiva rum.`;
   }
 }
 
@@ -587,6 +592,7 @@ function hasUnsavedSettingsFormChanges(referenceSettings) {
     [minPlayersToStartInputEl, gameplay.minPlayersToStart],
     [npcDownedRespawnSecondsInputEl, gameplay.npcDownedRespawnSeconds],
     [playerAttackCooldownSecondsInputEl, gameplay.playerAttackCooldownSeconds],
+    [attackHalfAngleDegreesInputEl, gameplay.attackHalfAngleDegrees],
     [moveSpeedMetersPerSecondInputEl, gameplay.moveSpeedMetersPerSecond],
     [playerSprintMultiplierInputEl, gameplay.playerSprintMultiplier]
   ];
@@ -758,6 +764,12 @@ async function saveSettings() {
       "Spelarslag cooldown (sek)",
       currentGameplay.playerAttackCooldownSeconds
     );
+    const attackHalfAngleDegreesPatch = readOptionalPatchedNumberField(
+      attackHalfAngleDegreesInputEl,
+      "Träffkon halvbredd (grader)",
+      currentGameplay.attackHalfAngleDegrees,
+      { min: 2, max: 60, step: 0.5 }
+    );
     const moveSpeedMetersPerSecondPatch = readOptionalPatchedNumberField(
       moveSpeedMetersPerSecondInputEl,
       "Gångfart spelare + NPC (m/s)",
@@ -820,6 +832,7 @@ async function saveSettings() {
     const minPlayersToStart = minPlayersToStartPatch.value;
     const npcDownedRespawnSeconds = npcDownedRespawnSecondsPatch.value;
     const playerAttackCooldownSeconds = playerAttackCooldownSecondsPatch.value;
+    const attackHalfAngleDegrees = attackHalfAngleDegreesPatch.value;
     const moveSpeedMetersPerSecond = moveSpeedMetersPerSecondPatch.value;
     const playerSprintMultiplier = playerSprintMultiplierPatch.value;
     const npcInspectDownedChancePercent = npcInspectDownedChancePatch.value;
@@ -837,6 +850,7 @@ async function saveSettings() {
       minPlayersToStartPatch.changed ||
       npcDownedRespawnSecondsPatch.changed ||
       playerAttackCooldownSecondsPatch.changed ||
+      attackHalfAngleDegreesPatch.changed ||
       moveSpeedMetersPerSecondPatch.changed ||
       playerSprintMultiplierPatch.changed;
     const aiBehaviorChanged =
@@ -878,6 +892,7 @@ async function saveSettings() {
       payload.minPlayersToStart = minPlayersToStart;
       payload.npcDownedRespawnSeconds = npcDownedRespawnSeconds;
       payload.playerAttackCooldownSeconds = playerAttackCooldownSeconds;
+      payload.attackHalfAngleDegrees = attackHalfAngleDegrees;
       payload.moveSpeedMetersPerSecond = moveSpeedMetersPerSecond;
       payload.playerSprintMultiplier = playerSprintMultiplier;
     }

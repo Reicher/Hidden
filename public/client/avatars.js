@@ -245,21 +245,39 @@ export function createAvatarSystem({ scene, camera }) {
     transparent: true,
     depthWrite: false
   });
-  firstPersonArmPivot.position.set(0.22, -0.18, -0.38);
-  firstPersonArmPivot.rotation.set(-0.08, -0.12, -0.12);
-  const firstPersonArm = new THREE.Mesh(
-    new THREE.BoxGeometry(0.16, 0.7, 0.18),
-    new THREE.MeshStandardMaterial({
-      color: 0xb57b5f,
-      roughness: 0.82,
-      metalness: 0.02,
-      depthTest: false,
-      depthWrite: false
-    })
+  firstPersonArmPivot.position.set(0.28, -0.42, -0.5);
+  firstPersonArmPivot.rotation.set(-1.12, -0.1, -0.2);
+  const firstPersonSkinMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb57b5f,
+    roughness: 0.82,
+    metalness: 0.02,
+    depthTest: false,
+    depthWrite: false
+  });
+  const firstPersonArm = new THREE.Group();
+  const firstPersonPalm = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.085, 0.12, 6, 12),
+    firstPersonSkinMaterial
   );
-  firstPersonArm.position.set(0, -0.35, 0.02);
-  firstPersonArm.renderOrder = 1000;
-  firstPersonArm.frustumCulled = false;
+  firstPersonPalm.rotation.z = Math.PI / 2;
+  firstPersonPalm.position.set(0, 0.02, 0);
+  const firstPersonFist = new THREE.Mesh(
+    new THREE.SphereGeometry(0.13, 18, 14),
+    firstPersonSkinMaterial
+  );
+  firstPersonFist.scale.set(1.08, 0.82, 0.94);
+  firstPersonFist.position.set(0.13, 0.02, 0.01);
+  const firstPersonWrist = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.055, 0.16, 5, 10),
+    firstPersonSkinMaterial
+  );
+  firstPersonWrist.rotation.z = Math.PI / 2;
+  firstPersonWrist.position.set(-0.12, 0, 0);
+  for (const part of [firstPersonPalm, firstPersonFist, firstPersonWrist]) {
+    part.renderOrder = 1000;
+    part.frustumCulled = false;
+    firstPersonArm.add(part);
+  }
   firstPersonArmPivot.add(firstPersonArm);
   firstPersonArmPivot.visible = false;
   camera.add(firstPersonArmPivot);
@@ -991,18 +1009,20 @@ export function createAvatarSystem({ scene, camera }) {
       firstPersonAttackMs = 0;
       return;
     }
-    firstPersonArmPivot.visible = true;
     firstPersonAttackMs = Math.max(0, firstPersonAttackMs - deltaSec * 1000);
+    firstPersonArmPivot.visible = firstPersonAttackMs > 0;
     let punch = 0;
     if (firstPersonAttackMs > 0) {
       const progress = 1 - clamp01(firstPersonAttackMs / ATTACK_ANIM_MS);
       const extension = progress < 0.35 ? progress / 0.35 : 1 - (progress - 0.35) / 0.65;
       punch = clamp01(extension) * 2.2;
     }
-    firstPersonArmPivot.rotation.x = -0.12 + punch;
-    firstPersonArmPivot.rotation.y = -0.12 + punch * 0.16;
-    firstPersonArmPivot.position.x = 0.22 - punch * 0.06;
-    firstPersonArmPivot.position.z = -0.38 - punch * 0.12;
+    firstPersonArmPivot.rotation.x = -1.12 + punch * 0.72;
+    firstPersonArmPivot.rotation.y = -0.1 + punch * 0.18;
+    firstPersonArmPivot.rotation.z = -0.2 - punch * 0.06;
+    firstPersonArmPivot.position.x = 0.28 - punch * 0.045;
+    firstPersonArmPivot.position.y = -0.42 + punch * 0.11;
+    firstPersonArmPivot.position.z = -0.5 - punch * 0.09;
   }
 
   function applyWorldCharacters({ characters, myCharacterId, nowMs, hideMyCharacter = true }) {
@@ -1052,9 +1072,8 @@ export function createAvatarSystem({ scene, camera }) {
       if (id === myCharacterId) {
         hasControl = true;
         firstPersonAttackMs = Math.max(firstPersonAttackMs, avatar.attackFlashMsRemaining);
-        const fpMat = firstPersonArm.material;
-        if (fpMat && !Array.isArray(fpMat) && fpMat.color && avatar.skinColor) {
-          fpMat.color.copy(avatar.skinColor);
+        if (firstPersonSkinMaterial.color && avatar.skinColor) {
+          firstPersonSkinMaterial.color.copy(avatar.skinColor);
         }
         camera.position.set(avatar.group.position.x, avatar.eyeHeight, avatar.group.position.z);
       }

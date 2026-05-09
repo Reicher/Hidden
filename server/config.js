@@ -62,6 +62,7 @@ const DEFAULT_MAX_PLAYERS = 10;
 const DEFAULT_MIN_PLAYERS_TO_START = 2;
 const DEFAULT_NPC_DOWNED_RESPAWN_SECONDS = 8;
 const DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS = 2;
+const DEFAULT_ATTACK_HALF_ANGLE_DEGREES = 18;
 const DEFAULT_MOVE_SPEED_METERS_PER_SECOND = 2.9;
 const DEFAULT_PLAYER_SPRINT_MULTIPLIER = 1.45;
 const DEFAULT_NPC_INSPECT_DOWNED_CHANCE_PERCENT = 75;
@@ -101,6 +102,7 @@ function normalizeGameplaySettings({
   minPlayersToStart,
   npcDownedRespawnSeconds,
   playerAttackCooldownSeconds,
+  attackHalfAngleDegrees,
   moveSpeedMetersPerSecond,
   playerSprintMultiplier
 }) {
@@ -111,6 +113,11 @@ function normalizeGameplaySettings({
   const normalizedPlayerAttackCooldownSeconds = parsePositiveInt(
     playerAttackCooldownSeconds,
     "playerAttackCooldownSeconds"
+  );
+  const normalizedAttackHalfAngleDegrees = parseBoundedNumber(
+    attackHalfAngleDegrees,
+    "attackHalfAngleDegrees",
+    { min: 2, max: 60 }
   );
   const normalizedMoveSpeedMetersPerSecond = parseBoundedNumber(
     moveSpeedMetersPerSecond,
@@ -139,6 +146,7 @@ function normalizeGameplaySettings({
     minPlayersToStart: normalizedMin,
     npcDownedRespawnSeconds: normalizedNpcRespawnSeconds,
     playerAttackCooldownSeconds: normalizedPlayerAttackCooldownSeconds,
+    attackHalfAngleDegrees: Number(normalizedAttackHalfAngleDegrees.toFixed(1)),
     moveSpeedMetersPerSecond: Number(normalizedMoveSpeedMetersPerSecond.toFixed(2)),
     playerSprintMultiplier: Number(normalizedPlayerSprintMultiplier.toFixed(2))
   });
@@ -224,6 +232,7 @@ let gameplaySettings = (() => {
         "PLAYER_ATTACK_COOLDOWN_SECONDS",
         DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS
       ),
+      attackHalfAngleDegrees: envNumber("ATTACK_HALF_ANGLE_DEGREES", DEFAULT_ATTACK_HALF_ANGLE_DEGREES),
       moveSpeedMetersPerSecond: envNumber("MOVE_SPEED_METERS_PER_SECOND", DEFAULT_MOVE_SPEED_METERS_PER_SECOND),
       playerSprintMultiplier: envNumber("PLAYER_SPRINT_MULTIPLIER", DEFAULT_PLAYER_SPRINT_MULTIPLIER)
     });
@@ -234,6 +243,7 @@ let gameplaySettings = (() => {
       minPlayersToStart: DEFAULT_MIN_PLAYERS_TO_START,
       npcDownedRespawnSeconds: DEFAULT_NPC_DOWNED_RESPAWN_SECONDS,
       playerAttackCooldownSeconds: DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS,
+      attackHalfAngleDegrees: DEFAULT_ATTACK_HALF_ANGLE_DEGREES,
       moveSpeedMetersPerSecond: DEFAULT_MOVE_SPEED_METERS_PER_SECOND,
       playerSprintMultiplier: DEFAULT_PLAYER_SPRINT_MULTIPLIER
     });
@@ -292,6 +302,7 @@ export let MAX_PLAYERS = gameplaySettings.maxPlayers;
 export let MIN_PLAYERS_TO_START = gameplaySettings.minPlayersToStart;
 export let NPC_DOWNED_RESPAWN_MS = gameplaySettings.npcDownedRespawnSeconds * 1000;
 export let ATTACK_COOLDOWN_MS = gameplaySettings.playerAttackCooldownSeconds * 1000;
+export let ATTACK_HALF_ANGLE = (gameplaySettings.attackHalfAngleDegrees * Math.PI) / 180;
 export let MOVE_SPEED = gameplaySettings.moveSpeedMetersPerSecond;
 export let PLAYER_SPRINT_MULTIPLIER = gameplaySettings.playerSprintMultiplier;
 export let NPC_INSPECT_DOWNED_CHANCE = aiBehaviorSettings.npcInspectDownedChancePercent / 100;
@@ -310,6 +321,7 @@ function applyGameplaySettings(nextSettings) {
   MIN_PLAYERS_TO_START = nextSettings.minPlayersToStart;
   NPC_DOWNED_RESPAWN_MS = nextSettings.npcDownedRespawnSeconds * 1000;
   ATTACK_COOLDOWN_MS = nextSettings.playerAttackCooldownSeconds * 1000;
+  ATTACK_HALF_ANGLE = (nextSettings.attackHalfAngleDegrees * Math.PI) / 180;
   MOVE_SPEED = nextSettings.moveSpeedMetersPerSecond;
   PLAYER_SPRINT_MULTIPLIER = nextSettings.playerSprintMultiplier;
 }
@@ -332,6 +344,7 @@ export function setGameplaySettings({
   minPlayersToStart,
   npcDownedRespawnSeconds,
   playerAttackCooldownSeconds,
+  attackHalfAngleDegrees,
   moveSpeedMetersPerSecond,
   playerSprintMultiplier
 }) {
@@ -341,6 +354,7 @@ export function setGameplaySettings({
     minPlayersToStart,
     npcDownedRespawnSeconds,
     playerAttackCooldownSeconds,
+    attackHalfAngleDegrees,
     moveSpeedMetersPerSecond,
     playerSprintMultiplier
   });
@@ -350,6 +364,7 @@ export function setGameplaySettings({
     nextSettings.minPlayersToStart !== MIN_PLAYERS_TO_START ||
     nextSettings.npcDownedRespawnSeconds * 1000 !== NPC_DOWNED_RESPAWN_MS ||
     nextSettings.playerAttackCooldownSeconds * 1000 !== ATTACK_COOLDOWN_MS ||
+    Math.abs((nextSettings.attackHalfAngleDegrees * Math.PI) / 180 - ATTACK_HALF_ANGLE) > 0.000001 ||
     nextSettings.moveSpeedMetersPerSecond !== MOVE_SPEED ||
     nextSettings.playerSprintMultiplier !== PLAYER_SPRINT_MULTIPLIER;
   if (!changed) return false;
@@ -364,6 +379,7 @@ export function getGameplaySettings() {
     minPlayersToStart: MIN_PLAYERS_TO_START,
     npcDownedRespawnSeconds: Math.round(NPC_DOWNED_RESPAWN_MS / 1000),
     playerAttackCooldownSeconds: Math.round(ATTACK_COOLDOWN_MS / 1000),
+    attackHalfAngleDegrees: Number(((ATTACK_HALF_ANGLE * 180) / Math.PI).toFixed(1)),
     moveSpeedMetersPerSecond: Number(MOVE_SPEED.toFixed(2)),
     playerSprintMultiplier: Number(PLAYER_SPRINT_MULTIPLIER.toFixed(2))
   });
@@ -422,7 +438,6 @@ export const TURN_SPEED = 2.3;
 export const AI_DECISION_MS_MIN = 600;
 export const AI_DECISION_MS_MAX = 1800;
 export const ATTACK_RANGE = 2.8;
-export const ATTACK_HALF_ANGLE = Math.PI / 18;
 export const ATTACK_FLASH_MS = 140;
 export const CHARACTER_RADIUS = 0.41;
 
