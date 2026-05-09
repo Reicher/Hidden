@@ -789,7 +789,11 @@ function updateGameChatAvailability() {
   const available = appMode === "playing" && canOpenInGameChat();
   gameChatBoxEl?.classList.toggle("hidden", !available);
   gameChatNoticeEl?.classList.toggle("hidden", !available);
-  if (available) return;
+  if (available) {
+    // Show full chat history so messages sent while the player was alive are visible.
+    chatUi.setGameLineLimit(null);
+    return;
+  }
   gameChatOpen = false;
   gameChatBoxEl?.classList.remove("open");
   gameChatInputRowEl?.classList.add("hidden");

@@ -2,17 +2,21 @@ import * as THREE from "/vendor/three.module.js";
 
 export function createSceneSystem(canvas) {
   const isLikelyTouchDevice = (() => {
-    const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
-    const hoverNone = window.matchMedia && window.matchMedia("(hover: none)").matches;
+    const coarsePointer =
+      window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    const hoverNone =
+      window.matchMedia && window.matchMedia("(hover: none)").matches;
     const touchApi = "ontouchstart" in window;
     const touchPoints = (navigator.maxTouchPoints || 0) > 0;
-    const mobileUa = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+    const mobileUa = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(
+      navigator.userAgent || "",
+    );
     return coarsePointer || hoverNone || touchApi || touchPoints || mobileUa;
   })();
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: !isLikelyTouchDevice,
-    powerPreference: "high-performance"
+    powerPreference: "high-performance",
   });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setClearColor(0x1f2530);
@@ -20,7 +24,12 @@ export function createSceneSystem(canvas) {
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x1f2530, 14, 52);
 
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+  const camera = new THREE.PerspectiveCamera(
+    75,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    100,
+  );
   camera.position.set(0, 1.6, 0);
   camera.rotation.order = "YXZ";
   scene.add(camera);
@@ -37,16 +46,30 @@ export function createSceneSystem(canvas) {
   let renderScale = 1;
   let lastAppliedPixelRatio = -1;
 
-  function resolveCanvasSize() {
-    const width = Math.max(1, Math.floor(canvas.clientWidth || window.innerWidth || 1));
-    const height = Math.max(1, Math.floor(canvas.clientHeight || window.innerHeight || 1));
+  function resolveCanvasSize(preferWindow = false) {
+    if (preferWindow) {
+      return {
+        width: Math.max(1, Math.floor(window.innerWidth || 1)),
+        height: Math.max(1, Math.floor(window.innerHeight || 1)),
+      };
+    }
+    const width = Math.max(
+      1,
+      Math.floor(canvas.clientWidth || window.innerWidth || 1),
+    );
+    const height = Math.max(
+      1,
+      Math.floor(canvas.clientHeight || window.innerHeight || 1),
+    );
     return { width, height };
   }
 
-  function resize() {
-    const { width, height } = resolveCanvasSize();
+  function resize(opts = {}) {
+    const { width, height } = resolveCanvasSize(opts.preferWindow);
     const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const cappedDpr = isLikelyTouchDevice ? Math.min(dpr, 1.25) : Math.min(dpr, 1.5);
+    const cappedDpr = isLikelyTouchDevice
+      ? Math.min(dpr, 1.25)
+      : Math.min(dpr, 1.5);
     const targetPixelRatio = Math.max(0.6, cappedDpr * renderScale);
     if (Math.abs(targetPixelRatio - lastAppliedPixelRatio) > 0.01) {
       renderer.setPixelRatio(targetPixelRatio);
@@ -72,7 +95,19 @@ export function createSceneSystem(canvas) {
     return renderScale;
   }
 
-  resize();
+  // Initial sizing: use window dimensions to avoid forcing a layout reflow
+  // during module evaluation (before stylesheets are guaranteed to be applied).
+  // A proper CSS-based resize is scheduled for the next animation frame.
+  resize({ preferWindow: true });
+  requestAnimationFrame(() => resize());
 
-  return { THREE, renderer, scene, camera, resize, setRenderScale, getRenderScale };
+  return {
+    THREE,
+    renderer,
+    scene,
+    camera,
+    resize,
+    setRenderScale,
+    getRenderScale,
+  };
 }
