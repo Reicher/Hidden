@@ -35,7 +35,6 @@ export function createInputController({
   let pitch = 0;
   let inputDirty = true;
   let lastInputSentAt = 0;
-  let heartbeatTimer = null;
   let mobileLookPointerId = null;
   let mobileLookLastX = 0;
   let mobileLookLastY = 0;
@@ -360,7 +359,7 @@ export function createInputController({
     canvas.addEventListener("click", handleCanvasClick);
     document.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mousedown", handleMouseDown);
-    heartbeatTimer = setInterval(sendInput, inputSendIntervalMs);
+    setInterval(sendInput, inputSendIntervalMs);
   }
 
   function getYaw() {

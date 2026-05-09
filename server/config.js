@@ -57,22 +57,111 @@ const DEFAULT_ALLOWED_ORIGINS = [
   `https://localhost:${DEFAULT_PORT}`
 ];
 
-const DEFAULT_TOTAL_CHARACTERS = 20;
-const DEFAULT_MAX_PLAYERS = 10;
-const DEFAULT_MIN_PLAYERS_TO_START = 2;
-const DEFAULT_NPC_DOWNED_RESPAWN_SECONDS = 8;
-const DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS = 2;
-const DEFAULT_ATTACK_HALF_ANGLE_DEGREES = 18;
-const DEFAULT_MOVE_SPEED_METERS_PER_SECOND = 2.9;
-const DEFAULT_PLAYER_SPRINT_MULTIPLIER = 1.45;
-const DEFAULT_NPC_INSPECT_DOWNED_CHANCE_PERCENT = 75;
-const DEFAULT_NPC_INSPECT_DOWNED_RADIUS_METERS = 8.5;
-const DEFAULT_NPC_SOCIAL_SEPARATION_PERCENT = 45;
-const DEFAULT_NPC_STOP_CHANCE_PERCENT = 25;
-const DEFAULT_NPC_MOVE_DECISION_INTERVAL_MIN_MS = 600;
-const DEFAULT_NPC_MOVE_DECISION_INTERVAL_MAX_MS = 1800;
-const DEFAULT_NPC_STOP_DURATION_MIN_MS = 600;
-const DEFAULT_NPC_STOP_DURATION_MAX_MS = 1800;
+export const GAMEPLAY_SETTINGS_SCHEMA = Object.freeze({
+  totalCharacters: Object.freeze({ env: "TOTAL_CHARACTERS", defaultValue: 20, envType: "int" }),
+  maxPlayers: Object.freeze({ env: "MAX_PLAYERS", defaultValue: 10, envType: "int" }),
+  minPlayersToStart: Object.freeze({ env: "MIN_PLAYERS_TO_START", defaultValue: 2, envType: "int" }),
+  npcDownedRespawnSeconds: Object.freeze({ env: "NPC_DOWNED_RESPAWN_SECONDS", defaultValue: 8, envType: "int" }),
+  playerAttackCooldownSeconds: Object.freeze({
+    env: "PLAYER_ATTACK_COOLDOWN_SECONDS",
+    defaultValue: 2,
+    envType: "int"
+  }),
+  attackHalfAngleDegrees: Object.freeze({ env: "ATTACK_HALF_ANGLE_DEGREES", defaultValue: 18, envType: "number" }),
+  moveSpeedMetersPerSecond: Object.freeze({
+    env: "MOVE_SPEED_METERS_PER_SECOND",
+    defaultValue: 2.9,
+    envType: "number"
+  }),
+  playerSprintMultiplier: Object.freeze({ env: "PLAYER_SPRINT_MULTIPLIER", defaultValue: 1.45, envType: "number" })
+});
+
+export const AI_BEHAVIOR_SETTINGS_SCHEMA = Object.freeze({
+  npcInspectDownedChancePercent: Object.freeze({
+    env: "NPC_INSPECT_DOWNED_CHANCE_PERCENT",
+    defaultValue: 75,
+    envType: "int"
+  }),
+  npcInspectDownedNearbyRadiusMeters: Object.freeze({
+    env: "NPC_INSPECT_DOWNED_RADIUS_METERS",
+    defaultValue: 8.5,
+    envType: "number"
+  }),
+  npcSocialSeparationPercent: Object.freeze({
+    env: "NPC_SOCIAL_SEPARATION_PERCENT",
+    defaultValue: 45,
+    envType: "int"
+  }),
+  npcStopChancePercent: Object.freeze({ env: "NPC_STOP_CHANCE_PERCENT", defaultValue: 25, envType: "int" }),
+  npcMoveDecisionIntervalMinMs: Object.freeze({
+    env: "NPC_MOVE_DECISION_INTERVAL_MIN_MS",
+    defaultValue: 600,
+    envType: "int"
+  }),
+  npcMoveDecisionIntervalMaxMs: Object.freeze({
+    env: "NPC_MOVE_DECISION_INTERVAL_MAX_MS",
+    defaultValue: 1800,
+    envType: "int"
+  }),
+  npcStopDurationMinMs: Object.freeze({ env: "NPC_STOP_DURATION_MIN_MS", defaultValue: 600, envType: "int" }),
+  npcStopDurationMaxMs: Object.freeze({ env: "NPC_STOP_DURATION_MAX_MS", defaultValue: 1800, envType: "int" })
+});
+
+function settingsDefaults(schema) {
+  return Object.freeze(
+    Object.fromEntries(Object.entries(schema).map(([key, field]) => [key, field.defaultValue]))
+  );
+}
+
+function readSettingsFromEnv(schema) {
+  return Object.fromEntries(
+    Object.entries(schema).map(([key, field]) => [
+      key,
+      field.envType === "number"
+        ? envNumber(field.env, field.defaultValue)
+        : envInt(field.env, field.defaultValue)
+    ])
+  );
+}
+
+function settingsKeys(schema) {
+  return Object.keys(schema);
+}
+
+function hasOwn(source, key) {
+  return Object.prototype.hasOwnProperty.call(source || {}, key);
+}
+
+function hasSettingsPatch(source, schema) {
+  return settingsKeys(schema).some((key) => hasOwn(source, key));
+}
+
+function mergeSettingsPatch(source, fallback, schema) {
+  return Object.freeze(
+    Object.fromEntries(
+      settingsKeys(schema).map((key) => [key, hasOwn(source, key) ? source[key] : fallback[key]])
+    )
+  );
+}
+
+const DEFAULT_GAMEPLAY_SETTINGS = settingsDefaults(GAMEPLAY_SETTINGS_SCHEMA);
+const DEFAULT_AI_BEHAVIOR_SETTINGS = settingsDefaults(AI_BEHAVIOR_SETTINGS_SCHEMA);
+
+export function hasGameplaySettingsPatch(source) {
+  return hasSettingsPatch(source, GAMEPLAY_SETTINGS_SCHEMA);
+}
+
+export function hasAiBehaviorSettingsPatch(source) {
+  return hasSettingsPatch(source, AI_BEHAVIOR_SETTINGS_SCHEMA);
+}
+
+export function mergeGameplaySettingsPatch(source, fallback = getGameplaySettings()) {
+  return mergeSettingsPatch(source, fallback, GAMEPLAY_SETTINGS_SCHEMA);
+}
+
+export function mergeAiBehaviorSettingsPatch(source, fallback = getAiBehaviorSettings()) {
+  return mergeSettingsPatch(source, fallback, AI_BEHAVIOR_SETTINGS_SCHEMA);
+}
 
 function parsePositiveInt(value, fieldName) {
   const parsed = Number(value);
@@ -223,77 +312,17 @@ function normalizeAiBehaviorSettings({
 
 let gameplaySettings = (() => {
   try {
-    return normalizeGameplaySettings({
-      totalCharacters: envInt("TOTAL_CHARACTERS", DEFAULT_TOTAL_CHARACTERS),
-      maxPlayers: envInt("MAX_PLAYERS", DEFAULT_MAX_PLAYERS),
-      minPlayersToStart: envInt("MIN_PLAYERS_TO_START", DEFAULT_MIN_PLAYERS_TO_START),
-      npcDownedRespawnSeconds: envInt("NPC_DOWNED_RESPAWN_SECONDS", DEFAULT_NPC_DOWNED_RESPAWN_SECONDS),
-      playerAttackCooldownSeconds: envInt(
-        "PLAYER_ATTACK_COOLDOWN_SECONDS",
-        DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS
-      ),
-      attackHalfAngleDegrees: envNumber("ATTACK_HALF_ANGLE_DEGREES", DEFAULT_ATTACK_HALF_ANGLE_DEGREES),
-      moveSpeedMetersPerSecond: envNumber("MOVE_SPEED_METERS_PER_SECOND", DEFAULT_MOVE_SPEED_METERS_PER_SECOND),
-      playerSprintMultiplier: envNumber("PLAYER_SPRINT_MULTIPLIER", DEFAULT_PLAYER_SPRINT_MULTIPLIER)
-    });
+    return normalizeGameplaySettings(readSettingsFromEnv(GAMEPLAY_SETTINGS_SCHEMA));
   } catch {
-    return normalizeGameplaySettings({
-      totalCharacters: DEFAULT_TOTAL_CHARACTERS,
-      maxPlayers: DEFAULT_MAX_PLAYERS,
-      minPlayersToStart: DEFAULT_MIN_PLAYERS_TO_START,
-      npcDownedRespawnSeconds: DEFAULT_NPC_DOWNED_RESPAWN_SECONDS,
-      playerAttackCooldownSeconds: DEFAULT_PLAYER_ATTACK_COOLDOWN_SECONDS,
-      attackHalfAngleDegrees: DEFAULT_ATTACK_HALF_ANGLE_DEGREES,
-      moveSpeedMetersPerSecond: DEFAULT_MOVE_SPEED_METERS_PER_SECOND,
-      playerSprintMultiplier: DEFAULT_PLAYER_SPRINT_MULTIPLIER
-    });
+    return normalizeGameplaySettings(DEFAULT_GAMEPLAY_SETTINGS);
   }
 })();
 
 let aiBehaviorSettings = (() => {
   try {
-    return normalizeAiBehaviorSettings({
-      npcInspectDownedChancePercent: envInt(
-        "NPC_INSPECT_DOWNED_CHANCE_PERCENT",
-        DEFAULT_NPC_INSPECT_DOWNED_CHANCE_PERCENT
-      ),
-      npcInspectDownedNearbyRadiusMeters: envNumber(
-        "NPC_INSPECT_DOWNED_RADIUS_METERS",
-        DEFAULT_NPC_INSPECT_DOWNED_RADIUS_METERS
-      ),
-      npcSocialSeparationPercent: envInt(
-        "NPC_SOCIAL_SEPARATION_PERCENT",
-        DEFAULT_NPC_SOCIAL_SEPARATION_PERCENT
-      ),
-      npcStopChancePercent: envInt("NPC_STOP_CHANCE_PERCENT", DEFAULT_NPC_STOP_CHANCE_PERCENT),
-      npcMoveDecisionIntervalMinMs: envInt(
-        "NPC_MOVE_DECISION_INTERVAL_MIN_MS",
-        DEFAULT_NPC_MOVE_DECISION_INTERVAL_MIN_MS
-      ),
-      npcMoveDecisionIntervalMaxMs: envInt(
-        "NPC_MOVE_DECISION_INTERVAL_MAX_MS",
-        DEFAULT_NPC_MOVE_DECISION_INTERVAL_MAX_MS
-      ),
-      npcStopDurationMinMs: envInt(
-        "NPC_STOP_DURATION_MIN_MS",
-        DEFAULT_NPC_STOP_DURATION_MIN_MS
-      ),
-      npcStopDurationMaxMs: envInt(
-        "NPC_STOP_DURATION_MAX_MS",
-        DEFAULT_NPC_STOP_DURATION_MAX_MS
-      )
-    });
+    return normalizeAiBehaviorSettings(readSettingsFromEnv(AI_BEHAVIOR_SETTINGS_SCHEMA));
   } catch {
-    return normalizeAiBehaviorSettings({
-      npcInspectDownedChancePercent: DEFAULT_NPC_INSPECT_DOWNED_CHANCE_PERCENT,
-      npcInspectDownedNearbyRadiusMeters: DEFAULT_NPC_INSPECT_DOWNED_RADIUS_METERS,
-      npcSocialSeparationPercent: DEFAULT_NPC_SOCIAL_SEPARATION_PERCENT,
-      npcStopChancePercent: DEFAULT_NPC_STOP_CHANCE_PERCENT,
-      npcMoveDecisionIntervalMinMs: DEFAULT_NPC_MOVE_DECISION_INTERVAL_MIN_MS,
-      npcMoveDecisionIntervalMaxMs: DEFAULT_NPC_MOVE_DECISION_INTERVAL_MAX_MS,
-      npcStopDurationMinMs: DEFAULT_NPC_STOP_DURATION_MIN_MS,
-      npcStopDurationMaxMs: DEFAULT_NPC_STOP_DURATION_MAX_MS
-    });
+    return normalizeAiBehaviorSettings(DEFAULT_AI_BEHAVIOR_SETTINGS);
   }
 })();
 

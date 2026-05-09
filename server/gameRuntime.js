@@ -9,6 +9,10 @@ import {
   getAvailableLayouts,
   getAiBehaviorSettings,
   getGameplaySettings,
+  hasAiBehaviorSettingsPatch,
+  hasGameplaySettingsPatch,
+  mergeAiBehaviorSettingsPatch,
+  mergeGameplaySettingsPatch,
   setAiBehaviorSettings,
   setActiveLayout,
   setGameplaySettings
@@ -92,41 +96,12 @@ export function attachGameRuntime({ server, rootDir }) {
 
     const gameplay = parsed.gameplaySettings;
     if (gameplay && typeof gameplay === "object") {
-      const currentGameplay = getGameplaySettings();
-      setGameplaySettings({
-        totalCharacters: gameplay.totalCharacters ?? currentGameplay.totalCharacters,
-        maxPlayers: gameplay.maxPlayers ?? currentGameplay.maxPlayers,
-        minPlayersToStart: gameplay.minPlayersToStart ?? currentGameplay.minPlayersToStart,
-        npcDownedRespawnSeconds: gameplay.npcDownedRespawnSeconds ?? currentGameplay.npcDownedRespawnSeconds,
-        playerAttackCooldownSeconds:
-          gameplay.playerAttackCooldownSeconds ?? currentGameplay.playerAttackCooldownSeconds,
-        attackHalfAngleDegrees: gameplay.attackHalfAngleDegrees ?? currentGameplay.attackHalfAngleDegrees,
-        moveSpeedMetersPerSecond: gameplay.moveSpeedMetersPerSecond ?? currentGameplay.moveSpeedMetersPerSecond,
-        playerSprintMultiplier: gameplay.playerSprintMultiplier ?? currentGameplay.playerSprintMultiplier
-      });
+      setGameplaySettings(mergeGameplaySettingsPatch(gameplay));
     }
 
     const aiBehavior = parsed.aiBehaviorSettings;
     if (aiBehavior && typeof aiBehavior === "object") {
-      const currentAiBehavior = getAiBehaviorSettings();
-      setAiBehaviorSettings({
-        npcInspectDownedChancePercent:
-          aiBehavior.npcInspectDownedChancePercent ?? currentAiBehavior.npcInspectDownedChancePercent,
-        npcInspectDownedNearbyRadiusMeters:
-          aiBehavior.npcInspectDownedNearbyRadiusMeters ?? currentAiBehavior.npcInspectDownedNearbyRadiusMeters,
-        npcSocialSeparationPercent:
-          aiBehavior.npcSocialSeparationPercent ?? currentAiBehavior.npcSocialSeparationPercent,
-        npcStopChancePercent:
-          aiBehavior.npcStopChancePercent ?? currentAiBehavior.npcStopChancePercent,
-        npcMoveDecisionIntervalMinMs:
-          aiBehavior.npcMoveDecisionIntervalMinMs ?? currentAiBehavior.npcMoveDecisionIntervalMinMs,
-        npcMoveDecisionIntervalMaxMs:
-          aiBehavior.npcMoveDecisionIntervalMaxMs ?? currentAiBehavior.npcMoveDecisionIntervalMaxMs,
-        npcStopDurationMinMs:
-          aiBehavior.npcStopDurationMinMs ?? currentAiBehavior.npcStopDurationMinMs,
-        npcStopDurationMaxMs:
-          aiBehavior.npcStopDurationMaxMs ?? currentAiBehavior.npcStopDurationMaxMs
-      });
+      setAiBehaviorSettings(mergeAiBehaviorSettingsPatch(aiBehavior));
     }
   }
 
@@ -268,28 +243,11 @@ export function attachGameRuntime({ server, rootDir }) {
         return true;
       }
 
-      const currentGameplay = getGameplaySettings();
       const requestedLayoutIdRaw = parsedBody?.layoutId;
       const hasLayoutPatch = typeof requestedLayoutIdRaw === "string" && requestedLayoutIdRaw.trim() !== "";
       const requestedLayoutId = hasLayoutPatch ? String(requestedLayoutIdRaw).trim().toLowerCase() : null;
-      const hasGameplayPatch =
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "totalCharacters") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "maxPlayers") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "minPlayersToStart") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcDownedRespawnSeconds") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "playerAttackCooldownSeconds") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "attackHalfAngleDegrees") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "moveSpeedMetersPerSecond") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "playerSprintMultiplier");
-      const hasAiBehaviorPatch =
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcInspectDownedChancePercent") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcInspectDownedNearbyRadiusMeters") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcSocialSeparationPercent") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcStopChancePercent") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcMoveDecisionIntervalMinMs") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcMoveDecisionIntervalMaxMs") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcStopDurationMinMs") ||
-        Object.prototype.hasOwnProperty.call(parsedBody || {}, "npcStopDurationMaxMs");
+      const hasGameplayPatch = hasGameplaySettingsPatch(parsedBody);
+      const hasAiBehaviorPatch = hasAiBehaviorSettingsPatch(parsedBody);
       if (!hasLayoutPatch && !hasGameplayPatch && !hasAiBehaviorPatch) {
         writeJson(res, 400, { error: "no_settings_provided" });
         return true;
@@ -304,115 +262,10 @@ export function attachGameRuntime({ server, rootDir }) {
           changed = setActiveLayout(requestedLayoutId) || changed;
         }
         if (hasGameplayPatch) {
-          const nextTotalCharacters = Object.prototype.hasOwnProperty.call(parsedBody, "totalCharacters")
-            ? parsedBody.totalCharacters
-            : currentGameplay.totalCharacters;
-          const nextMaxPlayers = Object.prototype.hasOwnProperty.call(parsedBody, "maxPlayers")
-            ? parsedBody.maxPlayers
-            : currentGameplay.maxPlayers;
-          const nextMinPlayersToStart = Object.prototype.hasOwnProperty.call(parsedBody, "minPlayersToStart")
-            ? parsedBody.minPlayersToStart
-            : currentGameplay.minPlayersToStart;
-          const nextNpcDownedRespawnSeconds = Object.prototype.hasOwnProperty.call(parsedBody, "npcDownedRespawnSeconds")
-            ? parsedBody.npcDownedRespawnSeconds
-            : currentGameplay.npcDownedRespawnSeconds;
-          const nextPlayerAttackCooldownSeconds = Object.prototype.hasOwnProperty.call(
-            parsedBody,
-            "playerAttackCooldownSeconds"
-          )
-            ? parsedBody.playerAttackCooldownSeconds
-            : currentGameplay.playerAttackCooldownSeconds;
-          const nextAttackHalfAngleDegrees = Object.prototype.hasOwnProperty.call(
-            parsedBody,
-            "attackHalfAngleDegrees"
-          )
-            ? parsedBody.attackHalfAngleDegrees
-            : currentGameplay.attackHalfAngleDegrees;
-          const nextMoveSpeedMetersPerSecond = Object.prototype.hasOwnProperty.call(
-            parsedBody,
-            "moveSpeedMetersPerSecond"
-          )
-            ? parsedBody.moveSpeedMetersPerSecond
-            : currentGameplay.moveSpeedMetersPerSecond;
-          const nextPlayerSprintMultiplier = Object.prototype.hasOwnProperty.call(
-            parsedBody,
-            "playerSprintMultiplier"
-          )
-            ? parsedBody.playerSprintMultiplier
-            : currentGameplay.playerSprintMultiplier;
-          changed =
-            setGameplaySettings({
-              totalCharacters: nextTotalCharacters,
-              maxPlayers: nextMaxPlayers,
-              minPlayersToStart: nextMinPlayersToStart,
-              npcDownedRespawnSeconds: nextNpcDownedRespawnSeconds,
-              playerAttackCooldownSeconds: nextPlayerAttackCooldownSeconds,
-              attackHalfAngleDegrees: nextAttackHalfAngleDegrees,
-              moveSpeedMetersPerSecond: nextMoveSpeedMetersPerSecond,
-              playerSprintMultiplier: nextPlayerSprintMultiplier
-            }) || changed;
+          changed = setGameplaySettings(mergeGameplaySettingsPatch(parsedBody)) || changed;
         }
         if (hasAiBehaviorPatch) {
-          const currentAiBehavior = getAiBehaviorSettings();
-          const nextNpcInspectDownedChancePercent = Object.prototype.hasOwnProperty.call(
-            parsedBody,
-            "npcInspectDownedChancePercent"
-          )
-            ? parsedBody.npcInspectDownedChancePercent
-            : currentAiBehavior.npcInspectDownedChancePercent;
-          const nextNpcInspectDownedNearbyRadiusMeters = Object.prototype.hasOwnProperty.call(
-            parsedBody,
-            "npcInspectDownedNearbyRadiusMeters"
-          )
-            ? parsedBody.npcInspectDownedNearbyRadiusMeters
-            : currentAiBehavior.npcInspectDownedNearbyRadiusMeters;
-          const nextNpcSocialSeparationPercent = Object.prototype.hasOwnProperty.call(
-            parsedBody,
-            "npcSocialSeparationPercent"
-          )
-            ? parsedBody.npcSocialSeparationPercent
-            : currentAiBehavior.npcSocialSeparationPercent;
-          const nextNpcStopChancePercent = Object.prototype.hasOwnProperty.call(
-            parsedBody,
-            "npcStopChancePercent"
-          )
-            ? parsedBody.npcStopChancePercent
-            : currentAiBehavior.npcStopChancePercent;
-          const nextNpcMoveDecisionIntervalMinMs = Object.prototype.hasOwnProperty.call(
-            parsedBody,
-            "npcMoveDecisionIntervalMinMs"
-          )
-            ? parsedBody.npcMoveDecisionIntervalMinMs
-            : currentAiBehavior.npcMoveDecisionIntervalMinMs;
-          const nextNpcMoveDecisionIntervalMaxMs = Object.prototype.hasOwnProperty.call(
-            parsedBody,
-            "npcMoveDecisionIntervalMaxMs"
-          )
-            ? parsedBody.npcMoveDecisionIntervalMaxMs
-            : currentAiBehavior.npcMoveDecisionIntervalMaxMs;
-          const nextNpcStopDurationMinMs = Object.prototype.hasOwnProperty.call(
-            parsedBody,
-            "npcStopDurationMinMs"
-          )
-            ? parsedBody.npcStopDurationMinMs
-            : currentAiBehavior.npcStopDurationMinMs;
-          const nextNpcStopDurationMaxMs = Object.prototype.hasOwnProperty.call(
-            parsedBody,
-            "npcStopDurationMaxMs"
-          )
-            ? parsedBody.npcStopDurationMaxMs
-            : currentAiBehavior.npcStopDurationMaxMs;
-          changed =
-            setAiBehaviorSettings({
-              npcInspectDownedChancePercent: nextNpcInspectDownedChancePercent,
-              npcInspectDownedNearbyRadiusMeters: nextNpcInspectDownedNearbyRadiusMeters,
-              npcSocialSeparationPercent: nextNpcSocialSeparationPercent,
-              npcStopChancePercent: nextNpcStopChancePercent,
-              npcMoveDecisionIntervalMinMs: nextNpcMoveDecisionIntervalMinMs,
-              npcMoveDecisionIntervalMaxMs: nextNpcMoveDecisionIntervalMaxMs,
-              npcStopDurationMinMs: nextNpcStopDurationMinMs,
-              npcStopDurationMaxMs: nextNpcStopDurationMaxMs
-            }) || changed;
+          changed = setAiBehaviorSettings(mergeAiBehaviorSettingsPatch(parsedBody)) || changed;
         }
         if (changed) {
           try {

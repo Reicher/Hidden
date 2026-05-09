@@ -1,4 +1,3 @@
-import assert from "node:assert/strict";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { startServer, stopServer, TestClient, waitFor } from "./helpers.js";

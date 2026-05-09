@@ -58,7 +58,6 @@ export function createSocketConnectionController({
     }
     reconnectAttempts += 1;
     const attempt = reconnectAttempts;
-    const remainingAttempts = MAX_RECONNECT_ATTEMPTS - attempt;
     setAppMode("disconnected");
     if (typeof onAutoReconnecting === "function") {
       onAutoReconnecting({ attempt, maxAttempts: MAX_RECONNECT_ATTEMPTS });

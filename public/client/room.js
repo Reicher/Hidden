@@ -7,15 +7,10 @@ const DEFAULT_WORLD_WIDTH_METERS = DEFAULT_WORLD_SIZE_METERS;
 const DEFAULT_WORLD_HEIGHT_METERS = DEFAULT_WORLD_SIZE_METERS;
 const SHELF_WIDTH = 1.0;
 const SHELF_DEPTH = 6.0;
-const SHELF_HEIGHT = 2.0;
 
 const COOLER_WIDTH = 1.0;
 const COOLER_DEPTH = 1.0;
 const COOLER_HEIGHT = 2.0;
-
-const FREEZER_WIDTH = 1.0;
-const FREEZER_DEPTH = 1.0;
-const FREEZER_HEIGHT = 1.0;
 const DEFAULT_SHELVES = Object.freeze([]);
 const DEFAULT_COOLERS = Object.freeze([]);
 const DEFAULT_FREEZERS = Object.freeze([]);

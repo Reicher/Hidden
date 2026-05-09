@@ -8,6 +8,8 @@
     "sync:three-local": "node scripts/sync-three-local.js",
     "postinstall": "npm run sync:three-local",
     "generate:layout": "node scripts/generate-layout-png.js",
+    "lint": "eslint . && node tests/no-dead-files.js",
+    "test:lint": "npm run lint",
     "test:smoke": "node tests/smoke.js",
     "test:reconnect-countdown-edge": "node tests/reconnect-countdown-edge.js",
     "test:supermajority-ready": "node tests/supermajority-ready.js",
@@ -21,13 +23,14 @@
     "test:hardening": "node tests/hardening.js",
     "test:perf": "node tests/perf-baseline.js",
     "test:perf:quick": "PERF_BOT_COUNT=3 PERF_MEASURE_MS=4000 PERF_SAMPLE_INTERVAL_MS=1000 PERF_MIN_FPS=12 PERF_MAX_FRAME_P95_MS=120 PERF_MAX_RTT_P95_MS=400 PERF_MAX_TICK_P95_MS=35 PERF_MAX_TICK_OVER_BUDGET_RATIO=0.5 PERF_MAX_PROCESS_CPU_HOST_SHARE=90 node tests/perf-baseline.js",
-    "test:all": "npm run test:combat && npm run test:physics && npm run test:debug-stats && npm run test:smoke && npm run test:reconnect-countdown-edge && npm run test:supermajority-ready && npm run test:private-rooms && npm run test:browser && npm run test:heartbeat && npm run test:rate-limit && npm run test:hardening && npm run test:perf"
+    "test:all": "npm run test:lint && npm run test:combat && npm run test:physics && npm run test:debug-stats && npm run test:smoke && npm run test:reconnect-countdown-edge && npm run test:supermajority-ready && npm run test:private-rooms && npm run test:browser && npm run test:heartbeat && npm run test:rate-limit && npm run test:hardening && npm run test:perf"
   },
   "dependencies": {
     "pngjs": "^7.0.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "eslint": "^10.3.0",
     "playwright": "^1.59.1",
     "three": "^0.164.1"
   }

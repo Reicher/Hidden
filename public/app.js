@@ -17,10 +17,11 @@ import { GAME_CREDITS_TEXT } from "./client/about.js";
 import { createInputController } from "./client/inputControls.js";
 import { handleSocketMessage } from "./client/socketMessages.js";
 import { createSocketConnectionController } from "./client/socketConnection.js";
-import {
-  createSocketState,
-  createSocketMessageContext,
-} from "./client/socketContext.js";
+import { createSocketMessageContext } from "./client/socketContext.js";
+import { createConnectScreen } from "./client/connectScreen.js";
+import { createSettingsController } from "./client/settingsController.js";
+import { createDebugOverlay } from "./client/debugOverlay.js";
+import { createClientState, DEFAULT_MATCH_STATE } from "./client/clientState.js";
 import { bindAppEventHandlers } from "./client/appBindings.js";
 import { normalizeAngle, colorForName } from "./client/utils.js";
 import { renderScoreboard as renderScoreboardFn } from "./client/scoreboard.js";
@@ -35,15 +36,9 @@ import {
 } from "./client/appHelpers.js";
 import {
   clampVolume,
-  loadAudioSettings,
   persistAudioSettings,
 } from "./client/audioSettings.js";
-import {
-  loadLookSettings,
-  persistLookSettings,
-  lookSensitivityMultiplier,
-  lookSmoothingRate,
-} from "./client/lookSettings.js";
+import { persistLookSettings } from "./client/lookSettings.js";
 import {
   canvas,
   screenRootEl,
@@ -140,7 +135,6 @@ import {
 
 const PLAYER_NAME_KEY = "hidden_player_name";
 const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
-const DEBUG_OVERLAY_ALLOWED_KEY = "hidden_debug_overlay_allowed";
 
 const sceneSystem = createSceneSystem(canvas);
 const { renderer, scene, camera, resize, setRenderScale, getRenderScale } =
@@ -148,41 +142,7 @@ const { renderer, scene, camera, resize, setRenderScale, getRenderScale } =
 const roomSystem = createRoomSystem({ scene, renderer });
 const avatarSystem = createAvatarSystem({ scene, camera });
 
-let authenticated = false;
-let appMode = "connect"; // connect | lobby | playing | disconnected
-let sessionState = "auth"; // auth | lobby | countdown | alive | downed | won | spectating
-let myCharacterId = null;
-let myName = "";
-let sessionReady = false;
-let activePlayersInGame = 0;
-let attackCooldownMsRemaining = 0;
-let attackCooldownVisualMaxMs = 1000;
-let gameChatOpen = false;
-let gameMenuOpen = false;
-let lobbyMenuOpen = false;
-let forceYawSyncOnNextWorld = false;
-const DEFAULT_MATCH_STATE = Object.freeze({
-  inProgress: false,
-  alivePlayers: 0,
-  startedAt: null,
-  elapsedMs: 0,
-});
-let currentMatch = { ...DEFAULT_MATCH_STATE };
-let lobbyScoreboard = [];
-let lobbyCountdownMsRemaining = 0;
-let lobbyMinPlayersToStart = 2;
-let lobbyMaxPlayers = 0;
-let winReturnToLobbyMsRemaining = 0;
-let winMessageHideAtMs = 0;
-let downedByName = "";
-let downedMessageHideAtMs = 0;
-let downedMessageSuppressed = false;
-let knockdownToastText = "";
-let knockdownToastMsRemaining = 0;
-let pendingLoginName = "";
-let spectatorTargetCharacterId = null;
-let spectatorTargetName = "";
-let spectatorCandidates = [];
+const { state: clientState, socketState } = createClientState();
 let socketConnection = null;
 
 const INPUT_SEND_INTERVAL_MS = 33;
@@ -194,11 +154,8 @@ const CROSSHAIR_HIT_DISTANCE_METERS = 2.8;
 const GAME_CHAT_MAX_LINES = 5;
 const GAME_CHAT_OPEN_SHORTCUT = "KeyC";
 const DEBUG_OVERLAY_TOGGLE_SHORTCUT = "KeyP";
-const DEBUG_OVERLAY_REFRESH_MS = 120;
-const DEBUG_PING_INTERVAL_MS = 1200;
 const DEBUG_OVERLAY_TOUCH_HOLD_MS = 900;
 const DEBUG_OVERLAY_UNLOCK_TOUCH_HOLD_MS = 2600;
-const DEBUG_FPS_SAMPLE_WINDOW_MS = 1000;
 const HUD_OVERLAY_REFRESH_MS = 120;
 const CROSSHAIR_AIM_CHECK_MS = 66;
 const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
@@ -222,9 +179,6 @@ const MOBILE_RENDER_SCALE_STEP_UP = 0.04;
 const MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS = 1500;
 const FORCE_MOBILE_UI =
   new URLSearchParams(location.search).get("mobileUi") === "1";
-const DEBUG_OVERLAY_QUERY_PARAM = new URLSearchParams(location.search).get(
-  "debugOverlay",
-);
 const IS_TOUCH_DEVICE = (() => {
   const coarsePointer =
     window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
@@ -244,65 +198,30 @@ const IS_TOUCH_DEVICE = (() => {
     FORCE_MOBILE_UI
   );
 })();
-let debugOverlayAllowed =
-  !IS_TOUCH_DEVICE || localStorage.getItem(DEBUG_OVERLAY_ALLOWED_KEY) === "1";
-if (DEBUG_OVERLAY_QUERY_PARAM === "1") {
-  debugOverlayAllowed = true;
-  localStorage.setItem(DEBUG_OVERLAY_ALLOWED_KEY, "1");
-}
-if (DEBUG_OVERLAY_QUERY_PARAM === "0") {
-  debugOverlayAllowed = false;
-  localStorage.removeItem(DEBUG_OVERLAY_ALLOWED_KEY);
-}
 
-let viewPitch = 0;
-let viewYaw = 0;
 let lastFrameAt = performance.now();
 let mobileControlsPreference = normalizeMobileControlsPreference(
   localStorage.getItem(MOBILE_CONTROLS_PREF_KEY),
 );
-let audioSettings = loadAudioSettings();
-let lookSettings = loadLookSettings();
-let debugOverlayOpen = false;
-let debugFps = 0;
-let debugPingMs = null;
-let lastDebugOverlayUpdateAt = 0;
-let lastDebugPingSentAt = 0;
-let debugFpsSampleFrames = 0;
-let debugFpsSampleMs = 0;
 let smoothFrameMs = 16.7;
 let lastQualityAdjustAt = 0;
 let lastOverlayUiUpdateAt = 0;
 let cachedCrosshairAimingAtCharacter = false;
 let lastCrosshairAimCheckAt = 0;
 let lastScoreboardSignature = "";
-const musicLoopEl = new Audio("/assets/sounds/music.wav");
-const uiBlipSfxTemplateEl = new Audio("/assets/sounds/blipSelect.wav");
-const hitHurtSfxTemplateEl = new Audio("/assets/sounds/hitHurt.wav");
-uiBlipSfxTemplateEl.preload = "auto";
-hitHurtSfxTemplateEl.preload = "auto";
-musicLoopEl.loop = true;
-musicLoopEl.preload = "auto";
-const HIT_SFX_MIN_DISTANCE = 0.8;
-const HIT_SFX_MAX_DISTANCE = 13;
-const HIT_SFX_BASE_GAIN = 0.95;
 const GAMEPLAY_SUMMARY_TEXT = "Håll dig gömd, hitta spelare och slå ner dem.";
 const DESKTOP_CONTROLS_TEXT =
   "Desktop: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack.";
 const MOBILE_CONTROLS_TEXT =
   "Mobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta.";
 let lastCountdownPreviewCharacterId = null;
-const ROOM_INFO_DEFAULTS = Object.freeze({
-  maxPlayers: 10,
-  totalCharacters: 20,
-});
 
 const chatUi = createChatUi({
   lobbyMessagesEl: chatMessagesEl,
   gameMessagesEl: gameChatMessagesEl,
   colorForName,
   shouldMirrorToGameChat: (entry) => {
-    if (sessionState === "alive") return Boolean(entry?.system);
+    if (clientState.sessionState === "alive") return Boolean(entry?.system);
     return true;
   },
   maxGameLines: GAME_CHAT_MAX_LINES,
@@ -311,6 +230,38 @@ const chatUi = createChatUi({
 function clampPitch(value) {
   return Math.max(-1.2, Math.min(1.2, value));
 }
+
+const settingsController = createSettingsController({
+  elements: {
+    fullscreenModeCheckboxEl,
+    lookSensitivityInputEl,
+    lookSensitivityValueEl,
+    lookSmoothingToggleBtnEl,
+    mobileControlsModeBtnEl,
+    musicMuteBtnEl,
+    musicVolumeInputEl,
+    settingsFullscreenHelpEl,
+    sfxMuteBtnEl,
+    sfxVolumeInputEl,
+    startFullscreenCheckboxEl,
+  },
+  camera,
+  getAppMode: () => clientState.appMode,
+  getMobileControlsPreference: () => mobileControlsPreference,
+  isTouchDevice: IS_TOUCH_DEVICE,
+  mobileControlsLabel,
+});
+const {
+  bindFullscreenListeners,
+  getAudioSettings,
+  getLookSettings,
+  playHitHurtAtPosition,
+  playUiBlipSfx,
+  refreshSettingsUi: refreshAudioSettingsUi,
+  setFullscreenEnabled,
+  setLookSettings,
+  syncMusicLoop,
+} = settingsController;
 
 const inputController = createInputController({
   canvas,
@@ -327,27 +278,62 @@ const inputController = createInputController({
   getLookSensitivityMultiplier: () => {
     const liveValue = Number(lookSensitivityInputEl?.value);
     if (Number.isFinite(liveValue)) return Math.max(0.1, liveValue / 100);
-    return lookSensitivityMultiplier(lookSettings);
+    return settingsController.getLookSensitivityMultiplier();
   },
   joystickDeadzone: JOYSTICK_DEADZONE,
   clampPitch,
   getSocket: () => socketConnection?.getSocket() || null,
-  getAppMode: () => appMode,
-  getSessionState: () => sessionState,
-  getGameMenuOpen: () => gameMenuOpen,
-  getGameChatOpen: () => gameChatOpen,
+  getAppMode: () => clientState.appMode,
+  getSessionState: () => clientState.sessionState,
+  getGameMenuOpen: () => clientState.gameMenuOpen,
+  getGameChatOpen: () => clientState.gameChatOpen,
   isGameChatFocused,
   requestPointerLock: requestPointerLockSafe,
 });
 
-function roomInfoText({
-  roomCode = null,
-  maxPlayers = ROOM_INFO_DEFAULTS.maxPlayers,
-  totalCharacters = ROOM_INFO_DEFAULTS.totalCharacters,
-} = {}) {
-  const scopeText = roomCode ? `Privat rum: ${roomCode}` : "Offentligt rum";
-  return `${scopeText} · Max ${maxPlayers} spelare av ${totalCharacters} karaktärer`;
-}
+const connectScreen = createConnectScreen({
+  elements: {
+    connectErrorEl,
+    createPrivateRoomBtnEl,
+    newsCardEl,
+    newsNotesEl,
+    newsPublishedAtEl,
+    newsVersionEl,
+    roomInfoEl,
+  },
+  activeRoomCodeFromPath,
+});
+const {
+  setConnectError,
+  setNewsCard,
+  setPrivateRoomButtonVisible,
+  setRoomInfo,
+} = connectScreen;
+
+const debugOverlay = createDebugOverlay({
+  elements: {
+    debugOverlayEl,
+    debugFpsTextEl,
+    debugFrameTimeTextEl,
+    debugPingTextEl,
+  },
+  getAppMode: () => clientState.appMode,
+  getAuthenticated: () => clientState.authenticated,
+  getSocket: () => socketConnection?.getSocket() || null,
+  isTouchDevice: IS_TOUCH_DEVICE,
+});
+const {
+  canUse: canUseDebugOverlay,
+  enableForDevice: enableDebugOverlayForDevice,
+  handlePong: handleDebugPong,
+  maybeRefresh: maybeRefreshDebugOverlay,
+  recordFrame: recordDebugFrame,
+  reset: resetDebugOverlay,
+  sendPing: sendDebugPing,
+  setOpen: setDebugOverlayOpen,
+  toggle: toggleDebugOverlay,
+  update: updateDebugOverlay,
+} = debugOverlay;
 
 function lobbyRoomNameFromPath() {
   const roomCode = activeRoomCodeFromPath();
@@ -374,7 +360,7 @@ function scoreboardSignature(players) {
 }
 
 function adaptRenderScale(nowMs, frameMs) {
-  if (!IS_TOUCH_DEVICE || appMode !== "playing") return;
+  if (!IS_TOUCH_DEVICE || clientState.appMode !== "playing") return;
   smoothFrameMs += (frameMs - smoothFrameMs) * 0.06;
   if (nowMs - lastQualityAdjustAt < MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS)
     return;
@@ -403,86 +389,6 @@ function adaptRenderScale(nowMs, frameMs) {
   }
 }
 
-async function setRoomInfo() {
-  if (!roomInfoEl) return;
-  const code = activeRoomCodeFromPath();
-  roomInfoEl.textContent = roomInfoText({ roomCode: code });
-  try {
-    const response = await fetch(`/api/room-info?t=${Date.now()}`, {
-      cache: "no-store",
-    });
-    if (!response.ok) throw new Error(`http_${response.status}`);
-    const payload = await response.json();
-    const maxPlayers = Math.max(1, Number(payload?.maxPlayers || 0));
-    const totalCharacters = Math.max(1, Number(payload?.totalCharacters || 0));
-    if (!Number.isFinite(maxPlayers) || !Number.isFinite(totalCharacters))
-      return;
-    roomInfoEl.textContent = roomInfoText({
-      roomCode: code,
-      maxPlayers,
-      totalCharacters,
-    });
-  } catch {
-    // Keep fallback text when endpoint is unavailable.
-  }
-}
-
-function setPrivateRoomButtonVisible(visible) {
-  if (!createPrivateRoomBtnEl) return;
-  createPrivateRoomBtnEl.classList.toggle("hidden", !visible);
-}
-
-async function setNewsCard() {
-  if (!newsCardEl || !newsVersionEl || !newsPublishedAtEl || !newsNotesEl)
-    return;
-  const formatTimestamp = (value) => {
-    const raw = typeof value === "string" ? value.trim() : "";
-    if (!raw) return "";
-    const asDate = new Date(raw);
-    if (!Number.isFinite(asDate.getTime())) return raw;
-    return new Intl.DateTimeFormat("sv-SE", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }).format(asDate);
-  };
-
-  try {
-    const response = await fetch(`/news.json?t=${Date.now()}`, {
-      cache: "no-store",
-    });
-    if (!response.ok) throw new Error(`http_${response.status}`);
-    const payload = await response.json();
-    const version =
-      typeof payload?.version === "string" ? payload.version.trim() : "";
-    const publishedAt = formatTimestamp(payload?.publishedAt);
-    const notes =
-      typeof payload?.notes === "string" ? payload.notes.trim() : "";
-
-    newsVersionEl.textContent = version
-      ? `Nyheter version ${version}`
-      : "Nyheter version -";
-    if (publishedAt) {
-      newsPublishedAtEl.textContent = publishedAt;
-      newsPublishedAtEl.classList.remove("hidden");
-    } else {
-      newsPublishedAtEl.textContent = "";
-      newsPublishedAtEl.classList.add("hidden");
-    }
-    newsNotesEl.textContent = notes || "Inga release notes hittades.";
-  } catch {
-    newsVersionEl.textContent = "Nyheter version -";
-    newsPublishedAtEl.textContent = "";
-    newsPublishedAtEl.classList.add("hidden");
-    newsNotesEl.textContent = "Inga nyheter tillgängliga just nu.";
-  }
-}
-
-function setConnectError(text) {
-  if (!connectErrorEl) return;
-  connectErrorEl.textContent = text || "";
-}
-
 function persistMobileControlsPreference(value) {
   const normalized = normalizeMobileControlsPreference(value);
   mobileControlsPreference = normalized;
@@ -501,178 +407,6 @@ function controlsTextForCurrentMode() {
       ? MOBILE_CONTROLS_TEXT
       : DESKTOP_CONTROLS_TEXT
   }`;
-}
-
-function getFullscreenElement() {
-  return document.fullscreenElement || document.webkitFullscreenElement || null;
-}
-
-function isFullscreenSupported() {
-  return Boolean(
-    document.fullscreenEnabled ||
-    document.webkitFullscreenEnabled ||
-    typeof document.documentElement?.requestFullscreen === "function" ||
-    typeof document.documentElement?.webkitRequestFullscreen === "function",
-  );
-}
-
-function isFullscreenActive() {
-  return Boolean(getFullscreenElement());
-}
-
-function setFullscreenHelpText() {
-  if (!settingsFullscreenHelpEl) return;
-  if (isFullscreenSupported()) {
-    settingsFullscreenHelpEl.textContent = isFullscreenActive()
-      ? "Helskärm är aktivt. Avmarkera rutan för att lämna."
-      : "";
-    return;
-  }
-  settingsFullscreenHelpEl.textContent = IS_TOUCH_DEVICE
-    ? "Helskärm stöds inte här (vanligt på iPhone/iPad Safari)."
-    : "Helskärm stöds inte i den här webbläsaren.";
-}
-
-async function setFullscreenEnabled(enabled) {
-  const wantsFullscreen = Boolean(enabled);
-  if (!isFullscreenSupported()) {
-    refreshAudioSettingsUi();
-    return false;
-  }
-  try {
-    if (wantsFullscreen && !isFullscreenActive()) {
-      const targetEl = document.documentElement;
-      if (typeof targetEl?.requestFullscreen === "function") {
-        const maybePromise = targetEl.requestFullscreen();
-        if (maybePromise && typeof maybePromise.catch === "function") {
-          await maybePromise.catch(() => {});
-        }
-      } else if (typeof targetEl?.webkitRequestFullscreen === "function") {
-        targetEl.webkitRequestFullscreen();
-      }
-    } else if (!wantsFullscreen && isFullscreenActive()) {
-      if (typeof document.exitFullscreen === "function") {
-        const maybePromise = document.exitFullscreen();
-        if (maybePromise && typeof maybePromise.catch === "function") {
-          await maybePromise.catch(() => {});
-        }
-      } else if (typeof document.webkitExitFullscreen === "function") {
-        document.webkitExitFullscreen();
-      }
-    }
-  } catch {
-    // ignore fullscreen API failures; UI will resync from actual fullscreen state
-  }
-  const applied = wantsFullscreen
-    ? isFullscreenActive()
-    : !isFullscreenActive();
-  refreshAudioSettingsUi();
-  return applied;
-}
-
-function refreshAudioSettingsUi() {
-  const fullscreenSupported = isFullscreenSupported();
-  const fullscreenActive = fullscreenSupported && isFullscreenActive();
-  if (startFullscreenCheckboxEl) {
-    startFullscreenCheckboxEl.disabled = !fullscreenSupported;
-    if (!fullscreenSupported || fullscreenActive) {
-      startFullscreenCheckboxEl.checked = fullscreenActive;
-    }
-  }
-  if (mobileControlsModeBtnEl) {
-    mobileControlsModeBtnEl.textContent = mobileControlsLabel(
-      mobileControlsPreference,
-    );
-  }
-  if (fullscreenModeCheckboxEl) {
-    fullscreenModeCheckboxEl.disabled = !fullscreenSupported;
-    fullscreenModeCheckboxEl.checked = fullscreenActive;
-  }
-  setFullscreenHelpText();
-  if (lookSensitivityInputEl)
-    lookSensitivityInputEl.value = String(lookSettings.sensitivity);
-  if (lookSensitivityValueEl)
-    lookSensitivityValueEl.textContent = `${lookSettings.sensitivity}%`;
-  if (lookSmoothingToggleBtnEl) {
-    lookSmoothingToggleBtnEl.textContent = lookSettings.smoothingEnabled
-      ? "På"
-      : "Av";
-  }
-  if (musicVolumeInputEl)
-    musicVolumeInputEl.value = String(audioSettings.musicVolume);
-  if (sfxVolumeInputEl)
-    sfxVolumeInputEl.value = String(audioSettings.sfxVolume);
-  if (musicMuteBtnEl)
-    musicMuteBtnEl.textContent = audioSettings.musicMuted ? "Avmuta" : "Muta";
-  if (sfxMuteBtnEl)
-    sfxMuteBtnEl.textContent = audioSettings.sfxMuted ? "Avmuta" : "Muta";
-  syncMusicLoop();
-}
-
-function syncMusicLoop() {
-  musicLoopEl.volume = Math.max(
-    0,
-    Math.min(1, audioSettings.musicVolume / 100),
-  );
-  const shouldPlay =
-    appMode === "playing" &&
-    !audioSettings.musicMuted &&
-    musicLoopEl.volume > 0;
-  if (shouldPlay) {
-    const playPromise = musicLoopEl.play();
-    if (playPromise && typeof playPromise.catch === "function") {
-      playPromise.catch(() => {});
-    }
-    return;
-  }
-  musicLoopEl.pause();
-  musicLoopEl.currentTime = 0;
-}
-
-function sfxVolumeMultiplier() {
-  if (audioSettings.sfxMuted) return 0;
-  return Math.max(0, Math.min(1, Number(audioSettings.sfxVolume || 0) / 100));
-}
-
-function playSfx(templateEl, gain = 1) {
-  const master = sfxVolumeMultiplier();
-  if (master <= 0) return;
-  const safeGain = Math.max(0, Math.min(1, Number(gain) || 0));
-  const volume = Math.max(0, Math.min(1, master * safeGain));
-  if (volume <= 0.001) return;
-  const instance = templateEl.cloneNode();
-  instance.volume = volume;
-  const playPromise = instance.play();
-  if (playPromise && typeof playPromise.catch === "function") {
-    playPromise.catch(() => {});
-  }
-}
-
-function playUiBlipSfx() {
-  playSfx(uiBlipSfxTemplateEl, 0.92);
-}
-
-function hitSfxGainByDistance(distanceMeters) {
-  const distance = Math.max(0, Number(distanceMeters) || 0);
-  if (distance <= HIT_SFX_MIN_DISTANCE) return HIT_SFX_BASE_GAIN;
-  if (distance >= HIT_SFX_MAX_DISTANCE) return 0;
-  const t =
-    (distance - HIT_SFX_MIN_DISTANCE) /
-    (HIT_SFX_MAX_DISTANCE - HIT_SFX_MIN_DISTANCE);
-  return HIT_SFX_BASE_GAIN * Math.pow(1 - t, 1.3);
-}
-
-function playHitHurtAtPosition(position) {
-  if (!position || appMode !== "playing") return;
-  const x = Number(position.x);
-  const y = Number(position.y || 0);
-  const z = Number(position.z);
-  if (!Number.isFinite(x) || !Number.isFinite(z)) return;
-  const dx = x - camera.position.x;
-  const dy = y - camera.position.y;
-  const dz = z - camera.position.z;
-  const distance = Math.hypot(dx, dy, dz);
-  playSfx(hitHurtSfxTemplateEl, hitSfxGainByDistance(distance));
 }
 
 function requestPointerLockSafe(targetEl = canvas) {
@@ -696,7 +430,7 @@ function updateConnectButton() {
 function updateDocumentTitle() {
   const othersPlaying = Math.max(
     0,
-    activePlayersInGame - (sessionState === "alive" ? 1 : 0),
+    clientState.activePlayersInGame - (clientState.sessionState === "alive" ? 1 : 0),
   );
   if (othersPlaying <= 0) {
     document.title = "Hidden";
@@ -740,8 +474,8 @@ function closeLobbyDialog() {
   updateScreenRootPointerEvents();
   updateMobileControlsVisibility();
   if (
-    appMode === "playing" &&
-    (sessionState === "alive" || sessionState === "won")
+    clientState.appMode === "playing" &&
+    (clientState.sessionState === "alive" || clientState.sessionState === "won")
   ) {
     requestPointerLockSafe(canvas);
   }
@@ -752,12 +486,12 @@ function isGameChatFocused() {
 }
 
 function canOpenInGameChat() {
-  if (appMode !== "playing") return false;
-  if (winReturnToLobbyMsRemaining > 0) return false;
+  if (clientState.appMode !== "playing") return false;
+  if (clientState.winReturnToLobbyMsRemaining > 0) return false;
   return (
-    sessionState === "downed" ||
-    sessionState === "spectating" ||
-    sessionState === "won"
+    clientState.sessionState === "downed" ||
+    clientState.sessionState === "spectating" ||
+    clientState.sessionState === "won"
   );
 }
 
@@ -768,18 +502,18 @@ function updateMobileControlsVisibility() {
       window.matchMedia("(orientation: portrait)").matches) ||
     window.innerHeight > window.innerWidth;
   const showLandscapePrompt =
-    IS_TOUCH_DEVICE && appMode === "playing" && isPortrait;
+    IS_TOUCH_DEVICE && clientState.appMode === "playing" && isPortrait;
   const wasShown = !mobileControlsEl.classList.contains("hidden");
   const lobbyDialogOpen =
-    appMode === "playing" &&
+    clientState.appMode === "playing" &&
     lobbyDialogBackdropEl &&
     !lobbyDialogBackdropEl.classList.contains("hidden");
   const show =
     mobileControlsEnabledByPreference() &&
-    appMode === "playing" &&
-    (sessionState === "alive" || sessionState === "won") &&
-    !gameChatOpen &&
-    !gameMenuOpen &&
+    clientState.appMode === "playing" &&
+    (clientState.sessionState === "alive" || clientState.sessionState === "won") &&
+    !clientState.gameChatOpen &&
+    !clientState.gameMenuOpen &&
     !lobbyDialogOpen &&
     !showLandscapePrompt;
   mobileControlsEl.classList.toggle("hidden", !show);
@@ -794,7 +528,7 @@ function updateMobileControlsVisibility() {
 }
 
 function updateGameChatAvailability() {
-  const available = appMode === "playing" && canOpenInGameChat();
+  const available = clientState.appMode === "playing" && canOpenInGameChat();
   gameChatBoxEl?.classList.toggle("hidden", !available);
   gameChatNoticeEl?.classList.toggle("hidden", !available);
   if (available) {
@@ -802,7 +536,7 @@ function updateGameChatAvailability() {
     chatUi.setGameLineLimit(null);
     return;
   }
-  gameChatOpen = false;
+  clientState.gameChatOpen = false;
   gameChatBoxEl?.classList.remove("open");
   gameChatInputRowEl?.classList.add("hidden");
   gameChatInputEl?.blur();
@@ -813,11 +547,11 @@ function setGameChatOpen(open, { restorePointerLock = false } = {}) {
   if (!gameChatInputRowEl || !gameChatBoxEl || !gameChatNoticeEl) return;
   updateGameChatAvailability();
   const canOpen = Boolean(open) && canOpenInGameChat();
-  gameChatOpen = canOpen;
+  clientState.gameChatOpen = canOpen;
   gameChatBoxEl.classList.toggle("open", canOpen);
   gameChatInputRowEl.classList.toggle("hidden", !canOpen);
   gameChatNoticeEl.textContent =
-    canOpen || sessionState === "won" ? "Chatt" : "Systemhändelser";
+    canOpen || clientState.sessionState === "won" ? "Chatt" : "Systemhändelser";
   chatUi.setGameLineLimit(canOpen ? null : GAME_CHAT_MAX_LINES);
   if (canOpen) {
     if (document.pointerLockElement) document.exitPointerLock?.();
@@ -825,11 +559,11 @@ function setGameChatOpen(open, { restorePointerLock = false } = {}) {
   } else {
     gameChatInputEl?.blur();
   }
-  if (!canOpenInGameChat()) gameChatOpen = false;
+  if (!canOpenInGameChat()) clientState.gameChatOpen = false;
   if (
     restorePointerLock &&
-    appMode === "playing" &&
-    (sessionState === "alive" || sessionState === "won")
+    clientState.appMode === "playing" &&
+    (clientState.sessionState === "alive" || clientState.sessionState === "won")
   ) {
     requestPointerLockSafe(canvas);
   }
@@ -840,9 +574,9 @@ function setGameChatOpen(open, { restorePointerLock = false } = {}) {
 
 function setGameMenuOpen(open, { restorePointerLock = false } = {}) {
   if (!gameMenuBackdropEl) return;
-  gameMenuOpen = Boolean(open);
-  gameMenuBackdropEl.classList.toggle("hidden", !gameMenuOpen);
-  if (gameMenuOpen) {
+  clientState.gameMenuOpen = Boolean(open);
+  gameMenuBackdropEl.classList.toggle("hidden", !clientState.gameMenuOpen);
+  if (clientState.gameMenuOpen) {
     resetInputState();
     inputController.sendInput();
     if (document.pointerLockElement) document.exitPointerLock?.();
@@ -852,8 +586,8 @@ function setGameMenuOpen(open, { restorePointerLock = false } = {}) {
   }
   if (
     restorePointerLock &&
-    appMode === "playing" &&
-    (sessionState === "alive" || sessionState === "won")
+    clientState.appMode === "playing" &&
+    (clientState.sessionState === "alive" || clientState.sessionState === "won")
   ) {
     requestPointerLockSafe(canvas);
   }
@@ -862,11 +596,11 @@ function setGameMenuOpen(open, { restorePointerLock = false } = {}) {
 
 function setLobbyMenuOpen(open) {
   if (!lobbyMenuBackdropEl) return;
-  lobbyMenuOpen = Boolean(open);
-  lobbyMenuBackdropEl.classList.toggle("hidden", !lobbyMenuOpen);
-  if (lobbyMenuOpen) {
+  clientState.lobbyMenuOpen = Boolean(open);
+  lobbyMenuBackdropEl.classList.toggle("hidden", !clientState.lobbyMenuOpen);
+  if (clientState.lobbyMenuOpen) {
     lobbyMenuSettingsBtnEl?.focus();
-  } else if (appMode === "lobby") {
+  } else if (clientState.appMode === "lobby") {
     lobbySettingsBtnEl?.focus();
   }
 }
@@ -880,27 +614,27 @@ function updateLobbyMatchStatus() {
     !lobbyPlayersMetaEl
   )
     return;
-  const show = appMode === "lobby";
+  const show = clientState.appMode === "lobby";
   lobbyMatchStatusEl.classList.toggle("hidden", !show);
   lobbyStatusRowEl.classList.toggle("hidden", !show);
   if (!show) return;
 
   lobbyMatchStatusTitleEl.textContent = lobbyRoomNameFromPath();
 
-  const players = Array.isArray(lobbyScoreboard) ? lobbyScoreboard : [];
+  const players = Array.isArray(clientState.lobbyScoreboard) ? clientState.lobbyScoreboard : [];
   const playerCount = players.length;
-  const maxPlayers = Math.max(playerCount, Number(lobbyMaxPlayers || 0));
+  const maxPlayers = Math.max(playerCount, Number(clientState.lobbyMaxPlayers || 0));
   lobbyPlayersMetaEl.textContent = `${playerCount}/${maxPlayers} spelare`;
 
-  if (currentMatch.inProgress) {
+  if (clientState.currentMatch.inProgress) {
     const elapsedMinutes = Math.floor(
-      Math.max(0, Number(currentMatch.elapsedMs || 0)) / 60000,
+      Math.max(0, Number(clientState.currentMatch.elapsedMs || 0)) / 60000,
     );
     lobbyStatusTextEl.textContent = `Match pågår (${elapsedMinutes} min)`;
     return;
   }
 
-  const minPlayers = Math.max(1, Number(lobbyMinPlayersToStart || 2));
+  const minPlayers = Math.max(1, Number(clientState.lobbyMinPlayersToStart || 2));
   const readyCount = players.reduce(
     (acc, player) => acc + (player?.ready ? 1 : 0),
     0,
@@ -913,7 +647,7 @@ function updateLobbyMatchStatus() {
   }, 0);
   const readyText = `Redo ${readyCount}/${readyEligibleCount}`;
   const countdownRunning =
-    lobbyCountdownMsRemaining > 0 || sessionState === "countdown";
+    clientState.lobbyCountdownMsRemaining > 0 || clientState.sessionState === "countdown";
 
   if (countdownRunning) {
     lobbyStatusTextEl.textContent = "Startar match";
@@ -937,29 +671,29 @@ function updateLobbyMatchStatus() {
 function updateReadyButton() {
   if (!playBtnEl) return;
   let buttonReadyState = "inactive";
-  if (!authenticated) {
+  if (!clientState.authenticated) {
     playBtnEl.disabled = true;
     playBtnEl.textContent = "Redo";
-  } else if (sessionState === "alive") {
+  } else if (clientState.sessionState === "alive") {
     playBtnEl.disabled = true;
     playBtnEl.textContent = "Du spelar";
-  } else if (sessionState === "spectating") {
+  } else if (clientState.sessionState === "spectating") {
     playBtnEl.disabled = true;
     playBtnEl.textContent = "Åskådar";
-  } else if (currentMatch.pendingReset) {
+  } else if (clientState.currentMatch.pendingReset) {
     playBtnEl.disabled = true;
     playBtnEl.textContent = "Avslutar match...";
-  } else if (currentMatch.inProgress) {
+  } else if (clientState.currentMatch.inProgress) {
     playBtnEl.disabled = false;
     playBtnEl.textContent = "Åskåda";
-  } else if (sessionState === "countdown" && sessionReady) {
+  } else if (clientState.sessionState === "countdown" && clientState.sessionReady) {
     playBtnEl.disabled = true;
     playBtnEl.textContent = "Match startar...";
-  } else if (sessionReady) {
+  } else if (clientState.sessionReady) {
     playBtnEl.disabled = false;
     playBtnEl.textContent = "Inte redo";
     buttonReadyState = "ready";
-  } else if (lobbyCountdownMsRemaining > 0) {
+  } else if (clientState.lobbyCountdownMsRemaining > 0) {
     // Player is in lobby watching an active countdown – join button is shown in overlay,
     // but keep lobby button usable as backup (labelled clearly).
     playBtnEl.disabled = false;
@@ -978,19 +712,19 @@ function updateReadyButton() {
 }
 
 function resetDownedState() {
-  downedByName = "";
-  downedMessageHideAtMs = 0;
-  downedMessageSuppressed = false;
+  clientState.downedByName = "";
+  clientState.downedMessageHideAtMs = 0;
+  clientState.downedMessageSuppressed = false;
 }
 
 function resetWinState() {
-  winReturnToLobbyMsRemaining = 0;
-  winMessageHideAtMs = 0;
+  clientState.winReturnToLobbyMsRemaining = 0;
+  clientState.winMessageHideAtMs = 0;
 }
 
 function resetKnockdownToast() {
-  knockdownToastText = "";
-  knockdownToastMsRemaining = 0;
+  clientState.knockdownToastText = "";
+  clientState.knockdownToastMsRemaining = 0;
 }
 
 function resetSessionRuntimeState({
@@ -998,117 +732,49 @@ function resetSessionRuntimeState({
   clearIdentity = false,
 } = {}) {
   if (clearIdentity) {
-    authenticated = false;
-    myName = "";
-    sessionState = "auth";
-    myCharacterId = null;
+    clientState.authenticated = false;
+    clientState.myName = "";
+    clientState.sessionState = "auth";
+    clientState.myCharacterId = null;
   }
-  sessionReady = false;
-  activePlayersInGame = 0;
-  attackCooldownMsRemaining = 0;
-  attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
-  currentMatch = { ...DEFAULT_MATCH_STATE };
-  lobbyScoreboard = [];
-  lobbyCountdownMsRemaining = 0;
-  lobbyMinPlayersToStart = 2;
-  lobbyMaxPlayers = Math.max(0, Number(maxPlayers || 0));
+  clientState.sessionReady = false;
+  clientState.activePlayersInGame = 0;
+  clientState.attackCooldownMsRemaining = 0;
+  clientState.attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
+  clientState.currentMatch = { ...DEFAULT_MATCH_STATE };
+  clientState.lobbyScoreboard = [];
+  clientState.lobbyCountdownMsRemaining = 0;
+  clientState.lobbyMinPlayersToStart = 2;
+  clientState.lobbyMaxPlayers = Math.max(0, Number(maxPlayers || 0));
   resetDownedState();
   resetWinState();
   resetKnockdownToast();
-  debugFps = 0;
-  debugPingMs = null;
-  lastDebugOverlayUpdateAt = 0;
-  lastDebugPingSentAt = 0;
-  debugFpsSampleFrames = 0;
-  debugFpsSampleMs = 0;
-  spectatorTargetCharacterId = null;
-  spectatorTargetName = "";
-  spectatorCandidates = [];
+  resetDebugOverlay();
+  clientState.spectatorTargetCharacterId = null;
+  clientState.spectatorTargetName = "";
+  clientState.spectatorCandidates = [];
   lastScoreboardSignature = "";
   cachedCrosshairAimingAtCharacter = false;
   lastCrosshairAimCheckAt = 0;
-  updateDebugOverlay();
 }
 
 function updateInGameHud() {
   updateGameChatAvailability();
   if (
     !IS_TOUCH_DEVICE &&
-    appMode === "playing" &&
+    clientState.appMode === "playing" &&
     canOpenInGameChat() &&
-    !gameChatOpen
+    !clientState.gameChatOpen
   ) {
     setGameChatOpen(true);
   }
   updateInGameHudUi({
     aliveOthersTextEl,
     gameChatNoticeEl,
-    activePlayersInGame,
-    sessionState,
+    activePlayersInGame: clientState.activePlayersInGame,
+    sessionState: clientState.sessionState,
   });
-  if (gameChatOpen && gameChatNoticeEl) gameChatNoticeEl.textContent = "Chatt";
-}
-
-function updateDebugOverlay() {
-  if (!debugOverlayEl) return;
-  const visible =
-    appMode === "playing" && debugOverlayAllowed && debugOverlayOpen;
-  debugOverlayEl.classList.toggle("hidden", !visible);
-  if (!visible) return;
-
-  const fpsRounded = Math.max(0, Math.round(debugFps));
-  const frameMs = debugFps > 0 ? 1000 / debugFps : null;
-  const pingRounded = Number.isFinite(debugPingMs)
-    ? Math.max(0, Math.round(debugPingMs))
-    : null;
-
-  if (debugFpsTextEl)
-    debugFpsTextEl.textContent = `FPS: ${fpsRounded > 0 ? fpsRounded : "--"}`;
-  if (debugFrameTimeTextEl)
-    debugFrameTimeTextEl.textContent = `Frame: ${frameMs != null ? frameMs.toFixed(1) : "--"} ms`;
-  if (debugPingTextEl)
-    debugPingTextEl.textContent = `Ping: ${pingRounded != null ? pingRounded : "--"} ms`;
-}
-
-function setDebugOverlayOpen(open) {
-  debugOverlayOpen =
-    Boolean(open) && appMode === "playing" && debugOverlayAllowed;
-  updateDebugOverlay();
-}
-
-function toggleDebugOverlay() {
-  if (appMode !== "playing" || !debugOverlayAllowed) return;
-  setDebugOverlayOpen(!debugOverlayOpen);
-}
-
-function canUseDebugOverlay() {
-  return Boolean(debugOverlayAllowed);
-}
-
-function enableDebugOverlayForDevice() {
-  if (debugOverlayAllowed) return false;
-  debugOverlayAllowed = true;
-  localStorage.setItem(DEBUG_OVERLAY_ALLOWED_KEY, "1");
-  return true;
-}
-
-function sendDebugPing(nowMs = performance.now()) {
-  if (appMode !== "playing" || !debugOverlayOpen) return;
-  if (nowMs - lastDebugPingSentAt < DEBUG_PING_INTERVAL_MS) return;
-  const activeSocket = socketConnection?.getSocket();
-  if (!activeSocket || !authenticated) return;
-  if (!activeSocket.sendJson({ type: "ping", clientSentAt: nowMs })) return;
-  lastDebugPingSentAt = nowMs;
-}
-
-function handleDebugPong(msg) {
-  const clientSentAt = Number(msg?.clientSentAt);
-  if (!Number.isFinite(clientSentAt)) return;
-  const rttMs = performance.now() - clientSentAt;
-  if (!Number.isFinite(rttMs) || rttMs < 0) return;
-  debugPingMs =
-    debugPingMs == null ? rttMs : debugPingMs + (rttMs - debugPingMs) * 0.35;
-  if (debugOverlayOpen && appMode === "playing") updateDebugOverlay();
+  if (clientState.gameChatOpen && gameChatNoticeEl) gameChatNoticeEl.textContent = "Chatt";
 }
 
 function updateDownedOverlay() {
@@ -1117,14 +783,14 @@ function updateDownedOverlay() {
     downedByTextEl,
     downedCountdownTextEl,
     gameMenuBtnEl,
-    appMode,
-    sessionState,
-    downedByName,
+    appMode: clientState.appMode,
+    sessionState: clientState.sessionState,
+    downedByName: clientState.downedByName,
     showDownedMessage:
-      Boolean(downedByName) &&
-      !downedMessageSuppressed &&
-      performance.now() < downedMessageHideAtMs,
-    returnToLobbyMsRemaining: winReturnToLobbyMsRemaining,
+      Boolean(clientState.downedByName) &&
+      !clientState.downedMessageSuppressed &&
+      performance.now() < clientState.downedMessageHideAtMs,
+    returnToLobbyMsRemaining: clientState.winReturnToLobbyMsRemaining,
   });
 }
 
@@ -1134,60 +800,60 @@ function updateWinOverlay() {
     winTitleEl,
     winCountdownTextEl,
     gameMenuBtnEl,
-    appMode,
-    sessionState,
-    winReturnToLobbyMsRemaining,
-    showWinTitle: performance.now() < winMessageHideAtMs,
+    appMode: clientState.appMode,
+    sessionState: clientState.sessionState,
+    winReturnToLobbyMsRemaining: clientState.winReturnToLobbyMsRemaining,
+    showWinTitle: performance.now() < clientState.winMessageHideAtMs,
   });
 }
 
 function updateSpectatorHud() {
   if (!spectatorHudEl || !spectatorTargetTextEl) return;
-  const spectating = appMode === "playing" && sessionState === "spectating";
+  const spectating = clientState.appMode === "playing" && clientState.sessionState === "spectating";
   spectatorHudEl.classList.toggle("hidden", !spectating);
   if (!spectating) return;
-  const targetName = spectatorTargetName
-    ? String(spectatorTargetName)
+  const targetName = clientState.spectatorTargetName
+    ? String(clientState.spectatorTargetName)
     : "ingen";
   spectatorTargetTextEl.textContent = `Åskådar ${targetName}`;
   const canCycle =
-    Array.isArray(spectatorCandidates) && spectatorCandidates.length > 1;
+    Array.isArray(clientState.spectatorCandidates) && clientState.spectatorCandidates.length > 1;
   if (spectatorPrevBtnEl) spectatorPrevBtnEl.disabled = !canCycle;
   if (spectatorNextBtnEl) spectatorNextBtnEl.disabled = !canCycle;
-  spectatorActionRowEl?.classList.toggle("hidden", Boolean(downedByName));
+  spectatorActionRowEl?.classList.toggle("hidden", Boolean(clientState.downedByName));
 }
 
 function updateKnockdownToast() {
   updateKnockdownToastUi({
     knockdownToastEl,
-    appMode,
-    sessionState,
-    knockdownToastMsRemaining,
-    knockdownToastText,
+    appMode: clientState.appMode,
+    sessionState: clientState.sessionState,
+    knockdownToastMsRemaining: clientState.knockdownToastMsRemaining,
+    knockdownToastText: clientState.knockdownToastText,
   });
 }
 
 function requestSpectate() {
   const activeSocket = socketConnection?.getSocket();
-  if (!activeSocket || !authenticated) return;
+  if (!activeSocket || !clientState.authenticated) return;
   activeSocket.sendJson({ type: "spectate" });
 }
 
 function requestSpectatorCycle(direction) {
   const activeSocket = socketConnection?.getSocket();
-  if (!activeSocket || sessionState !== "spectating") return;
+  if (!activeSocket || clientState.sessionState !== "spectating") return;
   const step = Number(direction) < 0 ? -1 : 1;
-  downedMessageSuppressed = true;
+  clientState.downedMessageSuppressed = true;
   updateDownedOverlay();
   activeSocket.sendJson({ type: "spectate_cycle", direction: step });
 }
 
 function updateCrosshairHud(deltaSec, nowMs) {
   const canProbeAim =
-    appMode === "playing" &&
-    sessionState === "alive" &&
-    myCharacterId != null &&
-    attackCooldownMsRemaining <= CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS;
+    clientState.appMode === "playing" &&
+    clientState.sessionState === "alive" &&
+    clientState.myCharacterId != null &&
+    clientState.attackCooldownMsRemaining <= CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS;
 
   if (
     canProbeAim &&
@@ -1195,7 +861,7 @@ function updateCrosshairHud(deltaSec, nowMs) {
   ) {
     camera.updateMatrixWorld(true);
     cachedCrosshairAimingAtCharacter = avatarSystem.isAimingAtCharacter({
-      myCharacterId,
+      myCharacterId: clientState.myCharacterId,
       maxDistance: CROSSHAIR_HIT_DISTANCE_METERS,
     });
     lastCrosshairAimCheckAt = nowMs;
@@ -1208,11 +874,11 @@ function updateCrosshairHud(deltaSec, nowMs) {
   const next = updateCrosshairHudUi({
     crosshairHudEl,
     crosshairCooldownArcEl,
-    appMode,
-    sessionState,
-    myCharacterId,
-    attackCooldownMsRemaining,
-    attackCooldownVisualMaxMs,
+    appMode: clientState.appMode,
+    sessionState: clientState.sessionState,
+    myCharacterId: clientState.myCharacterId,
+    attackCooldownMsRemaining: clientState.attackCooldownMsRemaining,
+    attackCooldownVisualMaxMs: clientState.attackCooldownVisualMaxMs,
     deltaSec,
     crosshairCooldownMinVisibleMs: CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS,
     crosshairDefaultCooldownMs: CROSSHAIR_DEFAULT_COOLDOWN_MS,
@@ -1222,13 +888,13 @@ function updateCrosshairHud(deltaSec, nowMs) {
     avatarSystem,
     aimingAtCharacter: cachedCrosshairAimingAtCharacter,
   });
-  attackCooldownMsRemaining = next.attackCooldownMsRemaining;
-  attackCooldownVisualMaxMs = next.attackCooldownVisualMaxMs;
+  clientState.attackCooldownMsRemaining = next.attackCooldownMsRemaining;
+  clientState.attackCooldownVisualMaxMs = next.attackCooldownVisualMaxMs;
 }
 
 function setAppMode(mode) {
-  const previous = appMode;
-  appMode = mode;
+  const previous = clientState.appMode;
+  clientState.appMode = mode;
 
   const showConnect = mode === "connect" || mode === "disconnected";
   const showLobby = mode === "lobby";
@@ -1250,9 +916,9 @@ function setAppMode(mode) {
   }
 
   if (previous === "playing" && mode !== "playing") {
-    myCharacterId = null;
-    attackCooldownMsRemaining = 0;
-    attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
+    clientState.myCharacterId = null;
+    clientState.attackCooldownMsRemaining = 0;
+    clientState.attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
     resetKnockdownToast();
     setDebugOverlayOpen(false);
     resetInputState();
@@ -1261,7 +927,7 @@ function setAppMode(mode) {
   if (mode !== "playing") setGameChatOpen(false);
   if (mode !== "playing") setGameMenuOpen(false);
   if (mode !== "lobby") setLobbyMenuOpen(false);
-  if (mode === "playing" && gameChatOpen && !canOpenInGameChat())
+  if (mode === "playing" && clientState.gameChatOpen && !canOpenInGameChat())
     setGameChatOpen(false);
   if (mode === "connect" || mode === "disconnected")
     setCountdownTextFromSession({ state: "lobby" });
@@ -1280,9 +946,9 @@ function setAppMode(mode) {
 
 function updateScreenRootPointerEvents() {
   if (!screenRootEl) return;
-  const overlayActive = appMode !== "playing";
+  const overlayActive = clientState.appMode !== "playing";
   const dialogOpenInGame =
-    appMode === "playing" &&
+    clientState.appMode === "playing" &&
     lobbyDialogBackdropEl &&
     !lobbyDialogBackdropEl.classList.contains("hidden");
   screenRootEl.style.pointerEvents =
@@ -1292,7 +958,7 @@ function updateScreenRootPointerEvents() {
 function setCountdownTextFromSession(state) {
   if (!countdownTextEl || !countdownOverlayEl) return;
   const ms = Number(state?.countdownMsRemaining || 0);
-  lobbyCountdownMsRemaining = ms;
+  clientState.lobbyCountdownMsRemaining = ms;
   if (countdownControlsTextEl)
     countdownControlsTextEl.textContent = controlsTextForCurrentMode();
   // Show join button when the player is in lobby (watching countdown) but not yet participating
@@ -1302,7 +968,7 @@ function setCountdownTextFromSession(state) {
   if (ms > 0) {
     const sec = Math.max(1, Math.ceil(ms / 1000));
     countdownTextEl.textContent = String(sec);
-    const characterId = state?.characterId ?? myCharacterId;
+    const characterId = state?.characterId ?? clientState.myCharacterId;
     if (countdownCharacterCanvasEl && characterId != null) {
       if (characterId !== lastCountdownPreviewCharacterId) {
         drawCountdownCharacterPreview(countdownCharacterCanvasEl, characterId);
@@ -1329,7 +995,7 @@ function renderScoreboard(players) {
   const nextSignature = scoreboardSignature(nextPlayers);
   if (nextSignature === lastScoreboardSignature) return;
   lastScoreboardSignature = nextSignature;
-  lobbyScoreboard = nextPlayers.slice();
+  clientState.lobbyScoreboard = nextPlayers.slice();
   renderScoreboardFn(scoreBodyEl, nextPlayers, colorForName);
   updateLobbyMatchStatus();
 }
@@ -1345,147 +1011,6 @@ function replaceChat(history) {
 function resetInputState() {
   inputController.resetInputState();
 }
-
-const socketState = createSocketState({
-  authenticated: {
-    get: () => authenticated,
-    set: (value) => {
-      authenticated = value;
-    },
-  },
-  myName: {
-    get: () => myName,
-    set: (value) => {
-      myName = value;
-    },
-  },
-  sessionState: {
-    get: () => sessionState,
-    set: (value) => {
-      sessionState = value;
-    },
-  },
-  sessionReady: {
-    get: () => sessionReady,
-    set: (value) => {
-      sessionReady = value;
-    },
-  },
-  myCharacterId: {
-    get: () => myCharacterId,
-    set: (value) => {
-      myCharacterId = value;
-    },
-  },
-  activePlayersInGame: {
-    get: () => activePlayersInGame,
-    set: (value) => {
-      activePlayersInGame = value;
-    },
-  },
-  attackCooldownMsRemaining: {
-    get: () => attackCooldownMsRemaining,
-    set: (value) => {
-      attackCooldownMsRemaining = value;
-    },
-  },
-  attackCooldownVisualMaxMs: {
-    get: () => attackCooldownVisualMaxMs,
-    set: (value) => {
-      attackCooldownVisualMaxMs = value;
-    },
-  },
-  forceYawSyncOnNextWorld: {
-    get: () => forceYawSyncOnNextWorld,
-    set: (value) => {
-      forceYawSyncOnNextWorld = value;
-    },
-  },
-  currentMatch: {
-    get: () => currentMatch,
-    set: (value) => {
-      currentMatch = value;
-    },
-  },
-  lobbyMinPlayersToStart: {
-    get: () => lobbyMinPlayersToStart,
-    set: (value) => {
-      lobbyMinPlayersToStart = value;
-    },
-  },
-  lobbyMaxPlayers: {
-    get: () => lobbyMaxPlayers,
-    set: (value) => {
-      lobbyMaxPlayers = value;
-    },
-  },
-  winReturnToLobbyMsRemaining: {
-    get: () => winReturnToLobbyMsRemaining,
-    set: (value) => {
-      winReturnToLobbyMsRemaining = value;
-    },
-  },
-  winMessageHideAtMs: {
-    get: () => winMessageHideAtMs,
-    set: (value) => {
-      winMessageHideAtMs = value;
-    },
-  },
-  downedByName: {
-    get: () => downedByName,
-    set: (value) => {
-      downedByName = value;
-    },
-  },
-  downedMessageHideAtMs: {
-    get: () => downedMessageHideAtMs,
-    set: (value) => {
-      downedMessageHideAtMs = value;
-    },
-  },
-  downedMessageSuppressed: {
-    get: () => downedMessageSuppressed,
-    set: (value) => {
-      downedMessageSuppressed = Boolean(value);
-    },
-  },
-  knockdownToastText: {
-    get: () => knockdownToastText,
-    set: (value) => {
-      knockdownToastText = value;
-    },
-  },
-  knockdownToastMsRemaining: {
-    get: () => knockdownToastMsRemaining,
-    set: (value) => {
-      knockdownToastMsRemaining = value;
-    },
-  },
-  pendingLoginName: {
-    get: () => pendingLoginName,
-    set: (value) => {
-      pendingLoginName = value;
-    },
-  },
-  spectatorTargetCharacterId: {
-    get: () => spectatorTargetCharacterId,
-    set: (value) => {
-      spectatorTargetCharacterId = value;
-    },
-  },
-  spectatorTargetName: {
-    get: () => spectatorTargetName,
-    set: (value) => {
-      spectatorTargetName = value;
-    },
-  },
-  spectatorCandidates: {
-    get: () => spectatorCandidates,
-    set: (value) => {
-      spectatorCandidates = value;
-    },
-  },
-});
 
 const socketMessageContext = createSocketMessageContext({
   socketState,
@@ -1527,7 +1052,7 @@ const socketMessageContext = createSocketMessageContext({
     cancelAutoReconnect: () =>
       socketConnection?.cancelAutoReconnectOnLoginError?.(),
     setViewYaw: (value) => {
-      viewYaw = value;
+      clientState.viewYaw = value;
     },
   },
 });
@@ -1537,7 +1062,7 @@ socketConnection = createSocketConnectionController({
   handleSocketMessage,
   getSocketMessageContext: () => socketMessageContext,
   setPendingLoginName: (name) => {
-    pendingLoginName = name;
+    clientState.pendingLoginName = name;
   },
   setConnectError,
   setPrivateRoomButtonVisible,
@@ -1599,19 +1124,19 @@ function sendInGameChat() {
 
 function requestReturnToLobby() {
   const activeSocket = socketConnection?.getSocket();
-  if (!activeSocket || !authenticated) return;
+  if (!activeSocket || !clientState.authenticated) return;
   activeSocket.sendJson({ type: "leave_match" });
   setGameMenuOpen(false);
 }
 
 function updateSpectatorCamera(deltaSec) {
-  if (sessionState !== "spectating") return;
+  if (clientState.sessionState !== "spectating") return;
   const target = avatarSystem.getCharacterCameraState(
-    spectatorTargetCharacterId,
+    clientState.spectatorTargetCharacterId,
   );
   if (!target) return;
 
-  if (downedByName && spectatorTargetName && spectatorTargetName === myName) {
+  if (clientState.downedByName && clientState.spectatorTargetName && clientState.spectatorTargetName === clientState.myName) {
     const posSmooth = 1 - Math.exp(-deltaSec * DOWNED_CAMERA_POS_SMOOTH_RATE);
     camera.position.x += (target.x - camera.position.x) * posSmooth;
     camera.position.z += (target.z - camera.position.z) * posSmooth;
@@ -1638,8 +1163,7 @@ function updateSpectatorCamera(deltaSec) {
 const savedName = localStorage.getItem(PLAYER_NAME_KEY);
 if (nameInputEl) nameInputEl.value = savedName != null ? savedName : "";
 if (IS_TOUCH_DEVICE) document.body.classList.add("touch-device");
-document.addEventListener("fullscreenchange", refreshAudioSettingsUi);
-document.addEventListener("webkitfullscreenchange", refreshAudioSettingsUi);
+bindFullscreenListeners();
 refreshAudioSettingsUi();
 inputController.bind();
 bindAppEventHandlers({
@@ -1714,9 +1238,7 @@ bindAppEventHandlers({
     refreshAudioSettingsUi,
     persistMobileControlsPreference,
     setFullscreenEnabled,
-    setLookSettings: (next) => {
-      lookSettings = next;
-    },
+    setLookSettings,
     controlsTextForCurrentMode,
     updateMobileControlsVisibility,
     requestPointerLockSafe,
@@ -1729,28 +1251,28 @@ bindAppEventHandlers({
     getActiveSocket: () => socketConnection?.getSocket() || null,
     requestJoinCountdown: () => {
       const activeSocket = socketConnection?.getSocket();
-      if (!activeSocket || !authenticated) return;
-      if (sessionState !== "lobby" || lobbyCountdownMsRemaining <= 0) return;
+      if (!activeSocket || !clientState.authenticated) return;
+      if (clientState.sessionState !== "lobby" || clientState.lobbyCountdownMsRemaining <= 0) return;
       activeSocket.sendJson({ type: "ready", ready: true });
-      sessionReady = true;
+      clientState.sessionReady = true;
       updateReadyButton();
     },
   },
   state: {
-    getAuthenticated: () => authenticated,
-    getCurrentMatch: () => currentMatch,
-    getSessionState: () => sessionState,
-    getSessionReady: () => sessionReady,
+    getAuthenticated: () => clientState.authenticated,
+    getCurrentMatch: () => clientState.currentMatch,
+    getSessionState: () => clientState.sessionState,
+    getSessionReady: () => clientState.sessionReady,
     setSessionReady: (value) => {
-      sessionReady = Boolean(value);
+      clientState.sessionReady = Boolean(value);
     },
-    getAppMode: () => appMode,
-    getLobbyMenuOpen: () => lobbyMenuOpen,
-    getGameChatOpen: () => gameChatOpen,
-    getGameMenuOpen: () => gameMenuOpen,
+    getAppMode: () => clientState.appMode,
+    getLobbyMenuOpen: () => clientState.lobbyMenuOpen,
+    getGameChatOpen: () => clientState.gameChatOpen,
+    getGameMenuOpen: () => clientState.gameMenuOpen,
     canOpenInGameChat,
-    getAudioSettings: () => audioSettings,
-    getLookSettings: () => lookSettings,
+    getAudioSettings,
+    getLookSettings,
     getMobileControlsPreference: () => mobileControlsPreference,
   },
 });
@@ -1765,43 +1287,34 @@ function animate() {
   const deltaSec = Math.min(0.05, (now - lastFrameAt) / 1000);
   lastFrameAt = now;
   const frameMs = Math.max(0, deltaSec * 1000);
-  debugFpsSampleFrames += 1;
-  debugFpsSampleMs += frameMs;
-  if (debugFpsSampleMs >= DEBUG_FPS_SAMPLE_WINDOW_MS) {
-    debugFps =
-      debugFpsSampleMs > 0
-        ? (debugFpsSampleFrames * 1000) / debugFpsSampleMs
-        : 0;
-    debugFpsSampleFrames = 0;
-    debugFpsSampleMs = 0;
-  }
-  if (appMode !== "playing") return;
+  recordDebugFrame(frameMs);
+  if (clientState.appMode !== "playing") return;
   sendDebugPing(now);
   adaptRenderScale(now, frameMs);
   const yaw = inputController.getYaw();
   const pitch = inputController.getPitch();
 
-  const smoothingRate = lookSmoothingRate(lookSettings);
+  const smoothingRate = settingsController.getLookSmoothingRate();
   const viewSmooth =
     smoothingRate > 0 ? 1 - Math.exp(-deltaSec * smoothingRate) : 1;
-  const yawDelta = normalizeAngle(yaw - viewYaw);
-  viewYaw = normalizeAngle(viewYaw + yawDelta * viewSmooth);
-  viewPitch += (pitch - viewPitch) * viewSmooth;
+  const yawDelta = normalizeAngle(yaw - clientState.viewYaw);
+  clientState.viewYaw = normalizeAngle(clientState.viewYaw + yawDelta * viewSmooth);
+  clientState.viewPitch += (pitch - clientState.viewPitch) * viewSmooth;
 
-  camera.rotation.y = viewYaw;
-  camera.rotation.x = viewPitch;
+  camera.rotation.y = clientState.viewYaw;
+  camera.rotation.x = clientState.viewPitch;
   roomSystem.update?.(deltaSec);
   const controlledCharacterId =
-    appMode === "playing" &&
-    (sessionState === "alive" || sessionState === "won")
-      ? myCharacterId
+    clientState.appMode === "playing" &&
+    (clientState.sessionState === "alive" || clientState.sessionState === "won")
+      ? clientState.myCharacterId
       : null;
   avatarSystem.animate(deltaSec, controlledCharacterId);
-  if (appMode === "playing" && sessionState === "spectating") {
+  if (clientState.appMode === "playing" && clientState.sessionState === "spectating") {
     updateSpectatorCamera(deltaSec);
   }
-  if (appMode === "playing" && sessionState === "downed") {
-    const corpsePos = avatarSystem.getCharacterPosition(myCharacterId);
+  if (clientState.appMode === "playing" && clientState.sessionState === "downed") {
+    const corpsePos = avatarSystem.getCharacterPosition(clientState.myCharacterId);
     if (corpsePos) {
       const posSmooth = 1 - Math.exp(-deltaSec * DOWNED_CAMERA_POS_SMOOTH_RATE);
       camera.position.x += (corpsePos.x - camera.position.x) * posSmooth;
@@ -1812,19 +1325,19 @@ function animate() {
     camera.rotation.set(-Math.PI / 2 + 0.0001, 0, 0);
   }
   if (
-    appMode === "playing" &&
-    (sessionState === "won" ||
-      sessionState === "downed" ||
-      sessionState === "spectating")
+    clientState.appMode === "playing" &&
+    (clientState.sessionState === "won" ||
+      clientState.sessionState === "downed" ||
+      clientState.sessionState === "spectating")
   ) {
-    winReturnToLobbyMsRemaining = Math.max(
+    clientState.winReturnToLobbyMsRemaining = Math.max(
       0,
-      winReturnToLobbyMsRemaining - deltaSec * 1000,
+      clientState.winReturnToLobbyMsRemaining - deltaSec * 1000,
     );
   }
-  knockdownToastMsRemaining = Math.max(
+  clientState.knockdownToastMsRemaining = Math.max(
     0,
-    knockdownToastMsRemaining - deltaSec * 1000,
+    clientState.knockdownToastMsRemaining - deltaSec * 1000,
   );
   if (now - lastOverlayUiUpdateAt >= HUD_OVERLAY_REFRESH_MS) {
     lastOverlayUiUpdateAt = now;
@@ -1833,15 +1346,8 @@ function animate() {
     updateKnockdownToast();
   }
   updateCrosshairHud(deltaSec, now);
-  if (
-    debugOverlayOpen &&
-    appMode === "playing" &&
-    now - lastDebugOverlayUpdateAt >= DEBUG_OVERLAY_REFRESH_MS
-  ) {
-    lastDebugOverlayUpdateAt = now;
-    updateDebugOverlay();
-  }
-  if (appMode === "playing") renderer.render(scene, camera);
+  maybeRefreshDebugOverlay(now);
+  if (clientState.appMode === "playing") renderer.render(scene, camera);
 }
 
 animate();
