@@ -256,7 +256,7 @@ export function createClientMessageProcessor({
       return "ok";
     }
 
-    if (msg.type === "ready" || msg.type === "play") {
+    if (msg.type === "ready") {
       if (session.state === "alive") return "ok";
       if (session.state === "spectating") {
         sendToSession(sessionId, "action_error", {
@@ -288,7 +288,7 @@ export function createClientMessageProcessor({
         });
         return "ok";
       }
-      const wantsReady = msg.type === "play" ? true : msg.ready !== false;
+      const wantsReady = msg.ready !== false;
       if (wantsReady) {
         if (!session.ready) {
           session.ready = true;

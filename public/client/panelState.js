@@ -69,6 +69,16 @@ export function createPanelState(
     refreshAudioSettingsUi,
   },
 ) {
+  function maybeRestorePointerLock(restorePointerLock) {
+    if (
+      restorePointerLock &&
+      getAppMode() === "playing" &&
+      (getSessionState() === "alive" || getSessionState() === "won")
+    ) {
+      requestPointerLockSafe();
+    }
+  }
+
   function isGameChatFocused() {
     return document.activeElement === gameChatInputEl;
   }
@@ -112,13 +122,7 @@ export function createPanelState(
       gameChatInputEl?.blur();
     }
     if (!canOpenInGameChat()) _setGameChatOpenState(false);
-    if (
-      restorePointerLock &&
-      getAppMode() === "playing" &&
-      (getSessionState() === "alive" || getSessionState() === "won")
-    ) {
-      requestPointerLockSafe();
-    }
+    maybeRestorePointerLock(restorePointerLock);
     updateMobileControlsVisibility();
     updateDownedOverlay();
     updateSpectatorHud();
@@ -137,13 +141,7 @@ export function createPanelState(
       updateMobileControlsVisibility();
       return;
     }
-    if (
-      restorePointerLock &&
-      getAppMode() === "playing" &&
-      (getSessionState() === "alive" || getSessionState() === "won")
-    ) {
-      requestPointerLockSafe();
-    }
+    maybeRestorePointerLock(restorePointerLock);
     updateMobileControlsVisibility();
   }
 
@@ -193,12 +191,7 @@ export function createPanelState(
     lobbyDialogTextEl?.classList.remove("hidden");
     updateScreenRootPointerEvents();
     updateMobileControlsVisibility();
-    if (
-      getAppMode() === "playing" &&
-      (getSessionState() === "alive" || getSessionState() === "won")
-    ) {
-      requestPointerLockSafe();
-    }
+    maybeRestorePointerLock(true);
   }
 
   return {

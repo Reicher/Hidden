@@ -37,9 +37,100 @@ export function createRoomTickLoop({
   let cachedScoreboard = [];
   let nextScoreboardRefreshAt = 0;
 
+  function isEndMatchState(session) {
+    return (
+      session.state === "won" ||
+      session.state === "downed" ||
+      session.state === "spectating"
+    );
+  }
+
+  function serializeCharacter(c, now) {
+    return {
+      id: c.id,
+      x: Number(c.x.toFixed(3)),
+      z: Number(c.z.toFixed(3)),
+      yaw: Number(c.yaw.toFixed(3)),
+      pitch: Number((c.pitch || 0).toFixed(3)),
+      inspectDownedTargetId: Number.isFinite(c.ai?.inspectDownedTargetId)
+        ? Number(c.ai.inspectDownedTargetId)
+        : -1,
+      inspectDownedActive:
+        Number.isFinite(c.ai?.inspectDownedTargetId) &&
+        c.ai.inspectDownedTargetId >= 0 &&
+        now < Number(c.ai?.inspectDownedUntil || 0),
+      controllerType: c.controllerType,
+      cooldownMsRemaining: Math.max(
+        0,
+        constants.ATTACK_COOLDOWN_MS - (now - c.lastAttackAt),
+      ),
+      attackFlashMsRemaining: Math.max(
+        0,
+        constants.ATTACK_FLASH_MS - (now - c.lastAttackAt),
+      ),
+      downedMsRemaining: Math.max(0, c.downedUntil - now),
+      downedDurationMs: constants.NPC_DOWNED_RESPAWN_MS,
+      fallAwayX: Number((c.fallAwayX || 0).toFixed(3)),
+      fallAwayZ: Number((c.fallAwayZ || 1).toFixed(3)),
+    };
+  }
+
+  function serializeSession(
+    session,
+    now,
+    { alivePlayers, spectatorCandidates },
+  ) {
+    if (!session) return null;
+    const playerCharacter =
+      session.characterId != null ? characters[session.characterId] : null;
+    const spectatorTargetSession =
+      session.spectatingSessionId != null
+        ? sessions.get(session.spectatingSessionId)
+        : null;
+    return {
+      state: session.state,
+      authenticated: session.authenticated,
+      name: session.name,
+      characterId: session.characterId,
+      ready: Boolean(session.ready || session.state === "countdown"),
+      countdownMsRemaining: countdownMsRemaining(now),
+      activePlayers: alivePlayers,
+      minPlayersToStart: constants.MIN_PLAYERS_TO_START,
+      maxPlayers: constants.MAX_PLAYERS,
+      returnToLobbyMsRemaining: isEndMatchState(session)
+        ? Math.max(0, (session.returnToLobbyAt || 0) - now)
+        : 0,
+      eliminatedByName:
+        session.state === "downed" || session.state === "spectating"
+          ? session.eliminatedByName || null
+          : null,
+      spectatorTargetCharacterId:
+        session.state === "spectating"
+          ? (session.spectatingCharacterId ?? null)
+          : null,
+      spectatorTargetName:
+        session.state === "spectating"
+          ? spectatorTargetSession?.name || null
+          : null,
+      spectatorCandidates:
+        session.state === "spectating"
+          ? spectatorCandidates.map((c) => ({
+              name: c.name,
+              characterId: c.characterId,
+            }))
+          : [],
+      attackCooldownMsRemaining: playerCharacter
+        ? Math.max(
+            0,
+            constants.ATTACK_COOLDOWN_MS - (now - playerCharacter.lastAttackAt),
+          )
+        : 0,
+    };
+  }
+
   const tickInterval = setInterval(() => {
-    const tickStartedAt = Date.now();
     const now = Date.now();
+    const tickStartedAt = now;
     const dt = Math.min(0.1, (now - lastTickAt) / 1000);
     lastTickAt = now;
     checkInvariants(now);
@@ -49,12 +140,7 @@ export function createRoomTickLoop({
     let matchEndedByTimeout = false;
     for (const session of sessions.values()) {
       if (!session.authenticated) continue;
-      if (
-        session.state !== "won" &&
-        session.state !== "downed" &&
-        session.state !== "spectating"
-      )
-        continue;
+      if (!isEndMatchState(session)) continue;
       const returnAt = Number(session.returnToLobbyAt || 0);
       if (!Number.isFinite(returnAt) || returnAt <= 0 || now < returnAt)
         continue;
@@ -66,12 +152,8 @@ export function createRoomTickLoop({
       appendSystemChat([{ type: "text", text: "Spelet avslutat" }]);
     }
     if (getPendingRoundReset()) {
-      const hasEndMatchParticipants = authenticatedSessions().some(
-        (session) =>
-          session.state === "won" ||
-          session.state === "downed" ||
-          session.state === "spectating",
-      );
+      const hasEndMatchParticipants =
+        authenticatedSessions().some(isEndMatchState);
       if (!hasEndMatchParticipants) {
         resetArenaForNextRound(now);
         setPendingRoundReset(false);
@@ -192,92 +274,18 @@ export function createRoomTickLoop({
       coolers: constants.COOLERS,
       freezers: constants.FREEZERS,
       scoreboard,
-      characters: characters.map((c) => ({
-        id: c.id,
-        x: Number(c.x.toFixed(3)),
-        z: Number(c.z.toFixed(3)),
-        yaw: Number(c.yaw.toFixed(3)),
-        pitch: Number((c.pitch || 0).toFixed(3)),
-        inspectDownedTargetId: Number.isFinite(c.ai?.inspectDownedTargetId)
-          ? Number(c.ai.inspectDownedTargetId)
-          : -1,
-        inspectDownedActive:
-          Number.isFinite(c.ai?.inspectDownedTargetId) &&
-          c.ai.inspectDownedTargetId >= 0 &&
-          now < Number(c.ai?.inspectDownedUntil || 0),
-        controllerType: c.controllerType,
-        cooldownMsRemaining: Math.max(
-          0,
-          constants.ATTACK_COOLDOWN_MS - (now - c.lastAttackAt),
-        ),
-        attackFlashMsRemaining: Math.max(
-          0,
-          constants.ATTACK_FLASH_MS - (now - c.lastAttackAt),
-        ),
-        downedMsRemaining: Math.max(0, c.downedUntil - now),
-        downedDurationMs: constants.NPC_DOWNED_RESPAWN_MS,
-        fallAwayX: Number((c.fallAwayX || 0).toFixed(3)),
-        fallAwayZ: Number((c.fallAwayZ || 1).toFixed(3)),
-      })),
+      characters: characters.map((c) => serializeCharacter(c, now)),
     };
 
     for (const [sessionId, ws] of sockets.entries()) {
       const session = sessions.get(sessionId);
-      const playerCharacter =
-        session && session.characterId != null
-          ? characters[session.characterId]
-          : null;
-      const spectatorTargetSession =
-        session?.spectatingSessionId != null
-          ? sessions.get(session.spectatingSessionId)
-          : null;
-      const spectatorTargetName = spectatorTargetSession?.name || null;
       send(ws, "world", {
         ...worldState,
         match,
-        session: session
-          ? {
-              state: session.state,
-              authenticated: session.authenticated,
-              name: session.name,
-              characterId: session.characterId,
-              ready: Boolean(session.ready || session.state === "countdown"),
-              countdownMsRemaining: countdownMsRemaining(now),
-              activePlayers: alivePlayers,
-              minPlayersToStart: constants.MIN_PLAYERS_TO_START,
-              maxPlayers: constants.MAX_PLAYERS,
-              returnToLobbyMsRemaining:
-                session.state === "won" ||
-                session.state === "downed" ||
-                session.state === "spectating"
-                  ? Math.max(0, (session.returnToLobbyAt || 0) - now)
-                  : 0,
-              eliminatedByName:
-                session.state === "downed" || session.state === "spectating"
-                  ? session.eliminatedByName || null
-                  : null,
-              spectatorTargetCharacterId:
-                session.state === "spectating"
-                  ? (session.spectatingCharacterId ?? null)
-                  : null,
-              spectatorTargetName:
-                session.state === "spectating" ? spectatorTargetName : null,
-              spectatorCandidates:
-                session.state === "spectating"
-                  ? spectatorCandidates.map((candidate) => ({
-                      name: candidate.name,
-                      characterId: candidate.characterId,
-                    }))
-                  : [],
-              attackCooldownMsRemaining: playerCharacter
-                ? Math.max(
-                    0,
-                    constants.ATTACK_COOLDOWN_MS -
-                      (now - playerCharacter.lastAttackAt),
-                  )
-                : 0,
-            }
-          : null,
+        session: serializeSession(session, now, {
+          alivePlayers,
+          spectatorCandidates,
+        }),
       });
     }
 

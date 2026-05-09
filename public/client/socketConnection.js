@@ -38,11 +38,15 @@ export function createSocketConnectionController({
     return connecting;
   }
 
-  function cancelAutoReconnect() {
+  function clearReconnectTimer() {
     if (reconnectTimer != null) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
+  }
+
+  function cancelAutoReconnect() {
+    clearReconnectTimer();
     reconnectAttempts = 0;
     lastConnectParams = null;
   }
@@ -157,10 +161,7 @@ export function createSocketConnectionController({
   // Call this when login_error is received so auto-reconnect is stopped
   // (wrong name, room full, etc. – retrying wouldn't help).
   function cancelAutoReconnectOnLoginError() {
-    if (reconnectTimer != null) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
+    clearReconnectTimer();
     reconnectAttempts = 0;
     // Keep lastConnectParams so the user can manually retry from the connect screen.
   }

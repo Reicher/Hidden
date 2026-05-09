@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { createSession } from "./session.js";
+import { rawSizeBytes } from "./net.js";
+
+function closeWsSafe(ws, code, reason) {
+  try {
+    ws.close(code, reason);
+  } catch {
+    ws.terminate();
+  }
+}
 
 export function createRoomWsLifecycle({
   roomMeta,
@@ -22,7 +31,7 @@ export function createRoomWsLifecycle({
   logWarn,
   emitStatsEvent,
   onInboundMessage = null,
-  onRoomEmpty
+  onRoomEmpty,
 }) {
   const wss = new WebSocketServer({ noServer: true });
 
@@ -32,7 +41,7 @@ export function createRoomWsLifecycle({
       if (ws.isAlive === false) {
         const staleSessionId = ws.sessionId || null;
         logEvent("heartbeat_timeout", {
-          sessionId: shortSessionId(staleSessionId)
+          sessionId: shortSessionId(staleSessionId),
         });
         ws.terminate();
         continue;
@@ -61,7 +70,11 @@ export function createRoomWsLifecycle({
       if (closingSession?.characterId != null) {
         releaseOwnedCharacter(sessionId);
       }
-      if (getLobbyCountdown() && closingSession?.state === "countdown" && closingSession?.name) {
+      if (
+        getLobbyCountdown() &&
+        closingSession?.state === "countdown" &&
+        closingSession?.name
+      ) {
         countdownReadyNames.add(String(closingSession.name).toLowerCase());
         markCountdownReconnectGrace(closingSession.name);
       }
@@ -69,7 +82,7 @@ export function createRoomWsLifecycle({
       if (closingSession?.authenticated && closingSession.name) {
         appendSystemChat([
           { type: "player", name: closingSession.name },
-          { type: "text", text: " lämnade spelet" }
+          { type: "text", text: " lämnade spelet" },
         ]);
       }
 
@@ -86,14 +99,18 @@ export function createRoomWsLifecycle({
         sessionId: shortSessionId(sessionId),
         name: closingSession?.name || null,
         reason,
-        ...details
+        ...details,
       });
       emitStatsEvent("session_disconnected", {
         sessionId: shortSessionId(sessionId),
         name: closingSession?.name || null,
-        reason
+        reason,
       });
-      if (roomMeta.isPrivate && sessions.size === 0 && typeof onRoomEmpty === "function") {
+      if (
+        roomMeta.isPrivate &&
+        sessions.size === 0 &&
+        typeof onRoomEmpty === "function"
+      ) {
         onRoomEmpty({ roomId: roomMeta.roomId, roomCode: roomMeta.roomCode });
       }
     };
@@ -106,16 +123,16 @@ export function createRoomWsLifecycle({
       sessionId: shortSessionId(sessionId),
       origin: req.headers.origin || "<missing>",
       ip: req.socket?.remoteAddress || null,
-      userAgent: req.headers["user-agent"] || null
+      userAgent: req.headers["user-agent"] || null,
     });
     emitStatsEvent("session_connected", {
-      sessionId: shortSessionId(sessionId)
+      sessionId: shortSessionId(sessionId),
     });
     send(ws, "welcome", {
       sessionId,
       maxPlayers: constants.MAX_PLAYERS,
       roomCode: roomMeta.roomCode || null,
-      isPrivate: roomMeta.isPrivate
+      isPrivate: roomMeta.isPrivate,
     });
 
     ws.on("pong", () => {
@@ -124,12 +141,11 @@ export function createRoomWsLifecycle({
 
     ws.on("message", (raw) => {
       if (typeof onInboundMessage === "function") {
-        let bytes = 0;
-        if (typeof raw === "string") bytes = Buffer.byteLength(raw, "utf8");
-        else if (Buffer.isBuffer(raw)) bytes = raw.byteLength;
-        else if (Array.isArray(raw)) bytes = raw.reduce((sum, chunk) => sum + (chunk?.byteLength || 0), 0);
-        else if (raw && typeof raw.byteLength === "number") bytes = raw.byteLength;
-        onInboundMessage({ sessionId, bytes, at: Date.now() });
+        onInboundMessage({
+          sessionId,
+          bytes: rawSizeBytes(raw),
+          at: Date.now(),
+        });
       }
       const result = processClientMessage(sessionId, raw);
       if (result === "abuse") {
@@ -138,29 +154,27 @@ export function createRoomWsLifecycle({
         const dropped = activeSession?.net.droppedMessages ?? 0;
         logWarn(
           "ratelimit",
-          `abuse-kick sid=${shortSessionId(sessionId)} origin=${req?.headers?.origin || "-"} reason=${reason} dropped=${dropped}`
+          `abuse-kick sid=${shortSessionId(sessionId)} origin=${req?.headers?.origin || "-"} reason=${reason} dropped=${dropped}`,
         );
-        cleanupSession("abuse_kick", { dropReason: reason, droppedMessages: dropped });
-        try {
-          ws.close(1008, "rate limit");
-        } catch {
-          ws.terminate();
-        }
+        cleanupSession("abuse_kick", {
+          dropReason: reason,
+          droppedMessages: dropped,
+        });
+        closeWsSafe(ws, 1008, "rate limit");
       }
     });
 
     ws.on("error", (err) => {
       console.error(`[ws-client-error:${sessionId}] ${err?.message || err}`);
       cleanupSession("socket_error", { error: err?.message || String(err) });
-      try {
-        ws.terminate();
-      } catch {
-        // no-op
-      }
+      ws.terminate();
     });
 
     ws.on("close", (code, closeReasonBuffer) => {
-      const closeReason = closeReasonBuffer && closeReasonBuffer.length > 0 ? closeReasonBuffer.toString() : "";
+      const closeReason =
+        closeReasonBuffer && closeReasonBuffer.length > 0
+          ? closeReasonBuffer.toString()
+          : "";
       cleanupSession("socket_close", { code, closeReason });
     });
   });

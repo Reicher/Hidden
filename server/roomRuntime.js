@@ -40,9 +40,14 @@ import {
   INVARIANT_LOG_COOLDOWN_MS,
   SHELVES,
   COOLERS,
-  FREEZERS
+  FREEZERS,
 } from "./config.js";
-import { normalizeAngle, canAttack, markAttack, collectVictimIds } from "./runtime/combat.js";
+import {
+  normalizeAngle,
+  canAttack,
+  markAttack,
+  collectVictimIds,
+} from "./runtime/combat.js";
 import { createMovementSystem } from "./runtime/ai.js";
 import { createSpectatorSystem } from "./runtime/spectator.js";
 import { createRoomLogger, createInvariantChecker } from "./runtime/logger.js";
@@ -63,7 +68,13 @@ const MAX_LOOK_PITCH_RAD = 1.2;
 const MATCH_END_RETURN_TO_LOBBY_MS = 10000;
 const COUNTDOWN_RECONNECT_GRACE_MS = 7000;
 
-export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = null, onStatsEvent = null }) {
+export function createRoomRuntime({
+  roomId,
+  roomCode,
+  isPrivate,
+  onRoomEmpty = null,
+  onStatsEvent = null,
+}) {
   const sessions = new Map();
   const sockets = new Map();
   const chatHistory = [];
@@ -83,14 +94,14 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
       totalTicks: 0,
       totalDurationMs: 0,
       maxDurationMs: 0,
-      overBudgetTicks: 0
+      overBudgetTicks: 0,
     },
     network: {
       inMessages: 0,
       inBytes: 0,
       outMessages: 0,
-      outBytes: 0
-    }
+      outBytes: 0,
+    },
   };
 
   function rand(min, max) {
@@ -109,7 +120,7 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
     permanentDownedUntil: Number.MAX_SAFE_INTEGER,
     maxLookPitchRad: MAX_LOOK_PITCH_RAD,
     getActiveMatchStartedAt: () => activeMatchStartedAt,
-    rand
+    rand,
   });
   const characters = charSystem.characters;
   const {
@@ -119,7 +130,7 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
     computeFallAwayVector,
     downCharacter,
     releaseOwnedCharacter,
-    resetArenaForNextRound
+    resetArenaForNextRound,
   } = charSystem;
 
   function shortSessionId(sessionId) {
@@ -133,7 +144,10 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   function percentile(values, ratio) {
     if (!Array.isArray(values) || values.length === 0) return 0;
     const sorted = sortedNumeric(values);
-    const index = Math.min(sorted.length - 1, Math.max(0, Math.floor(ratio * (sorted.length - 1))));
+    const index = Math.min(
+      sorted.length - 1,
+      Math.max(0, Math.floor(ratio * (sorted.length - 1))),
+    );
     return sorted[index];
   }
 
@@ -150,24 +164,32 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
   function recordInboundBytes(bytes) {
     const value = Number(bytes);
     perfStats.network.inMessages += 1;
-    perfStats.network.inBytes += Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+    perfStats.network.inBytes +=
+      Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
   }
 
   function recordOutboundBytes(bytes) {
     const value = Number(bytes);
     perfStats.network.outMessages += 1;
-    perfStats.network.outBytes += Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+    perfStats.network.outBytes +=
+      Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
   }
 
   function recordTickDuration(durationMs) {
     const duration = Math.max(0, Number(durationMs) || 0);
     perfStats.tick.totalTicks += 1;
     perfStats.tick.totalDurationMs += duration;
-    perfStats.tick.maxDurationMs = Math.max(perfStats.tick.maxDurationMs, duration);
+    perfStats.tick.maxDurationMs = Math.max(
+      perfStats.tick.maxDurationMs,
+      duration,
+    );
     if (duration > TICK_MS) perfStats.tick.overBudgetTicks += 1;
     tickDurationHistoryMs.push(duration);
     if (tickDurationHistoryMs.length > TICK_DURATION_HISTORY_LIMIT) {
-      tickDurationHistoryMs.splice(0, tickDurationHistoryMs.length - TICK_DURATION_HISTORY_LIMIT);
+      tickDurationHistoryMs.splice(
+        0,
+        tickDurationHistoryMs.length - TICK_DURATION_HISTORY_LIMIT,
+      );
     }
   }
 
@@ -176,8 +198,10 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
     const elapsedSec = Math.max(0.001, (now - perfStartedAt) / 1000);
     const tickSamples = tickDurationHistoryMs.slice();
     const tickTotal = perfStats.tick.totalTicks;
-    const avgTickMs = tickTotal > 0 ? perfStats.tick.totalDurationMs / tickTotal : 0;
-    const overBudgetRatio = tickTotal > 0 ? perfStats.tick.overBudgetTicks / tickTotal : 0;
+    const avgTickMs =
+      tickTotal > 0 ? perfStats.tick.totalDurationMs / tickTotal : 0;
+    const overBudgetRatio =
+      tickTotal > 0 ? perfStats.tick.overBudgetTicks / tickTotal : 0;
 
     return {
       collectedAt: now,
@@ -190,7 +214,7 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
         inBytesPerSec: round(perfStats.network.inBytes / elapsedSec, 2),
         outBytesPerSec: round(perfStats.network.outBytes / elapsedSec, 2),
         inMessagesPerSec: round(perfStats.network.inMessages / elapsedSec, 2),
-        outMessagesPerSec: round(perfStats.network.outMessages / elapsedSec, 2)
+        outMessagesPerSec: round(perfStats.network.outMessages / elapsedSec, 2),
       },
       tick: {
         totalTicks: tickTotal,
@@ -202,8 +226,8 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
         windowAvgMs: round(avg(tickSamples), 3),
         p50Ms: round(percentile(tickSamples, 0.5), 3),
         p95Ms: round(percentile(tickSamples, 0.95), 3),
-        p99Ms: round(percentile(tickSamples, 0.99), 3)
-      }
+        p99Ms: round(percentile(tickSamples, 0.99), 3),
+      },
     };
   }
 
@@ -249,7 +273,7 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
       authenticated,
       active,
       countdown,
-      lobby: Math.max(0, authenticated - active - countdown)
+      lobby: Math.max(0, authenticated - active - countdown),
     };
   }
 
@@ -263,7 +287,7 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
         isPrivate,
         at: Date.now(),
         ...details,
-        snapshot: debugStateSnapshot()
+        snapshot: debugStateSnapshot(),
       });
     } catch {
       // keep game runtime independent from debug tracking errors.
@@ -278,11 +302,13 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
     logWarn,
     totalCharacters: TOTAL_CHARACTERS,
     maxPlayers: MAX_PLAYERS,
-    cooldownMs: INVARIANT_LOG_COOLDOWN_MS
+    cooldownMs: INVARIANT_LOG_COOLDOWN_MS,
   });
 
   function normalizePlayerName(raw) {
-    const trimmed = String(raw || "").trim().replace(/\s+/g, " ");
+    const trimmed = String(raw || "")
+      .trim()
+      .replace(/\s+/g, " ");
     return trimmed.slice(0, NAME_MAX_LEN);
   }
 
@@ -311,14 +337,18 @@ export function createRoomRuntime({ roomId, roomCode, isPrivate, onRoomEmpty = n
     return Number.isFinite(until) && now < until;
   }
 
-function normalizeChatText(raw) {
-  const trimmed = String(raw || "").replace(/[\u0000-\u001f\u007f]/g, "").trim();
-  return trimmed.slice(0, CHAT_MAX_LEN);
-}
+  function normalizeChatText(raw) {
+    const trimmed = String(raw || "")
+      .replace(/[\u0000-\u001f\u007f]/g, "")
+      .trim();
+    return trimmed.slice(0, CHAT_MAX_LEN);
+  }
 
-function sanitizeSystemTextSegment(raw) {
-  return String(raw || "").replace(/[\u0000-\u001f\u007f]/g, "").slice(0, CHAT_MAX_LEN);
-}
+  function sanitizeSystemTextSegment(raw) {
+    return String(raw || "")
+      .replace(/[\u0000-\u001f\u007f]/g, "")
+      .slice(0, CHAT_MAX_LEN);
+  }
 
   function findAuthenticatedByName(name) {
     const key = name.toLowerCase();
@@ -344,15 +374,15 @@ function sanitizeSystemTextSegment(raw) {
         wins: a.stats.wins,
         knockdowns: a.stats.knockdowns,
         streak: a.stats.streak,
-        downed: a.stats.downed
+        downed: a.stats.downed,
       },
       {
         name: b.name,
         wins: b.stats.wins,
         knockdowns: b.stats.knockdowns,
         streak: b.stats.streak,
-        downed: b.stats.downed
-      }
+        downed: b.stats.downed,
+      },
     );
   }
 
@@ -362,9 +392,15 @@ function sanitizeSystemTextSegment(raw) {
 
   function statusLabel(session) {
     if (!session?.authenticated) return "disconnected";
-    if (session.state === "lobby" || session.state === "countdown") return "i lobby";
+    if (session.state === "lobby" || session.state === "countdown")
+      return "i lobby";
     if (session.state === "spectating") return "åskådar";
-    if (session.state === "alive" || session.state === "won" || session.state === "downed") return "i spel";
+    if (
+      session.state === "alive" ||
+      session.state === "won" ||
+      session.state === "downed"
+    )
+      return "i spel";
     return "disconnected";
   }
 
@@ -374,14 +410,14 @@ function sanitizeSystemTextSegment(raw) {
     isCharacterDowned,
     getSortedActiveSessions: sortedAuthenticatedSessionsForScoreboard,
     releaseOwnedCharacter,
-    getActiveMatchStartedAt: () => activeMatchStartedAt
+    getActiveMatchStartedAt: () => activeMatchStartedAt,
   });
   const {
     aliveSpectatorCandidates,
     clearSpectatorTarget,
     setSessionSpectating,
     cycleSpectatorTarget,
-    maintainSpectatorTarget
+    maintainSpectatorTarget,
   } = spectator;
 
   function scoreboardSnapshot() {
@@ -394,9 +430,17 @@ function sanitizeSystemTextSegment(raw) {
         streak: s.stats.streak,
         innocents: s.stats.innocents,
         status: statusLabel(s),
-        ready: Boolean(s.ready || s.state === "countdown")
+        ready: Boolean(s.ready || s.state === "countdown"),
       }))
       .sort((a, b) => compareScoreboardEntries(a, b));
+  }
+
+  function closeWsSafe(ws, code, reason) {
+    try {
+      ws.close(code, reason);
+    } catch {
+      ws.terminate();
+    }
   }
 
   function send(ws, type, payload = {}) {
@@ -416,15 +460,11 @@ function sanitizeSystemTextSegment(raw) {
     for (const ws of sockets.values()) send(ws, type, payload);
   }
 
-  function broadcastToSessions(type, payload = {}, shouldSend = () => true) {
+  function broadcastChatToNonActivePlayers(entry) {
     for (const [sessionId, ws] of sockets.entries()) {
       const session = sessions.get(sessionId);
-      if (shouldSend(session, sessionId)) send(ws, type, payload);
+      if (session?.state !== "alive") send(ws, "chat", { entry });
     }
-  }
-
-  function broadcastChatToNonActivePlayers(entry) {
-    broadcastToSessions("chat", { entry }, (session) => session?.state !== "alive");
   }
 
   function appendChat({ name, text, system = false, segments = null }) {
@@ -434,7 +474,7 @@ function sanitizeSystemTextSegment(raw) {
       name,
       text,
       system: Boolean(system),
-      segments: Array.isArray(segments) ? segments : null
+      segments: Array.isArray(segments) ? segments : null,
     };
     chatHistory.push(entry);
     if (chatHistory.length > CHAT_HISTORY_LIMIT) chatHistory.shift();
@@ -459,7 +499,12 @@ function sanitizeSystemTextSegment(raw) {
       plainText += text;
     }
     if (normalized.length === 0 || !plainText) return null;
-    const entry = appendChat({ name: "System", text: plainText, system: true, segments: normalized });
+    const entry = appendChat({
+      name: "System",
+      text: plainText,
+      system: true,
+      segments: normalized,
+    });
     broadcast("chat", { entry });
     return entry;
   }
@@ -472,7 +517,7 @@ function sanitizeSystemTextSegment(raw) {
     finalizeLobbyCountdown,
     endCurrentMatch,
     assignCharacterForCountdown,
-    returnToLobby
+    returnToLobby,
   } = createMatchFlow({
     sessions,
     characters,
@@ -481,7 +526,7 @@ function sanitizeSystemTextSegment(raw) {
       SUPERMAJORITY_READY_TIMEOUT_SECONDS,
       SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS,
       MATCH_END_RETURN_TO_LOBBY_MS,
-      MIN_PLAYERS_TO_START
+      MIN_PLAYERS_TO_START,
     },
     state: {
       getLobbyCountdown: () => lobbyCountdown,
@@ -499,7 +544,7 @@ function sanitizeSystemTextSegment(raw) {
       getActiveMatchStartedAt: () => activeMatchStartedAt,
       setActiveMatchStartedAt: (value) => {
         activeMatchStartedAt = Number(value) || 0;
-      }
+      },
     },
     countdownReadyNames,
     countdownReconnectGraceByName,
@@ -517,14 +562,16 @@ function sanitizeSystemTextSegment(raw) {
     clearSpectatorTarget,
     isCharacterDowned,
     clearDownedState,
-    resetArenaForNextRound
+    resetArenaForNextRound,
   });
 
   function handleCharacterEliminated(charId, attackerId, now) {
     const c = characters[charId];
     const attacker = attackerId != null ? characters[attackerId] : null;
     const attackerSession =
-      attacker?.ownerSessionId != null ? sessions.get(attacker.ownerSessionId) : null;
+      attacker?.ownerSessionId != null
+        ? sessions.get(attacker.ownerSessionId)
+        : null;
     const fallAway = computeFallAwayVector(attacker, c);
     const owner = c.ownerSessionId;
 
@@ -536,7 +583,7 @@ function sanitizeSystemTextSegment(raw) {
         logEvent("player_eliminated", {
           sessionId: shortSessionId(owner),
           name: ownerSession.name,
-          characterId: charId
+          characterId: charId,
         });
         ownerSession.state = "spectating";
         ownerSession.ready = false;
@@ -566,11 +613,13 @@ function sanitizeSystemTextSegment(raw) {
       characters,
       attackerId,
       attackRange: ATTACK_RANGE,
-      attackHalfAngle: ATTACK_HALF_ANGLE
+      attackHalfAngle: ATTACK_HALF_ANGLE,
     }).filter((victimId) => !isCharacterDowned(characters[victimId], now));
 
     const attackerSessionId = attacker.ownerSessionId;
-    const attackerSession = attackerSessionId ? sessions.get(attackerSessionId) : null;
+    const attackerSession = attackerSessionId
+      ? sessions.get(attackerSessionId)
+      : null;
 
     for (const victimId of victims) {
       const victimOwner = characters[victimId].ownerSessionId;
@@ -580,11 +629,13 @@ function sanitizeSystemTextSegment(raw) {
           attackerSession.stats.knockdowns += 1;
           attackerSession.stats.streak += 1;
           if (victimSession?.authenticated && victimSession.name) {
-            sendToSession(attackerSessionId, "knockdown_confirm", { victimName: victimSession.name });
+            sendToSession(attackerSessionId, "knockdown_confirm", {
+              victimName: victimSession.name,
+            });
             appendSystemChat([
               { type: "player", name: attackerSession.name },
               { type: "text", text: " slog ner " },
-              { type: "player", name: victimSession.name }
+              { type: "player", name: victimSession.name },
             ]);
           }
         } else if (!victimOwner) {
@@ -598,7 +649,7 @@ function sanitizeSystemTextSegment(raw) {
       sessionId: shortSessionId(attackerSessionId),
       attackerCharacterId: attackerId,
       victims: victims.length,
-      victimCharacterIds: victims
+      victimCharacterIds: victims,
     });
   }
 
@@ -614,7 +665,7 @@ function sanitizeSystemTextSegment(raw) {
     minX: ROOM_BOUNDARY_MIN_X,
     maxX: ROOM_BOUNDARY_MAX_X,
     minZ: ROOM_BOUNDARY_MIN_Z,
-    maxZ: ROOM_BOUNDARY_MAX_Z
+    maxZ: ROOM_BOUNDARY_MAX_Z,
   };
   const movement = createMovementSystem({
     boundaries: roomBoundaries,
@@ -634,7 +685,7 @@ function sanitizeSystemTextSegment(raw) {
     stopDurationMinMs: NPC_STOP_DURATION_MIN_MS,
     stopDurationMaxMs: NPC_STOP_DURATION_MAX_MS,
     rand,
-    clampPitch
+    clampPitch,
   });
 
   function isOriginAllowed(origin) {
@@ -659,7 +710,7 @@ function sanitizeSystemTextSegment(raw) {
       chatHistory,
       appendChat,
       broadcast,
-      broadcastChatToNonActivePlayers
+      broadcastChatToNonActivePlayers,
     },
     normalizePlayerName,
     normalizeChatText,
@@ -687,7 +738,7 @@ function sanitizeSystemTextSegment(raw) {
     emitStatsEvent,
     logEvent,
     clampPitch,
-    normalizeAngle
+    normalizeAngle,
   });
 
   function disconnectIdleSessions(now) {
@@ -698,13 +749,9 @@ function sanitizeSystemTextSegment(raw) {
       if (idleForMs < IDLE_SESSION_TIMEOUT_MS) continue;
       logWarn(
         "anslutning",
-        `idle-timeout sid=${shortSessionId(sessionId)} idleMs=${idleForMs}`
+        `idle-timeout sid=${shortSessionId(sessionId)} idleMs=${idleForMs}`,
       );
-      try {
-        ws.close(1001, "idle timeout");
-      } catch {
-        ws.terminate();
-      }
+      closeWsSafe(ws, 1001, "idle timeout");
     }
   }
 
@@ -721,7 +768,7 @@ function sanitizeSystemTextSegment(raw) {
       ATTACK_FLASH_MS,
       NPC_DOWNED_RESPAWN_MS,
       MIN_PLAYERS_TO_START,
-      MAX_PLAYERS
+      MAX_PLAYERS,
     },
     sessions,
     sockets,
@@ -759,19 +806,19 @@ function sanitizeSystemTextSegment(raw) {
     send,
     onTick: ({ durationMs }) => {
       recordTickDuration(durationMs);
-    }
+    },
   });
 
   const { wss, heartbeatInterval } = createRoomWsLifecycle({
     roomMeta: {
       roomId,
       roomCode,
-      isPrivate
+      isPrivate,
     },
     constants: {
       HEARTBEAT_INTERVAL_MS,
       MIN_PLAYERS_TO_START,
-      MAX_PLAYERS
+      MAX_PLAYERS,
     },
     sessions,
     sockets,
@@ -792,7 +839,7 @@ function sanitizeSystemTextSegment(raw) {
     onInboundMessage: ({ bytes }) => {
       recordInboundBytes(bytes);
     },
-    onRoomEmpty
+    onRoomEmpty,
   });
 
   tickInterval.unref?.();
@@ -803,7 +850,7 @@ function sanitizeSystemTextSegment(raw) {
     worldWidthMeters: WORLD_WIDTH_METERS,
     worldHeightMeters: WORLD_HEIGHT_METERS,
     maxPlayers: MAX_PLAYERS,
-    totalCharacters: TOTAL_CHARACTERS
+    totalCharacters: TOTAL_CHARACTERS,
   });
   emitStatsEvent("runtime_started");
 
@@ -826,11 +873,7 @@ function sanitizeSystemTextSegment(raw) {
     clearInterval(tickInterval);
     clearInterval(heartbeatInterval);
     for (const ws of wss.clients) {
-      try {
-        ws.close(1001, "room closed");
-      } catch {
-        ws.terminate();
-      }
+      closeWsSafe(ws, 1001, "room closed");
     }
     sessions.clear();
     sockets.clear();
@@ -853,7 +896,7 @@ function sanitizeSystemTextSegment(raw) {
       names: authenticatedSessions()
         .map((session) => session.name)
         .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, "sv"))
-    })
+        .sort((a, b) => a.localeCompare(b, "sv")),
+    }),
   };
 }

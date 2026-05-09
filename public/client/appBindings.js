@@ -109,6 +109,18 @@ export function bindAppEventHandlers({
     debugLongPressTimer = null;
   }
 
+  function mutateAudioSetting(mutate) {
+    const audioSettings = state.getAudioSettings();
+    mutate(audioSettings);
+    persistAudioSettings(audioSettings);
+    refreshAudioSettingsUi();
+  }
+
+  function handleResize() {
+    resize();
+    updateMobileControlsVisibility();
+  }
+
   connectBtnEl?.addEventListener("click", connectAndLogin);
   startFullscreenCheckboxEl?.addEventListener("change", () => {
     refreshAudioSettingsUi();
@@ -242,28 +254,24 @@ export function bindAppEventHandlers({
     if (event.target === lobbyDialogBackdropEl) closeLobbyDialog();
   });
   musicVolumeInputEl?.addEventListener("input", () => {
-    const audioSettings = state.getAudioSettings();
-    audioSettings.musicVolume = clampVolume(musicVolumeInputEl.value);
-    persistAudioSettings(audioSettings);
-    refreshAudioSettingsUi();
+    mutateAudioSetting((s) => {
+      s.musicVolume = clampVolume(musicVolumeInputEl.value);
+    });
   });
   musicMuteBtnEl?.addEventListener("click", () => {
-    const audioSettings = state.getAudioSettings();
-    audioSettings.musicMuted = !audioSettings.musicMuted;
-    persistAudioSettings(audioSettings);
-    refreshAudioSettingsUi();
+    mutateAudioSetting((s) => {
+      s.musicMuted = !s.musicMuted;
+    });
   });
   sfxVolumeInputEl?.addEventListener("input", () => {
-    const audioSettings = state.getAudioSettings();
-    audioSettings.sfxVolume = clampVolume(sfxVolumeInputEl.value);
-    persistAudioSettings(audioSettings);
-    refreshAudioSettingsUi();
+    mutateAudioSetting((s) => {
+      s.sfxVolume = clampVolume(sfxVolumeInputEl.value);
+    });
   });
   sfxMuteBtnEl?.addEventListener("click", () => {
-    const audioSettings = state.getAudioSettings();
-    audioSettings.sfxMuted = !audioSettings.sfxMuted;
-    persistAudioSettings(audioSettings);
-    refreshAudioSettingsUi();
+    mutateAudioSetting((s) => {
+      s.sfxMuted = !s.sfxMuted;
+    });
   });
   mobileControlsModeBtnEl?.addEventListener("click", () => {
     const idx = MOBILE_CONTROLS_PREFS.indexOf(
@@ -318,14 +326,8 @@ export function bindAppEventHandlers({
     refreshAudioSettingsUi();
     persistLookSettings(next);
   });
-  window.addEventListener("resize", () => {
-    resize();
-    updateMobileControlsVisibility();
-  });
-  window.addEventListener("orientationchange", () => {
-    resize();
-    updateMobileControlsVisibility();
-  });
+  window.addEventListener("resize", handleResize);
+  window.addEventListener("orientationchange", handleResize);
   document.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;

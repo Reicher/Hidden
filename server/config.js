@@ -54,62 +54,100 @@ const DEFAULT_ALLOWED_ORIGINS = [
   `http://127.0.0.1:${DEFAULT_PORT}`,
   `http://localhost:${DEFAULT_PORT}`,
   `https://127.0.0.1:${DEFAULT_PORT}`,
-  `https://localhost:${DEFAULT_PORT}`
+  `https://localhost:${DEFAULT_PORT}`,
 ];
 
 export const GAMEPLAY_SETTINGS_SCHEMA = Object.freeze({
-  totalCharacters: Object.freeze({ env: "TOTAL_CHARACTERS", defaultValue: 20, envType: "int" }),
-  maxPlayers: Object.freeze({ env: "MAX_PLAYERS", defaultValue: 10, envType: "int" }),
-  minPlayersToStart: Object.freeze({ env: "MIN_PLAYERS_TO_START", defaultValue: 2, envType: "int" }),
-  npcDownedRespawnSeconds: Object.freeze({ env: "NPC_DOWNED_RESPAWN_SECONDS", defaultValue: 8, envType: "int" }),
+  totalCharacters: Object.freeze({
+    env: "TOTAL_CHARACTERS",
+    defaultValue: 20,
+    envType: "int",
+  }),
+  maxPlayers: Object.freeze({
+    env: "MAX_PLAYERS",
+    defaultValue: 10,
+    envType: "int",
+  }),
+  minPlayersToStart: Object.freeze({
+    env: "MIN_PLAYERS_TO_START",
+    defaultValue: 2,
+    envType: "int",
+  }),
+  npcDownedRespawnSeconds: Object.freeze({
+    env: "NPC_DOWNED_RESPAWN_SECONDS",
+    defaultValue: 8,
+    envType: "int",
+  }),
   playerAttackCooldownSeconds: Object.freeze({
     env: "PLAYER_ATTACK_COOLDOWN_SECONDS",
     defaultValue: 2,
-    envType: "int"
+    envType: "int",
   }),
-  attackHalfAngleDegrees: Object.freeze({ env: "ATTACK_HALF_ANGLE_DEGREES", defaultValue: 18, envType: "number" }),
+  attackHalfAngleDegrees: Object.freeze({
+    env: "ATTACK_HALF_ANGLE_DEGREES",
+    defaultValue: 18,
+    envType: "number",
+  }),
   moveSpeedMetersPerSecond: Object.freeze({
     env: "MOVE_SPEED_METERS_PER_SECOND",
     defaultValue: 2.9,
-    envType: "number"
+    envType: "number",
   }),
-  playerSprintMultiplier: Object.freeze({ env: "PLAYER_SPRINT_MULTIPLIER", defaultValue: 1.45, envType: "number" })
+  playerSprintMultiplier: Object.freeze({
+    env: "PLAYER_SPRINT_MULTIPLIER",
+    defaultValue: 1.45,
+    envType: "number",
+  }),
 });
 
 export const AI_BEHAVIOR_SETTINGS_SCHEMA = Object.freeze({
   npcInspectDownedChancePercent: Object.freeze({
     env: "NPC_INSPECT_DOWNED_CHANCE_PERCENT",
     defaultValue: 75,
-    envType: "int"
+    envType: "int",
   }),
   npcInspectDownedNearbyRadiusMeters: Object.freeze({
     env: "NPC_INSPECT_DOWNED_RADIUS_METERS",
     defaultValue: 8.5,
-    envType: "number"
+    envType: "number",
   }),
   npcSocialSeparationPercent: Object.freeze({
     env: "NPC_SOCIAL_SEPARATION_PERCENT",
     defaultValue: 45,
-    envType: "int"
+    envType: "int",
   }),
-  npcStopChancePercent: Object.freeze({ env: "NPC_STOP_CHANCE_PERCENT", defaultValue: 25, envType: "int" }),
+  npcStopChancePercent: Object.freeze({
+    env: "NPC_STOP_CHANCE_PERCENT",
+    defaultValue: 25,
+    envType: "int",
+  }),
   npcMoveDecisionIntervalMinMs: Object.freeze({
     env: "NPC_MOVE_DECISION_INTERVAL_MIN_MS",
     defaultValue: 600,
-    envType: "int"
+    envType: "int",
   }),
   npcMoveDecisionIntervalMaxMs: Object.freeze({
     env: "NPC_MOVE_DECISION_INTERVAL_MAX_MS",
     defaultValue: 1800,
-    envType: "int"
+    envType: "int",
   }),
-  npcStopDurationMinMs: Object.freeze({ env: "NPC_STOP_DURATION_MIN_MS", defaultValue: 600, envType: "int" }),
-  npcStopDurationMaxMs: Object.freeze({ env: "NPC_STOP_DURATION_MAX_MS", defaultValue: 1800, envType: "int" })
+  npcStopDurationMinMs: Object.freeze({
+    env: "NPC_STOP_DURATION_MIN_MS",
+    defaultValue: 600,
+    envType: "int",
+  }),
+  npcStopDurationMaxMs: Object.freeze({
+    env: "NPC_STOP_DURATION_MAX_MS",
+    defaultValue: 1800,
+    envType: "int",
+  }),
 });
 
 function settingsDefaults(schema) {
   return Object.freeze(
-    Object.fromEntries(Object.entries(schema).map(([key, field]) => [key, field.defaultValue]))
+    Object.fromEntries(
+      Object.entries(schema).map(([key, field]) => [key, field.defaultValue]),
+    ),
   );
 }
 
@@ -119,8 +157,8 @@ function readSettingsFromEnv(schema) {
       key,
       field.envType === "number"
         ? envNumber(field.env, field.defaultValue)
-        : envInt(field.env, field.defaultValue)
-    ])
+        : envInt(field.env, field.defaultValue),
+    ]),
   );
 }
 
@@ -139,13 +177,18 @@ function hasSettingsPatch(source, schema) {
 function mergeSettingsPatch(source, fallback, schema) {
   return Object.freeze(
     Object.fromEntries(
-      settingsKeys(schema).map((key) => [key, hasOwn(source, key) ? source[key] : fallback[key]])
-    )
+      settingsKeys(schema).map((key) => [
+        key,
+        hasOwn(source, key) ? source[key] : fallback[key],
+      ]),
+    ),
   );
 }
 
 const DEFAULT_GAMEPLAY_SETTINGS = settingsDefaults(GAMEPLAY_SETTINGS_SCHEMA);
-const DEFAULT_AI_BEHAVIOR_SETTINGS = settingsDefaults(AI_BEHAVIOR_SETTINGS_SCHEMA);
+const DEFAULT_AI_BEHAVIOR_SETTINGS = settingsDefaults(
+  AI_BEHAVIOR_SETTINGS_SCHEMA,
+);
 
 export function hasGameplaySettingsPatch(source) {
   return hasSettingsPatch(source, GAMEPLAY_SETTINGS_SCHEMA);
@@ -155,11 +198,17 @@ export function hasAiBehaviorSettingsPatch(source) {
   return hasSettingsPatch(source, AI_BEHAVIOR_SETTINGS_SCHEMA);
 }
 
-export function mergeGameplaySettingsPatch(source, fallback = getGameplaySettings()) {
+export function mergeGameplaySettingsPatch(
+  source,
+  fallback = getGameplaySettings(),
+) {
   return mergeSettingsPatch(source, fallback, GAMEPLAY_SETTINGS_SCHEMA);
 }
 
-export function mergeAiBehaviorSettingsPatch(source, fallback = getAiBehaviorSettings()) {
+export function mergeAiBehaviorSettingsPatch(
+  source,
+  fallback = getAiBehaviorSettings(),
+) {
   return mergeSettingsPatch(source, fallback, AI_BEHAVIOR_SETTINGS_SCHEMA);
 }
 
@@ -193,30 +242,36 @@ function normalizeGameplaySettings({
   playerAttackCooldownSeconds,
   attackHalfAngleDegrees,
   moveSpeedMetersPerSecond,
-  playerSprintMultiplier
+  playerSprintMultiplier,
 }) {
   const normalizedTotal = parsePositiveInt(totalCharacters, "totalCharacters");
   const normalizedMax = parsePositiveInt(maxPlayers, "maxPlayers");
-  const normalizedMin = parsePositiveInt(minPlayersToStart, "minPlayersToStart");
-  const normalizedNpcRespawnSeconds = parsePositiveInt(npcDownedRespawnSeconds, "npcDownedRespawnSeconds");
+  const normalizedMin = parsePositiveInt(
+    minPlayersToStart,
+    "minPlayersToStart",
+  );
+  const normalizedNpcRespawnSeconds = parsePositiveInt(
+    npcDownedRespawnSeconds,
+    "npcDownedRespawnSeconds",
+  );
   const normalizedPlayerAttackCooldownSeconds = parsePositiveInt(
     playerAttackCooldownSeconds,
-    "playerAttackCooldownSeconds"
+    "playerAttackCooldownSeconds",
   );
   const normalizedAttackHalfAngleDegrees = parseBoundedNumber(
     attackHalfAngleDegrees,
     "attackHalfAngleDegrees",
-    { min: 2, max: 60 }
+    { min: 2, max: 60 },
   );
   const normalizedMoveSpeedMetersPerSecond = parseBoundedNumber(
     moveSpeedMetersPerSecond,
     "moveSpeedMetersPerSecond",
-    { min: 0.5, max: 8 }
+    { min: 0.5, max: 8 },
   );
   const normalizedPlayerSprintMultiplier = parseBoundedNumber(
     playerSprintMultiplier,
     "playerSprintMultiplier",
-    { min: 1, max: 3 }
+    { min: 1, max: 3 },
   );
 
   if (normalizedMax >= normalizedTotal) {
@@ -236,8 +291,10 @@ function normalizeGameplaySettings({
     npcDownedRespawnSeconds: normalizedNpcRespawnSeconds,
     playerAttackCooldownSeconds: normalizedPlayerAttackCooldownSeconds,
     attackHalfAngleDegrees: Number(normalizedAttackHalfAngleDegrees.toFixed(1)),
-    moveSpeedMetersPerSecond: Number(normalizedMoveSpeedMetersPerSecond.toFixed(2)),
-    playerSprintMultiplier: Number(normalizedPlayerSprintMultiplier.toFixed(2))
+    moveSpeedMetersPerSecond: Number(
+      normalizedMoveSpeedMetersPerSecond.toFixed(2),
+    ),
+    playerSprintMultiplier: Number(normalizedPlayerSprintMultiplier.toFixed(2)),
   });
 }
 
@@ -249,70 +306,80 @@ function normalizeAiBehaviorSettings({
   npcMoveDecisionIntervalMinMs,
   npcMoveDecisionIntervalMaxMs,
   npcStopDurationMinMs,
-  npcStopDurationMaxMs
+  npcStopDurationMaxMs,
 }) {
   const normalizedInspectChance = parseBoundedNumber(
     npcInspectDownedChancePercent,
     "npcInspectDownedChancePercent",
-    { min: 0, max: 100, integer: true }
+    { min: 0, max: 100, integer: true },
   );
   const normalizedInspectRadius = parseBoundedNumber(
     npcInspectDownedNearbyRadiusMeters,
     "npcInspectDownedNearbyRadiusMeters",
-    { min: 2, max: 20 }
+    { min: 2, max: 20 },
   );
   const normalizedSocialSeparation = parseBoundedNumber(
     npcSocialSeparationPercent,
     "npcSocialSeparationPercent",
-    { min: 0, max: 100, integer: true }
+    { min: 0, max: 100, integer: true },
   );
   const normalizedStopChance = parseBoundedNumber(
     npcStopChancePercent,
     "npcStopChancePercent",
-    { min: 0, max: 100, integer: true }
+    { min: 0, max: 100, integer: true },
   );
   const normalizedMoveDecisionIntervalMinMs = parseBoundedNumber(
     npcMoveDecisionIntervalMinMs,
     "npcMoveDecisionIntervalMinMs",
-    { min: 200, max: 4000, integer: true }
+    { min: 200, max: 4000, integer: true },
   );
   const normalizedMoveDecisionIntervalMaxMs = parseBoundedNumber(
     npcMoveDecisionIntervalMaxMs,
     "npcMoveDecisionIntervalMaxMs",
-    { min: 250, max: 6000, integer: true }
+    { min: 250, max: 6000, integer: true },
   );
   const normalizedStopDurationMinMs = parseBoundedNumber(
     npcStopDurationMinMs,
     "npcStopDurationMinMs",
-    { min: 200, max: 5000, integer: true }
+    { min: 200, max: 5000, integer: true },
   );
   const normalizedStopDurationMaxMs = parseBoundedNumber(
     npcStopDurationMaxMs,
     "npcStopDurationMaxMs",
-    { min: 250, max: 7000, integer: true }
+    { min: 250, max: 7000, integer: true },
   );
-  if (normalizedMoveDecisionIntervalMinMs > normalizedMoveDecisionIntervalMaxMs) {
-    throw new Error("npcMoveDecisionIntervalMinMs kan inte vara större än npcMoveDecisionIntervalMaxMs.");
+  if (
+    normalizedMoveDecisionIntervalMinMs > normalizedMoveDecisionIntervalMaxMs
+  ) {
+    throw new Error(
+      "npcMoveDecisionIntervalMinMs kan inte vara större än npcMoveDecisionIntervalMaxMs.",
+    );
   }
   if (normalizedStopDurationMinMs > normalizedStopDurationMaxMs) {
-    throw new Error("npcStopDurationMinMs kan inte vara större än npcStopDurationMaxMs.");
+    throw new Error(
+      "npcStopDurationMinMs kan inte vara större än npcStopDurationMaxMs.",
+    );
   }
 
   return Object.freeze({
     npcInspectDownedChancePercent: normalizedInspectChance,
-    npcInspectDownedNearbyRadiusMeters: Number(normalizedInspectRadius.toFixed(1)),
+    npcInspectDownedNearbyRadiusMeters: Number(
+      normalizedInspectRadius.toFixed(1),
+    ),
     npcSocialSeparationPercent: normalizedSocialSeparation,
     npcStopChancePercent: normalizedStopChance,
     npcMoveDecisionIntervalMinMs: normalizedMoveDecisionIntervalMinMs,
     npcMoveDecisionIntervalMaxMs: normalizedMoveDecisionIntervalMaxMs,
     npcStopDurationMinMs: normalizedStopDurationMinMs,
-    npcStopDurationMaxMs: normalizedStopDurationMaxMs
+    npcStopDurationMaxMs: normalizedStopDurationMaxMs,
   });
 }
 
 let gameplaySettings = (() => {
   try {
-    return normalizeGameplaySettings(readSettingsFromEnv(GAMEPLAY_SETTINGS_SCHEMA));
+    return normalizeGameplaySettings(
+      readSettingsFromEnv(GAMEPLAY_SETTINGS_SCHEMA),
+    );
   } catch {
     return normalizeGameplaySettings(DEFAULT_GAMEPLAY_SETTINGS);
   }
@@ -320,7 +387,9 @@ let gameplaySettings = (() => {
 
 let aiBehaviorSettings = (() => {
   try {
-    return normalizeAiBehaviorSettings(readSettingsFromEnv(AI_BEHAVIOR_SETTINGS_SCHEMA));
+    return normalizeAiBehaviorSettings(
+      readSettingsFromEnv(AI_BEHAVIOR_SETTINGS_SCHEMA),
+    );
   } catch {
     return normalizeAiBehaviorSettings(DEFAULT_AI_BEHAVIOR_SETTINGS);
   }
@@ -329,17 +398,25 @@ let aiBehaviorSettings = (() => {
 export let TOTAL_CHARACTERS = gameplaySettings.totalCharacters;
 export let MAX_PLAYERS = gameplaySettings.maxPlayers;
 export let MIN_PLAYERS_TO_START = gameplaySettings.minPlayersToStart;
-export let NPC_DOWNED_RESPAWN_MS = gameplaySettings.npcDownedRespawnSeconds * 1000;
-export let ATTACK_COOLDOWN_MS = gameplaySettings.playerAttackCooldownSeconds * 1000;
-export let ATTACK_HALF_ANGLE = (gameplaySettings.attackHalfAngleDegrees * Math.PI) / 180;
+export let NPC_DOWNED_RESPAWN_MS =
+  gameplaySettings.npcDownedRespawnSeconds * 1000;
+export let ATTACK_COOLDOWN_MS =
+  gameplaySettings.playerAttackCooldownSeconds * 1000;
+export let ATTACK_HALF_ANGLE =
+  (gameplaySettings.attackHalfAngleDegrees * Math.PI) / 180;
 export let MOVE_SPEED = gameplaySettings.moveSpeedMetersPerSecond;
 export let PLAYER_SPRINT_MULTIPLIER = gameplaySettings.playerSprintMultiplier;
-export let NPC_INSPECT_DOWNED_CHANCE = aiBehaviorSettings.npcInspectDownedChancePercent / 100;
-export let NPC_INSPECT_DOWNED_RADIUS_METERS = aiBehaviorSettings.npcInspectDownedNearbyRadiusMeters;
-export let NPC_SOCIAL_SEPARATION_WEIGHT = (aiBehaviorSettings.npcSocialSeparationPercent / 100) * 0.4;
+export let NPC_INSPECT_DOWNED_CHANCE =
+  aiBehaviorSettings.npcInspectDownedChancePercent / 100;
+export let NPC_INSPECT_DOWNED_RADIUS_METERS =
+  aiBehaviorSettings.npcInspectDownedNearbyRadiusMeters;
+export let NPC_SOCIAL_SEPARATION_WEIGHT =
+  (aiBehaviorSettings.npcSocialSeparationPercent / 100) * 0.4;
 export let NPC_STOP_CHANCE = aiBehaviorSettings.npcStopChancePercent / 100;
-export let NPC_MOVE_DECISION_INTERVAL_MIN_MS = aiBehaviorSettings.npcMoveDecisionIntervalMinMs;
-export let NPC_MOVE_DECISION_INTERVAL_MAX_MS = aiBehaviorSettings.npcMoveDecisionIntervalMaxMs;
+export let NPC_MOVE_DECISION_INTERVAL_MIN_MS =
+  aiBehaviorSettings.npcMoveDecisionIntervalMinMs;
+export let NPC_MOVE_DECISION_INTERVAL_MAX_MS =
+  aiBehaviorSettings.npcMoveDecisionIntervalMaxMs;
 export let NPC_STOP_DURATION_MIN_MS = aiBehaviorSettings.npcStopDurationMinMs;
 export let NPC_STOP_DURATION_MAX_MS = aiBehaviorSettings.npcStopDurationMaxMs;
 
@@ -358,8 +435,10 @@ function applyGameplaySettings(nextSettings) {
 function applyAiBehaviorSettings(nextSettings) {
   aiBehaviorSettings = nextSettings;
   NPC_INSPECT_DOWNED_CHANCE = nextSettings.npcInspectDownedChancePercent / 100;
-  NPC_INSPECT_DOWNED_RADIUS_METERS = nextSettings.npcInspectDownedNearbyRadiusMeters;
-  NPC_SOCIAL_SEPARATION_WEIGHT = (nextSettings.npcSocialSeparationPercent / 100) * 0.4;
+  NPC_INSPECT_DOWNED_RADIUS_METERS =
+    nextSettings.npcInspectDownedNearbyRadiusMeters;
+  NPC_SOCIAL_SEPARATION_WEIGHT =
+    (nextSettings.npcSocialSeparationPercent / 100) * 0.4;
   NPC_STOP_CHANCE = nextSettings.npcStopChancePercent / 100;
   NPC_MOVE_DECISION_INTERVAL_MIN_MS = nextSettings.npcMoveDecisionIntervalMinMs;
   NPC_MOVE_DECISION_INTERVAL_MAX_MS = nextSettings.npcMoveDecisionIntervalMaxMs;
@@ -375,7 +454,7 @@ export function setGameplaySettings({
   playerAttackCooldownSeconds,
   attackHalfAngleDegrees,
   moveSpeedMetersPerSecond,
-  playerSprintMultiplier
+  playerSprintMultiplier,
 }) {
   const nextSettings = normalizeGameplaySettings({
     totalCharacters,
@@ -385,17 +464,11 @@ export function setGameplaySettings({
     playerAttackCooldownSeconds,
     attackHalfAngleDegrees,
     moveSpeedMetersPerSecond,
-    playerSprintMultiplier
+    playerSprintMultiplier,
   });
-  const changed =
-    nextSettings.totalCharacters !== TOTAL_CHARACTERS ||
-    nextSettings.maxPlayers !== MAX_PLAYERS ||
-    nextSettings.minPlayersToStart !== MIN_PLAYERS_TO_START ||
-    nextSettings.npcDownedRespawnSeconds * 1000 !== NPC_DOWNED_RESPAWN_MS ||
-    nextSettings.playerAttackCooldownSeconds * 1000 !== ATTACK_COOLDOWN_MS ||
-    Math.abs((nextSettings.attackHalfAngleDegrees * Math.PI) / 180 - ATTACK_HALF_ANGLE) > 0.000001 ||
-    nextSettings.moveSpeedMetersPerSecond !== MOVE_SPEED ||
-    nextSettings.playerSprintMultiplier !== PLAYER_SPRINT_MULTIPLIER;
+  const changed = Object.keys(GAMEPLAY_SETTINGS_SCHEMA).some(
+    (k) => nextSettings[k] !== gameplaySettings[k],
+  );
   if (!changed) return false;
   applyGameplaySettings(nextSettings);
   return true;
@@ -408,9 +481,11 @@ export function getGameplaySettings() {
     minPlayersToStart: MIN_PLAYERS_TO_START,
     npcDownedRespawnSeconds: Math.round(NPC_DOWNED_RESPAWN_MS / 1000),
     playerAttackCooldownSeconds: Math.round(ATTACK_COOLDOWN_MS / 1000),
-    attackHalfAngleDegrees: Number(((ATTACK_HALF_ANGLE * 180) / Math.PI).toFixed(1)),
+    attackHalfAngleDegrees: Number(
+      ((ATTACK_HALF_ANGLE * 180) / Math.PI).toFixed(1),
+    ),
     moveSpeedMetersPerSecond: Number(MOVE_SPEED.toFixed(2)),
-    playerSprintMultiplier: Number(PLAYER_SPRINT_MULTIPLIER.toFixed(2))
+    playerSprintMultiplier: Number(PLAYER_SPRINT_MULTIPLIER.toFixed(2)),
   });
 }
 
@@ -422,7 +497,7 @@ export function setAiBehaviorSettings({
   npcMoveDecisionIntervalMinMs,
   npcMoveDecisionIntervalMaxMs,
   npcStopDurationMinMs,
-  npcStopDurationMaxMs
+  npcStopDurationMaxMs,
 }) {
   const nextSettings = normalizeAiBehaviorSettings({
     npcInspectDownedChancePercent,
@@ -432,17 +507,11 @@ export function setAiBehaviorSettings({
     npcMoveDecisionIntervalMinMs,
     npcMoveDecisionIntervalMaxMs,
     npcStopDurationMinMs,
-    npcStopDurationMaxMs
+    npcStopDurationMaxMs,
   });
-  const changed =
-    nextSettings.npcInspectDownedChancePercent !== aiBehaviorSettings.npcInspectDownedChancePercent ||
-    nextSettings.npcInspectDownedNearbyRadiusMeters !== aiBehaviorSettings.npcInspectDownedNearbyRadiusMeters ||
-    nextSettings.npcSocialSeparationPercent !== aiBehaviorSettings.npcSocialSeparationPercent ||
-    nextSettings.npcStopChancePercent !== aiBehaviorSettings.npcStopChancePercent ||
-    nextSettings.npcMoveDecisionIntervalMinMs !== aiBehaviorSettings.npcMoveDecisionIntervalMinMs ||
-    nextSettings.npcMoveDecisionIntervalMaxMs !== aiBehaviorSettings.npcMoveDecisionIntervalMaxMs ||
-    nextSettings.npcStopDurationMinMs !== aiBehaviorSettings.npcStopDurationMinMs ||
-    nextSettings.npcStopDurationMaxMs !== aiBehaviorSettings.npcStopDurationMaxMs;
+  const changed = Object.keys(AI_BEHAVIOR_SETTINGS_SCHEMA).some(
+    (k) => nextSettings[k] !== aiBehaviorSettings[k],
+  );
   if (!changed) return false;
   applyAiBehaviorSettings(nextSettings);
   return true;
@@ -450,14 +519,18 @@ export function setAiBehaviorSettings({
 
 export function getAiBehaviorSettings() {
   return Object.freeze({
-    npcInspectDownedChancePercent: aiBehaviorSettings.npcInspectDownedChancePercent,
-    npcInspectDownedNearbyRadiusMeters: aiBehaviorSettings.npcInspectDownedNearbyRadiusMeters,
+    npcInspectDownedChancePercent:
+      aiBehaviorSettings.npcInspectDownedChancePercent,
+    npcInspectDownedNearbyRadiusMeters:
+      aiBehaviorSettings.npcInspectDownedNearbyRadiusMeters,
     npcSocialSeparationPercent: aiBehaviorSettings.npcSocialSeparationPercent,
     npcStopChancePercent: aiBehaviorSettings.npcStopChancePercent,
-    npcMoveDecisionIntervalMinMs: aiBehaviorSettings.npcMoveDecisionIntervalMinMs,
-    npcMoveDecisionIntervalMaxMs: aiBehaviorSettings.npcMoveDecisionIntervalMaxMs,
+    npcMoveDecisionIntervalMinMs:
+      aiBehaviorSettings.npcMoveDecisionIntervalMinMs,
+    npcMoveDecisionIntervalMaxMs:
+      aiBehaviorSettings.npcMoveDecisionIntervalMaxMs,
     npcStopDurationMinMs: aiBehaviorSettings.npcStopDurationMinMs,
-    npcStopDurationMaxMs: aiBehaviorSettings.npcStopDurationMaxMs
+    npcStopDurationMaxMs: aiBehaviorSettings.npcStopDurationMaxMs,
   });
 }
 
@@ -492,7 +565,9 @@ function discoverLayoutPresets() {
   const pngFiles = readdirSync(layoutsDir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && /\.png$/i.test(entry.name))
     .map((entry) => entry.name)
-    .sort((a, b) => a.localeCompare(b, "sv", { sensitivity: "base", numeric: true }));
+    .sort((a, b) =>
+      a.localeCompare(b, "sv", { sensitivity: "base", numeric: true }),
+    );
 
   if (pngFiles.length === 0) {
     throw new Error(`[layout] Inga PNG-filer hittades i ${layoutsDir}.`);
@@ -503,31 +578,48 @@ function discoverLayoutPresets() {
       Object.freeze({
         id: fileName.replace(/\.png$/i, "").toLowerCase(),
         fileName,
-        label: fileName
-      })
-    )
+        label: fileName,
+      }),
+    ),
   );
 }
 
 const LAYOUT_PRESETS = discoverLayoutPresets();
 
-const LAYOUT_PRESET_BY_ID = new Map(LAYOUT_PRESETS.map((preset) => [preset.id, preset]));
+const LAYOUT_PRESET_BY_ID = new Map(
+  LAYOUT_PRESETS.map((preset) => [preset.id, preset]),
+);
 const loadedLayouts = new Map();
-const requestedLayoutId = envString("WORLD_LAYOUT_ID", "layout-50").toLowerCase();
+const requestedLayoutId = envString(
+  "WORLD_LAYOUT_ID",
+  "layout-50",
+).toLowerCase();
 
-function cloneFixtureSet(fixtures, { kind, width, depth, height, keepSourceDimensions = false }) {
+function cloneFixtureSet(
+  fixtures,
+  { kind, width, depth, height, keepSourceDimensions = false },
+) {
   return Object.freeze(
     fixtures.map((fixture) =>
       freezeFixture({
         kind,
         x: fixture.x,
         z: fixture.z,
-        width: keepSourceDimensions && typeof fixture.width === "number" ? fixture.width : width,
-        depth: keepSourceDimensions && typeof fixture.depth === "number" ? fixture.depth : depth,
-        height: keepSourceDimensions && typeof fixture.height === "number" ? fixture.height : height,
-        yaw: fixture.yaw
-      })
-    )
+        width:
+          keepSourceDimensions && typeof fixture.width === "number"
+            ? fixture.width
+            : width,
+        depth:
+          keepSourceDimensions && typeof fixture.depth === "number"
+            ? fixture.depth
+            : depth,
+        height:
+          keepSourceDimensions && typeof fixture.height === "number"
+            ? fixture.height
+            : height,
+        yaw: fixture.yaw,
+      }),
+    ),
   );
 }
 
@@ -535,7 +627,9 @@ function readLayoutById(layoutId) {
   const preset = LAYOUT_PRESET_BY_ID.get(layoutId);
   if (!preset) {
     const known = LAYOUT_PRESETS.map((entry) => entry.id).join(", ");
-    throw new Error(`[layout] Unknown layout id "${layoutId}". Available: ${known}`);
+    throw new Error(
+      `[layout] Unknown layout id "${layoutId}". Available: ${known}`,
+    );
   }
   const filePath = resolve(HERE, "./layouts", preset.fileName);
   const mtimeMs = statSync(filePath).mtimeMs;
@@ -552,7 +646,7 @@ function readLayoutById(layoutId) {
     coolerHeight: COOLER_HEIGHT,
     freezerWidth: FREEZER_WIDTH,
     freezerDepth: FREEZER_DEPTH,
-    freezerHeight: FREEZER_HEIGHT
+    freezerHeight: FREEZER_HEIGHT,
   });
   const layout = Object.freeze({
     id: preset.id,
@@ -561,26 +655,28 @@ function readLayoutById(layoutId) {
     worldSizeMeters: loaded.worldSizeMeters,
     worldWidthMeters: loaded.worldWidthMeters,
     worldHeightMeters: loaded.worldHeightMeters,
-    warnings: Object.freeze(Array.isArray(loaded.warnings) ? loaded.warnings : []),
+    warnings: Object.freeze(
+      Array.isArray(loaded.warnings) ? loaded.warnings : [],
+    ),
     shelves: cloneFixtureSet(loaded.shelves, {
       kind: "shelf",
       width: SHELF_WIDTH,
       depth: SHELF_DEPTH,
       height: SHELF_HEIGHT,
-      keepSourceDimensions: true
+      keepSourceDimensions: true,
     }),
     coolers: cloneFixtureSet(loaded.coolers, {
       kind: "cooler",
       width: COOLER_WIDTH,
       depth: COOLER_DEPTH,
-      height: COOLER_HEIGHT
+      height: COOLER_HEIGHT,
     }),
     freezers: cloneFixtureSet(loaded.freezers, {
       kind: "freezer",
       width: FREEZER_WIDTH,
       depth: FREEZER_DEPTH,
-      height: FREEZER_HEIGHT
-    })
+      height: FREEZER_HEIGHT,
+    }),
   });
   if (layout.warnings.length > 0) {
     for (const warning of layout.warnings) {
@@ -619,10 +715,13 @@ function applyActiveLayout(layout) {
 }
 
 export function setActiveLayout(layoutId) {
-  const normalized = String(layoutId || "").trim().toLowerCase();
+  const normalized = String(layoutId || "")
+    .trim()
+    .toLowerCase();
   if (!normalized) return false;
   const nextLayout = readLayoutById(normalized);
-  if (normalized === ACTIVE_LAYOUT_ID && nextLayout === activeLayout) return false;
+  if (normalized === ACTIVE_LAYOUT_ID && nextLayout === activeLayout)
+    return false;
   applyActiveLayout(nextLayout);
   return true;
 }
@@ -636,7 +735,7 @@ export function getActiveLayoutInfo() {
     worldSizeMeters: latest.worldSizeMeters,
     worldWidthMeters: latest.worldWidthMeters,
     worldHeightMeters: latest.worldHeightMeters,
-    warnings: latest.warnings
+    warnings: latest.warnings,
   });
 }
 
@@ -651,23 +750,40 @@ export function getAvailableLayouts() {
         worldSizeMeters: loaded.worldSizeMeters,
         worldWidthMeters: loaded.worldWidthMeters,
         worldHeightMeters: loaded.worldHeightMeters,
-        warnings: loaded.warnings
+        warnings: loaded.warnings,
       });
-    })
+    }),
   );
 }
 
-export const HEARTBEAT_INTERVAL_MS = envPositiveInt("HEARTBEAT_INTERVAL_MS", 5000);
-export const IDLE_SESSION_TIMEOUT_MS = envPositiveInt("IDLE_SESSION_TIMEOUT_MS", 30 * 60 * 1000);
+export const HEARTBEAT_INTERVAL_MS = envPositiveInt(
+  "HEARTBEAT_INTERVAL_MS",
+  5000,
+);
+export const IDLE_SESSION_TIMEOUT_MS = envPositiveInt(
+  "IDLE_SESSION_TIMEOUT_MS",
+  30 * 60 * 1000,
+);
 export const MAX_MESSAGE_BYTES = envPositiveInt("MAX_MESSAGE_BYTES", 2048);
 export const INPUT_UPDATE_MIN_MS = envInt("INPUT_UPDATE_MIN_MS", 20);
 export const ATTACK_MESSAGE_MIN_MS = envInt("ATTACK_MESSAGE_MIN_MS", 60);
 export const MESSAGE_WINDOW_MS = envPositiveInt("MESSAGE_WINDOW_MS", 1000);
-export const MAX_MESSAGES_PER_WINDOW = envPositiveInt("MAX_MESSAGES_PER_WINDOW", 120);
+export const MAX_MESSAGES_PER_WINDOW = envPositiveInt(
+  "MAX_MESSAGES_PER_WINDOW",
+  120,
+);
 export const SPAM_DROP_WINDOW_MS = envPositiveInt("SPAM_DROP_WINDOW_MS", 1000);
-export const SPAM_MAX_DROPS_PER_WINDOW = envPositiveInt("SPAM_MAX_DROPS_PER_WINDOW", 40);
-export const ALLOWED_ORIGINS = new Set(envCsv("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS));
+export const SPAM_MAX_DROPS_PER_WINDOW = envPositiveInt(
+  "SPAM_MAX_DROPS_PER_WINDOW",
+  40,
+);
+export const ALLOWED_ORIGINS = new Set(
+  envCsv("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS),
+);
 export const ALLOW_MISSING_ORIGIN = envBool("ALLOW_MISSING_ORIGIN", false);
 export const DEBUG_VIEW_TOKEN = envString("DEBUG_VIEW_TOKEN", "");
 
-export const INVARIANT_LOG_COOLDOWN_MS = envPositiveInt("INVARIANT_LOG_COOLDOWN_MS", 5000);
+export const INVARIANT_LOG_COOLDOWN_MS = envPositiveInt(
+  "INVARIANT_LOG_COOLDOWN_MS",
+  5000,
+);

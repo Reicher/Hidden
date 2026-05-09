@@ -19,26 +19,10 @@ export function createMatchFlow({
   clearSpectatorTarget,
   isCharacterDowned,
   clearDownedState,
-  resetArenaForNextRound
+  resetArenaForNextRound,
 }) {
-  function getLobbyCountdown() {
-    return state.getLobbyCountdown();
-  }
-
-  function setLobbyCountdown(value) {
-    state.setLobbyCountdown(value);
-  }
-
-  function getSupermajorityReadyTimeout() {
-    return state.getSupermajorityReadyTimeout();
-  }
-
-  function setSupermajorityReadyTimeout(value) {
-    state.setSupermajorityReadyTimeout(value);
-  }
-
   function countdownMsRemaining(now = Date.now()) {
-    const lobbyCountdown = getLobbyCountdown();
+    const lobbyCountdown = state.getLobbyCountdown();
     if (!lobbyCountdown) return 0;
     return Math.max(0, lobbyCountdown.endsAt - now);
   }
@@ -47,7 +31,10 @@ export function createMatchFlow({
     if (!session || !session.authenticated) return false;
     if (session.characterId != null) {
       const owned = characters[session.characterId];
-      if (owned?.ownerSessionId === session.id && owned?.controllerType === "PLAYER") {
+      if (
+        owned?.ownerSessionId === session.id &&
+        owned?.controllerType === "PLAYER"
+      ) {
         session.input.yaw = owned.yaw;
         session.input.pitch = owned.pitch;
         sendToSession(session.id, "possess", { characterId: owned.id });
@@ -57,15 +44,23 @@ export function createMatchFlow({
     }
 
     const standingAvailable = characters.find(
-      (c) => c.controllerType === "AI" && c.ownerSessionId == null && !isCharacterDowned(c, now)
+      (c) =>
+        c.controllerType === "AI" &&
+        c.ownerSessionId == null &&
+        !isCharacterDowned(c, now),
     );
     const available =
-      standingAvailable || characters.find((c) => c.controllerType === "AI" && c.ownerSessionId == null);
+      standingAvailable ||
+      characters.find(
+        (c) => c.controllerType === "AI" && c.ownerSessionId == null,
+      );
     if (!available) {
       session.ready = false;
       session.state = "lobby";
       session.readyAt = 0;
-      sendToSession(session.id, "action_error", { message: "Ingen ledig karaktär just nu." });
+      sendToSession(session.id, "action_error", {
+        message: "Ingen ledig karaktär just nu.",
+      });
       return false;
     }
     clearDownedState(available);
@@ -85,7 +80,7 @@ export function createMatchFlow({
       characterId: available.id,
       x: Number(available.x.toFixed(2)),
       z: Number(available.z.toFixed(2)),
-      yaw: Number(available.yaw.toFixed(2))
+      yaw: Number(available.yaw.toFixed(2)),
     });
     sendToSession(session.id, "possess", { characterId: available.id });
     return true;
@@ -98,14 +93,15 @@ export function createMatchFlow({
     session.state = "countdown";
     session.readyAt = endsAt;
     session.input.attackRequested = false;
-    if (session.name) countdownReadyNames.add(String(session.name).toLowerCase());
+    if (session.name)
+      countdownReadyNames.add(String(session.name).toLowerCase());
     sendToSession(session.id, "countdown", {
-      seconds: Math.max(1, Math.ceil((endsAt - Date.now()) / 1000))
+      seconds: Math.max(1, Math.ceil((endsAt - Date.now()) / 1000)),
     });
   }
 
   function cancelLobbyCountdown() {
-    const lobbyCountdown = getLobbyCountdown();
+    const lobbyCountdown = state.getLobbyCountdown();
     if (!lobbyCountdown) return;
     for (const session of sessions.values()) {
       if (!session.authenticated) continue;
@@ -117,56 +113,63 @@ export function createMatchFlow({
       session.state = "lobby";
       session.readyAt = 0;
     }
-    setLobbyCountdown(null);
+    state.setLobbyCountdown(null);
     countdownReadyNames.clear();
     countdownReconnectGraceByName.clear();
     appendSystemChat([{ type: "text", text: "Nedräkning avbruten" }]);
   }
 
   function cancelSupermajorityReadyTimeout() {
-    setSupermajorityReadyTimeout(null);
+    state.setSupermajorityReadyTimeout(null);
   }
 
   function startSupermajorityReadyTimeout(now) {
-    setSupermajorityReadyTimeout({
+    state.setSupermajorityReadyTimeout({
       endsAt: now + constants.SUPERMAJORITY_READY_TIMEOUT_SECONDS * 1000,
       nextAnnounceSecond:
-        constants.SUPERMAJORITY_READY_TIMEOUT_SECONDS - constants.SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS
+        constants.SUPERMAJORITY_READY_TIMEOUT_SECONDS -
+        constants.SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS,
     });
     appendSystemChat([
       {
         type: "text",
-        text: `2/3 spelare redo. Matchstart om ${constants.SUPERMAJORITY_READY_TIMEOUT_SECONDS} sekunder om inte alla blir redo tidigare.`
-      }
+        text: `2/3 spelare redo. Matchstart om ${constants.SUPERMAJORITY_READY_TIMEOUT_SECONDS} sekunder om inte alla blir redo tidigare.`,
+      },
     ]);
   }
 
   function announceSupermajorityReadyTimeout(now) {
-    const supermajorityReadyTimeout = getSupermajorityReadyTimeout();
+    const supermajorityReadyTimeout = state.getSupermajorityReadyTimeout();
     if (!supermajorityReadyTimeout) return;
     while (
       supermajorityReadyTimeout.nextAnnounceSecond > 0 &&
-      now >= supermajorityReadyTimeout.endsAt - supermajorityReadyTimeout.nextAnnounceSecond * 1000
+      now >=
+        supermajorityReadyTimeout.endsAt -
+          supermajorityReadyTimeout.nextAnnounceSecond * 1000
     ) {
       const seconds = supermajorityReadyTimeout.nextAnnounceSecond;
       appendSystemChat([
         {
           type: "text",
-          text: `2/3 spelare redo. Matchstart om ${seconds} sekunder om inte alla blir redo tidigare.`
-        }
+          text: `2/3 spelare redo. Matchstart om ${seconds} sekunder om inte alla blir redo tidigare.`,
+        },
       ]);
-      supermajorityReadyTimeout.nextAnnounceSecond -= constants.SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS;
+      supermajorityReadyTimeout.nextAnnounceSecond -=
+        constants.SUPERMAJORITY_READY_NOTIFY_STEP_SECONDS;
     }
   }
 
-  function startLobbyCountdown(now, seconds = constants.ROUND_COUNTDOWN_SECONDS) {
+  function startLobbyCountdown(
+    now,
+    seconds = constants.ROUND_COUNTDOWN_SECONDS,
+  ) {
     const endsAt = now + seconds * 1000;
     cancelSupermajorityReadyTimeout();
     countdownReadyNames.clear();
     pruneCountdownReconnectGrace(now);
-    setLobbyCountdown({
+    state.setLobbyCountdown({
       endsAt,
-      lastAnnouncedSecond: null
+      lastAnnouncedSecond: null,
     });
     for (const session of sessions.values()) {
       if (!session.authenticated) continue;
@@ -175,61 +178,75 @@ export function createMatchFlow({
     }
     logEvent("countdown_start", {
       seconds,
-      players: countdownPlayerCount()
+      players: countdownPlayerCount(),
     });
     emitStatsEvent("countdown_start", {
       seconds,
-      players: countdownPlayerCount()
+      players: countdownPlayerCount(),
     });
     appendSystemChat([{ type: "text", text: "Nedräkning startad" }]);
   }
 
   function maybeStartLobbyCountdown(now) {
-    if (getLobbyCountdown()) return;
+    if (state.getLobbyCountdown()) return;
     if (state.getActiveMatchStartedAt() > 0) return;
     if (state.getPendingRoundReset()) return;
-    const lobbyPlayers = authenticatedSessions().filter((session) => session.state === "lobby");
+    const lobbyPlayers = authenticatedSessions().filter(
+      (session) => session.state === "lobby",
+    );
     if (lobbyPlayers.length < constants.MIN_PLAYERS_TO_START) {
       cancelSupermajorityReadyTimeout();
       return;
     }
-    const readyCount = lobbyPlayers.reduce((count, session) => count + (session.ready ? 1 : 0), 0);
+    const readyCount = lobbyPlayers.reduce(
+      (count, session) => count + (session.ready ? 1 : 0),
+      0,
+    );
     if (readyCount >= lobbyPlayers.length) {
       startLobbyCountdown(now);
       return;
     }
-    const readyNeededForSupermajority = Math.ceil((lobbyPlayers.length * 2) / 3);
+    const readyNeededForSupermajority = Math.ceil(
+      (lobbyPlayers.length * 2) / 3,
+    );
     if (readyCount < readyNeededForSupermajority) {
       cancelSupermajorityReadyTimeout();
       return;
     }
-    if (!getSupermajorityReadyTimeout()) {
+    if (!state.getSupermajorityReadyTimeout()) {
       startSupermajorityReadyTimeout(now);
       return;
     }
     announceSupermajorityReadyTimeout(now);
-    if (now >= getSupermajorityReadyTimeout().endsAt) {
+    if (now >= state.getSupermajorityReadyTimeout().endsAt) {
       startLobbyCountdown(now);
     }
   }
 
   function finalizeLobbyCountdown(now) {
-    if (!getLobbyCountdown()) return;
-    const participants = authenticatedSessions().filter((session) => session.state === "countdown" && session.ready);
-    setLobbyCountdown(null);
+    if (!state.getLobbyCountdown()) return;
+    const participants = authenticatedSessions().filter(
+      (session) => session.state === "countdown" && session.ready,
+    );
+    state.setLobbyCountdown(null);
     countdownReadyNames.clear();
     pruneCountdownReconnectGrace(now);
-    for (const session of participants) markCountdownReconnectGrace(session.name, now);
+    for (const session of participants)
+      markCountdownReconnectGrace(session.name, now);
     appendSystemChat([{ type: "text", text: "Spel startat" }]);
     for (const session of participants) {
-      if (session.characterId == null && !assignCharacterForCountdown(session, now)) continue;
+      if (
+        session.characterId == null &&
+        !assignCharacterForCountdown(session, now)
+      )
+        continue;
       session.state = "alive";
       session.ready = false;
       session.readyAt = now;
       session.input.attackRequested = false;
       emitStatsEvent("session_alive", {
         sessionId: shortSessionId(session.id),
-        name: session.name
+        name: session.name,
       });
     }
   }
@@ -250,7 +267,7 @@ export function createMatchFlow({
       emitStatsEvent("session_lobby", {
         sessionId: shortSessionId(session.id),
         name: session.name,
-        reason
+        reason,
       });
     }
   }
@@ -261,17 +278,27 @@ export function createMatchFlow({
       winnerSession.stats.wins += 1;
       appendSystemChat([
         { type: "player", name: normalizePlayerName(winnerSession.name) },
-        { type: "text", text: " vann matchen!" }
+        { type: "text", text: " vann matchen!" },
       ]);
       appendSystemChat([
-        { type: "text", text: `Spelet avslutas om ${Math.ceil(constants.MATCH_END_RETURN_TO_LOBBY_MS / 1000)} sekunder` }
+        {
+          type: "text",
+          text: `Spelet avslutas om ${Math.ceil(constants.MATCH_END_RETURN_TO_LOBBY_MS / 1000)} sekunder`,
+        },
       ]);
     }
-    const matchEndsAt = winnerSessionId ? now + constants.MATCH_END_RETURN_TO_LOBBY_MS : 0;
+    const matchEndsAt = winnerSessionId
+      ? now + constants.MATCH_END_RETURN_TO_LOBBY_MS
+      : 0;
 
     for (const session of sessions.values()) {
       if (!session.authenticated) continue;
-      if (winnerSessionId && session.id === winnerSessionId && session.state === "alive" && session.characterId != null) {
+      if (
+        winnerSessionId &&
+        session.id === winnerSessionId &&
+        session.state === "alive" &&
+        session.characterId != null
+      ) {
         session.state = "won";
         session.ready = false;
         session.readyAt = 0;
@@ -281,21 +308,10 @@ export function createMatchFlow({
         continue;
       }
       if (session.state === "alive") returnToLobby(session, "round_ended");
-      if (session.state === "downed") {
+      if (session.state === "downed" || session.state === "spectating") {
         if (!winnerSessionId) {
           returnToLobby(session, "round_ended");
         } else {
-          session.ready = false;
-          session.readyAt = 0;
-          session.input.attackRequested = false;
-          session.returnToLobbyAt = matchEndsAt;
-        }
-      }
-      if (session.state === "spectating") {
-        if (!winnerSessionId) {
-          returnToLobby(session, "round_ended");
-        } else {
-          session.ready = false;
           session.readyAt = 0;
           session.input.attackRequested = false;
           session.returnToLobbyAt = matchEndsAt;
@@ -308,7 +324,7 @@ export function createMatchFlow({
       session.ready = false;
     }
 
-    setLobbyCountdown(null);
+    state.setLobbyCountdown(null);
     cancelSupermajorityReadyTimeout();
     countdownReadyNames.clear();
     countdownReconnectGraceByName.clear();
@@ -325,6 +341,6 @@ export function createMatchFlow({
     finalizeLobbyCountdown,
     endCurrentMatch,
     assignCharacterForCountdown,
-    returnToLobby
+    returnToLobby,
   };
 }

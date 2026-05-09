@@ -159,7 +159,7 @@ const {
 const roomSystem = createRoomSystem({ scene, renderer });
 const avatarSystem = createAvatarSystem({ scene, camera });
 
-const { state: clientState, socketState } = createClientState();
+const { state: clientState } = createClientState();
 let socketConnection = null;
 
 const INPUT_SEND_INTERVAL_MS = 33;
@@ -796,7 +796,7 @@ function resetInputState() {
 }
 
 const socketMessageContext = createSocketMessageContext({
-  socketState,
+  state: clientState,
   constants: {
     DEFAULT_MATCH_STATE,
     CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS,
@@ -1072,29 +1072,19 @@ function animate() {
   camera.rotation.y = clientState.viewYaw;
   camera.rotation.x = clientState.viewPitch;
   roomSystem.update?.(deltaSec);
+  const sessionState = clientState.sessionState;
   const controlledCharacterId =
-    clientState.appMode === "playing" &&
-    (clientState.sessionState === "alive" || clientState.sessionState === "won")
+    sessionState === "alive" || sessionState === "won"
       ? clientState.myCharacterId
       : null;
   avatarSystem.animate(deltaSec, controlledCharacterId);
-  if (
-    clientState.appMode === "playing" &&
-    clientState.sessionState === "spectating"
-  ) {
+  if (sessionState === "spectating")
     updateSpectatorCamera(deltaSec, clientState);
-  }
+  if (sessionState === "downed") updateDownedCamera(deltaSec, clientState);
   if (
-    clientState.appMode === "playing" &&
-    clientState.sessionState === "downed"
-  ) {
-    updateDownedCamera(deltaSec, clientState);
-  }
-  if (
-    clientState.appMode === "playing" &&
-    (clientState.sessionState === "won" ||
-      clientState.sessionState === "downed" ||
-      clientState.sessionState === "spectating")
+    sessionState === "won" ||
+    sessionState === "downed" ||
+    sessionState === "spectating"
   ) {
     clientState.winReturnToLobbyMsRemaining = Math.max(
       0,
@@ -1113,7 +1103,7 @@ function animate() {
   }
   updateCrosshairHud(deltaSec, now);
   maybeRefreshDebugOverlay(now);
-  if (clientState.appMode === "playing") renderer.render(scene, camera);
+  renderer.render(scene, camera);
 }
 
 animate();
