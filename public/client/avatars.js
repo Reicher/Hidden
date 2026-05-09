@@ -36,13 +36,14 @@ const AIM_BODY_RADIUS = 0.44;
 const AIM_HEAD_Y_OFFSET_RATIO = 0.9;
 const AIM_CHEST_Y_OFFSET_RATIO = 0.58;
 const SKIN_TONE_HEX = [
-  0xfad7c4, 0xf1c7a5, 0xe6b88a, 0xd8a676, 0xbf8a5d, 0xa9744d, 0x8c603f, 0x714c34, 0x573a2a, 0x3f2b1f
+  0xfad7c4, 0xf1c7a5, 0xe6b88a, 0xd8a676, 0xbf8a5d, 0xa9744d, 0x8c603f,
+  0x714c34, 0x573a2a, 0x3f2b1f,
 ];
 const HAT_TYPES = ["CylinderHatt", "Trollkarlshatt", "Sombrero"];
 const HAT_COLOR_HEX_BY_TYPE = {
   CylinderHatt: [0x111111, 0x232323, 0x3a3a3a, 0x3f2f24],
   Trollkarlshatt: [0x1f2b44, 0x2d3561, 0x4a2f44, 0x2c2f36],
-  Sombrero: [0xd9c39a, 0xc5a77f, 0xb89365, 0x9f7b54]
+  Sombrero: [0xd9c39a, 0xc5a77f, 0xb89365, 0x9f7b54],
 };
 const MOUTH_TYPES = ["happy", "neutral", "surprised", "sad"];
 
@@ -86,7 +87,8 @@ function previewStyleForCharacter(characterId) {
   let hatHex = null;
   if (hatRoll >= 0.28) {
     hatType = HAT_TYPES[Math.floor(rng() * HAT_TYPES.length)];
-    const palette = HAT_COLOR_HEX_BY_TYPE[hatType] || HAT_COLOR_HEX_BY_TYPE.CylinderHatt;
+    const palette =
+      HAT_COLOR_HEX_BY_TYPE[hatType] || HAT_COLOR_HEX_BY_TYPE.CylinderHatt;
     hatHex = palette[Math.floor(rng() * palette.length)];
   }
   const mouthType = MOUTH_TYPES[Math.floor(rng() * MOUTH_TYPES.length)];
@@ -95,7 +97,7 @@ function previewStyleForCharacter(characterId) {
     shirt: `hsl(${shirtHue} ${shirtSat}% ${shirtLight}%)`,
     hatType,
     hat: hatHex == null ? null : hexToCss(hatHex),
-    mouthType
+    mouthType,
   };
 }
 
@@ -118,9 +120,30 @@ function fillRoundedRect(ctx, x, y, w, h, r) {
 function traceHeadShapePath(ctx, cx, cy, headR) {
   ctx.beginPath();
   ctx.moveTo(cx, cy - headR * 1.02);
-  ctx.bezierCurveTo(cx + headR * 0.78, cy - headR * 0.96, cx + headR * 0.9, cy + headR * 0.1, cx + headR * 0.5, cy + headR * 0.9);
-  ctx.bezierCurveTo(cx + headR * 0.22, cy + headR * 1.15, cx - headR * 0.22, cy + headR * 1.15, cx - headR * 0.5, cy + headR * 0.9);
-  ctx.bezierCurveTo(cx - headR * 0.9, cy + headR * 0.1, cx - headR * 0.78, cy - headR * 0.96, cx, cy - headR * 1.02);
+  ctx.bezierCurveTo(
+    cx + headR * 0.78,
+    cy - headR * 0.96,
+    cx + headR * 0.9,
+    cy + headR * 0.1,
+    cx + headR * 0.5,
+    cy + headR * 0.9,
+  );
+  ctx.bezierCurveTo(
+    cx + headR * 0.22,
+    cy + headR * 1.15,
+    cx - headR * 0.22,
+    cy + headR * 1.15,
+    cx - headR * 0.5,
+    cy + headR * 0.9,
+  );
+  ctx.bezierCurveTo(
+    cx - headR * 0.9,
+    cy + headR * 0.1,
+    cx - headR * 0.78,
+    cy - headR * 0.96,
+    cx,
+    cy - headR * 1.02,
+  );
   ctx.closePath();
 }
 
@@ -172,31 +195,93 @@ export function drawCountdownCharacterPreview(canvas, characterId) {
   ctx.fillRect(0, 0, width, height);
 
   ctx.fillStyle = style.shirt;
-  fillRoundedRect(ctx, width * 0.22, height * 0.56, width * 0.56, height * 0.34, 16);
+  fillRoundedRect(
+    ctx,
+    width * 0.22,
+    height * 0.56,
+    width * 0.56,
+    height * 0.34,
+    16,
+  );
 
   ctx.fillStyle = style.skin;
-  fillRoundedRect(ctx, cx - headR * 0.24, headCy + headR * 0.84, headR * 0.48, headR * 0.44, 8);
+  fillRoundedRect(
+    ctx,
+    cx - headR * 0.24,
+    headCy + headR * 0.84,
+    headR * 0.48,
+    headR * 0.44,
+    8,
+  );
   traceHeadShapePath(ctx, cx, headCy, headR);
   ctx.fill();
 
   ctx.fillStyle = "#ffffff";
   ctx.beginPath();
-  ctx.ellipse(cx - headR * 0.35, headCy - headR * 0.05, headR * 0.21, headR * 0.26, 0, 0, Math.PI * 2);
-  ctx.ellipse(cx + headR * 0.35, headCy - headR * 0.05, headR * 0.21, headR * 0.26, 0, 0, Math.PI * 2);
+  ctx.ellipse(
+    cx - headR * 0.35,
+    headCy - headR * 0.05,
+    headR * 0.21,
+    headR * 0.26,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.ellipse(
+    cx + headR * 0.35,
+    headCy - headR * 0.05,
+    headR * 0.21,
+    headR * 0.26,
+    0,
+    0,
+    Math.PI * 2,
+  );
   ctx.fill();
 
   ctx.fillStyle = "#111111";
   ctx.beginPath();
-  ctx.arc(cx - headR * 0.33, headCy - headR * 0.02, headR * 0.078, 0, Math.PI * 2);
-  ctx.arc(cx + headR * 0.33, headCy - headR * 0.02, headR * 0.078, 0, Math.PI * 2);
+  ctx.arc(
+    cx - headR * 0.33,
+    headCy - headR * 0.02,
+    headR * 0.078,
+    0,
+    Math.PI * 2,
+  );
+  ctx.arc(
+    cx + headR * 0.33,
+    headCy - headR * 0.02,
+    headR * 0.078,
+    0,
+    Math.PI * 2,
+  );
   ctx.fill();
-  strokeSimpleMouth(ctx, cx, headCy + headR * 0.45, headR * 0.22, style.mouthType);
+  strokeSimpleMouth(
+    ctx,
+    cx,
+    headCy + headR * 0.45,
+    headR * 0.22,
+    style.mouthType,
+  );
 
   if (style.hat) {
     ctx.fillStyle = style.hat;
     if (style.hatType === "CylinderHatt") {
-      fillRoundedRect(ctx, cx - headR * 0.58, headCy - headR * 1.25, headR * 1.16, headR * 0.6, 8);
-      fillRoundedRect(ctx, cx - headR * 0.88, headCy - headR * 0.76, headR * 1.76, headR * 0.16, 6);
+      fillRoundedRect(
+        ctx,
+        cx - headR * 0.58,
+        headCy - headR * 1.25,
+        headR * 1.16,
+        headR * 0.6,
+        8,
+      );
+      fillRoundedRect(
+        ctx,
+        cx - headR * 0.88,
+        headCy - headR * 0.76,
+        headR * 1.76,
+        headR * 0.16,
+        6,
+      );
     } else if (style.hatType === "Trollkarlshatt") {
       const brimRy = headR * 0.15;
       const brimCy = Math.min(headCy - headR * 0.88, minHatTopY + brimRy);
@@ -243,7 +328,7 @@ export function createAvatarSystem({ scene, camera }) {
   const knockdownStarMaterial = new THREE.SpriteMaterial({
     map: knockdownStarTexture,
     transparent: true,
-    depthWrite: false
+    depthWrite: false,
   });
   firstPersonArmPivot.position.set(0.28, -0.42, -0.5);
   firstPersonArmPivot.rotation.set(-1.12, -0.1, -0.2);
@@ -252,24 +337,24 @@ export function createAvatarSystem({ scene, camera }) {
     roughness: 0.82,
     metalness: 0.02,
     depthTest: false,
-    depthWrite: false
+    depthWrite: false,
   });
   const firstPersonArm = new THREE.Group();
   const firstPersonPalm = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.085, 0.12, 6, 12),
-    firstPersonSkinMaterial
+    firstPersonSkinMaterial,
   );
   firstPersonPalm.rotation.z = Math.PI / 2;
   firstPersonPalm.position.set(0, 0.02, 0);
   const firstPersonFist = new THREE.Mesh(
     new THREE.SphereGeometry(0.13, 18, 14),
-    firstPersonSkinMaterial
+    firstPersonSkinMaterial,
   );
   firstPersonFist.scale.set(1.08, 0.82, 0.94);
   firstPersonFist.position.set(0.13, 0.02, 0.01);
   const firstPersonWrist = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.055, 0.16, 5, 10),
-    firstPersonSkinMaterial
+    firstPersonSkinMaterial,
   );
   firstPersonWrist.rotation.z = Math.PI / 2;
   firstPersonWrist.position.set(-0.12, 0, 0);
@@ -284,7 +369,8 @@ export function createAvatarSystem({ scene, camera }) {
   let firstPersonAttackMs = 0;
 
   function visualYaw(serverYaw, controllerType) {
-    if (controllerType === "PLAYER") return normalizeAngle(serverYaw + AVATAR_YAW_OFFSET);
+    if (controllerType === "PLAYER")
+      return normalizeAngle(serverYaw + AVATAR_YAW_OFFSET);
     return serverYaw;
   }
 
@@ -299,7 +385,9 @@ export function createAvatarSystem({ scene, camera }) {
     const headScale = 0.84 + rng() * 0.28;
     const fatness = rng();
 
-    const skin = new THREE.Color(SKIN_TONE_HEX[Math.floor(rng() * SKIN_TONE_HEX.length)]);
+    const skin = new THREE.Color(
+      SKIN_TONE_HEX[Math.floor(rng() * SKIN_TONE_HEX.length)],
+    );
     const shirt = new THREE.Color();
     shirt.setHSL(rng(), 0.4 + rng() * 0.3, 0.36 + rng() * 0.24);
     const pants = new THREE.Color();
@@ -311,14 +399,21 @@ export function createAvatarSystem({ scene, camera }) {
     let hat = null;
     if (hatRoll >= 0.28) {
       hatType = HAT_TYPES[Math.floor(rng() * HAT_TYPES.length)];
-      const palette = HAT_COLOR_HEX_BY_TYPE[hatType] || HAT_COLOR_HEX_BY_TYPE.CylinderHatt;
+      const palette =
+        HAT_COLOR_HEX_BY_TYPE[hatType] || HAT_COLOR_HEX_BY_TYPE.CylinderHatt;
       hat = new THREE.Color(palette[Math.floor(rng() * palette.length)]);
     }
     const mouthType = MOUTH_TYPES[Math.floor(rng() * MOUTH_TYPES.length)];
 
-    const baseHeightNoHat = noHatBodyHeight({ heightScale, legScale, torsoScale, headScale });
+    const baseHeightNoHat = noHatBodyHeight({
+      heightScale,
+      legScale,
+      torsoScale,
+      headScale,
+    });
     const targetHeightNoHat = 1.5 + heightRng() * 0.5;
-    const visualScale = baseHeightNoHat > 0.0001 ? targetHeightNoHat / baseHeightNoHat : 1;
+    const visualScale =
+      baseHeightNoHat > 0.0001 ? targetHeightNoHat / baseHeightNoHat : 1;
 
     return {
       rng,
@@ -337,25 +432,39 @@ export function createAvatarSystem({ scene, camera }) {
       hat: hat || new THREE.Color(0x2a2a2a),
       hatType,
       mouthType,
-      visualScale
+      visualScale,
     };
   }
 
   function createHatMesh(profile, headRadius) {
     if (profile.hatType === "none") return null;
-    const hatMaterial = new THREE.MeshStandardMaterial({ color: profile.hat, roughness: 0.7, metalness: 0.06 });
+    const hatMaterial = new THREE.MeshStandardMaterial({
+      color: profile.hat,
+      roughness: 0.7,
+      metalness: 0.06,
+    });
     const hatGroup = new THREE.Group();
 
     if (profile.hatType === "CylinderHatt") {
       const brim = new THREE.Mesh(
-        new THREE.CylinderGeometry(headRadius * 0.95, headRadius * 0.95, headRadius * 0.1, 20),
-        hatMaterial
+        new THREE.CylinderGeometry(
+          headRadius * 0.95,
+          headRadius * 0.95,
+          headRadius * 0.1,
+          20,
+        ),
+        hatMaterial,
       );
       brim.position.y = headRadius * 0.02;
       hatGroup.add(brim);
       const crown = new THREE.Mesh(
-        new THREE.CylinderGeometry(headRadius * 0.58, headRadius * 0.64, headRadius * 1.05, 20),
-        hatMaterial
+        new THREE.CylinderGeometry(
+          headRadius * 0.58,
+          headRadius * 0.64,
+          headRadius * 1.05,
+          20,
+        ),
+        hatMaterial,
       );
       crown.position.y = headRadius * 0.54;
       hatGroup.add(crown);
@@ -364,14 +473,19 @@ export function createAvatarSystem({ scene, camera }) {
 
     if (profile.hatType === "Trollkarlshatt") {
       const brim = new THREE.Mesh(
-        new THREE.CylinderGeometry(headRadius * 1.02, headRadius * 1.02, headRadius * 0.08, 20),
-        hatMaterial
+        new THREE.CylinderGeometry(
+          headRadius * 1.02,
+          headRadius * 1.02,
+          headRadius * 0.08,
+          20,
+        ),
+        hatMaterial,
       );
       brim.position.y = headRadius * 0.02;
       hatGroup.add(brim);
       const cone = new THREE.Mesh(
         new THREE.ConeGeometry(headRadius * 0.76, headRadius * 1.5, 20),
-        hatMaterial
+        hatMaterial,
       );
       cone.position.y = headRadius * 0.78;
       hatGroup.add(cone);
@@ -380,14 +494,24 @@ export function createAvatarSystem({ scene, camera }) {
 
     if (profile.hatType === "Sombrero") {
       const brim = new THREE.Mesh(
-        new THREE.CylinderGeometry(headRadius * 1.34, headRadius * 1.44, headRadius * 0.1, 28),
-        hatMaterial
+        new THREE.CylinderGeometry(
+          headRadius * 1.34,
+          headRadius * 1.44,
+          headRadius * 0.1,
+          28,
+        ),
+        hatMaterial,
       );
       brim.position.y = headRadius * 0.08;
       hatGroup.add(brim);
       const crown = new THREE.Mesh(
-        new THREE.CylinderGeometry(headRadius * 0.46, headRadius * 0.64, headRadius * 0.72, 22),
-        hatMaterial
+        new THREE.CylinderGeometry(
+          headRadius * 0.46,
+          headRadius * 0.64,
+          headRadius * 0.72,
+          22,
+        ),
+        hatMaterial,
       );
       crown.position.y = headRadius * 0.44;
       hatGroup.add(crown);
@@ -397,13 +521,16 @@ export function createAvatarSystem({ scene, camera }) {
     return null;
   }
 
-  function createHeadGeometry(headRadius) {
-    const geometry = new THREE.SphereGeometry(headRadius, 24, 18);
+  // Shared unit head geometry – created once for the entire system.
+  // Each head mesh is scaled by headRadius at instantiation time so we never
+  // re-run the expensive vertex-manipulation loop per avatar.
+  const sharedUnitHeadGeometry = (() => {
+    const geometry = new THREE.SphereGeometry(1, 24, 18);
     const positions = geometry.attributes.position;
     const vertex = new THREE.Vector3();
     for (let i = 0; i < positions.count; i += 1) {
       vertex.fromBufferAttribute(positions, i);
-      const yNorm = THREE.MathUtils.clamp(vertex.y / headRadius, -1, 1);
+      const yNorm = THREE.MathUtils.clamp(vertex.y, -1, 1);
       const chin = THREE.MathUtils.clamp(-yNorm, 0, 1);
       const temple = THREE.MathUtils.clamp((yNorm + 0.1) / 1.1, 0, 1);
       vertex.x *= 1 - chin * 0.15 - temple * 0.05;
@@ -414,7 +541,7 @@ export function createAvatarSystem({ scene, camera }) {
     positions.needsUpdate = true;
     geometry.computeVertexNormals();
     return geometry;
-  }
+  })();
 
   function createHeadFaceTexture(skinColor, mouthType = "neutral") {
     const canvas = document.createElement("canvas");
@@ -454,8 +581,24 @@ export function createAvatarSystem({ scene, camera }) {
       } else {
         ctx.fillStyle = "#ffffff";
         ctx.beginPath();
-        ctx.ellipse(leftEyeCx, faceCy, EYE_RADIUS_X_PX, EYE_RADIUS_Y_PX, 0, 0, Math.PI * 2);
-        ctx.ellipse(rightEyeCx, faceCy, EYE_RADIUS_X_PX, EYE_RADIUS_Y_PX, 0, 0, Math.PI * 2);
+        ctx.ellipse(
+          leftEyeCx,
+          faceCy,
+          EYE_RADIUS_X_PX,
+          EYE_RADIUS_Y_PX,
+          0,
+          0,
+          Math.PI * 2,
+        );
+        ctx.ellipse(
+          rightEyeCx,
+          faceCy,
+          EYE_RADIUS_X_PX,
+          EYE_RADIUS_Y_PX,
+          0,
+          0,
+          Math.PI * 2,
+        );
         ctx.fill();
 
         ctx.fillStyle = "#111111";
@@ -526,17 +669,34 @@ export function createAvatarSystem({ scene, camera }) {
     group.add(yawGroup);
     yawGroup.add(poseRoot);
 
-    const torsoMaterial = new THREE.MeshStandardMaterial({ color: profile.shirt, roughness: 0.85 });
-    const pantsMaterial = new THREE.MeshStandardMaterial({ color: profile.pants, roughness: 0.9 });
-    const skinMaterialPlain = new THREE.MeshStandardMaterial({ color: profile.skin, roughness: 0.8 });
-    const shoeMaterial = new THREE.MeshStandardMaterial({ color: profile.shoe, roughness: 0.92 });
+    const torsoMaterial = new THREE.MeshStandardMaterial({
+      color: profile.shirt,
+      roughness: 0.85,
+    });
+    const pantsMaterial = new THREE.MeshStandardMaterial({
+      color: profile.pants,
+      roughness: 0.9,
+    });
+    const skinMaterialPlain = new THREE.MeshStandardMaterial({
+      color: profile.skin,
+      roughness: 0.8,
+    });
+    const shoeMaterial = new THREE.MeshStandardMaterial({
+      color: profile.shoe,
+      roughness: 0.92,
+    });
     const headFace = createHeadFaceTexture(profile.skin, profile.mouthType);
     const skinMaterial = headFace
-      ? new THREE.MeshStandardMaterial({ color: 0xffffff, map: headFace.texture, roughness: 0.8 })
+      ? new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          map: headFace.texture,
+          roughness: 0.8,
+        })
       : new THREE.MeshStandardMaterial({ color: profile.skin, roughness: 0.8 });
 
     const shoeHeight = 0.11 * profile.heightScale;
-    const shoeWidth = 0.16 * profile.heightScale * (0.86 + profile.fatness * 0.14);
+    const shoeWidth =
+      0.16 * profile.heightScale * (0.86 + profile.fatness * 0.14);
     const shoeLength = 0.26 * profile.heightScale;
 
     const legRadius = 0.078 * profile.heightScale * profile.legScale;
@@ -548,7 +708,10 @@ export function createAvatarSystem({ scene, camera }) {
     const torsoTotal = 0.9 * profile.heightScale * profile.torsoScale;
     const torsoCore = Math.max(0.06, torsoTotal - torsoRadius * 2);
     const torsoHalfWidth = torsoRadius * profile.torsoWidthScale;
-    const legGap = Math.max(legRadius * 0.72, torsoHalfWidth * 0.62 - legRadius * 0.06);
+    const legGap = Math.max(
+      legRadius * 0.72,
+      torsoHalfWidth * 0.62 - legRadius * 0.06,
+    );
     const shoulderY = hipY + torsoTotal * 0.8;
 
     const armRadius = 0.066 * profile.heightScale * profile.armScale;
@@ -563,18 +726,28 @@ export function createAvatarSystem({ scene, camera }) {
     const headY = hipY + torsoTotal + headRadius * 0.84;
     const eyeHeight = headY + headRadius * 0.24;
 
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(torsoRadius, torsoCore, 6, 14), torsoMaterial);
+    const torso = new THREE.Mesh(
+      new THREE.CapsuleGeometry(torsoRadius, torsoCore, 6, 14),
+      torsoMaterial,
+    );
     torso.scale.set(profile.torsoWidthScale, 1, profile.torsoDepthScale);
     torso.position.set(0, hipY + torsoTotal * 0.48, 0);
     poseRoot.add(torso);
 
-    const pelvis = new THREE.Mesh(new THREE.SphereGeometry(Math.max(legRadius * 1.35, torsoRadius * 0.36), 16, 12), pantsMaterial);
+    const pelvis = new THREE.Mesh(
+      new THREE.SphereGeometry(
+        Math.max(legRadius * 1.35, torsoRadius * 0.36),
+        16,
+        12,
+      ),
+      pantsMaterial,
+    );
     pelvis.scale.set(1.42, 0.82, 1.06);
     pelvis.position.set(0, hipY - legRadius * 0.1, 0);
     poseRoot.add(pelvis);
 
-    const head = new THREE.Mesh(createHeadGeometry(headRadius), skinMaterial);
-    head.scale.set(0.98, 1.02, 0.98);
+    const head = new THREE.Mesh(sharedUnitHeadGeometry, skinMaterial);
+    head.scale.set(0.98 * headRadius, 1.02 * headRadius, 0.98 * headRadius);
     head.position.set(0, headY, 0);
     poseRoot.add(head);
     const hat = createHatMesh(profile, headRadius);
@@ -594,43 +767,67 @@ export function createAvatarSystem({ scene, camera }) {
       knockdownStars.push(star);
     }
 
+    // Shared geometries: left and right counterparts are mirrors of each other
+    // (same dimensions, just positioned differently), so they share one geometry.
+    const armGeometry = new THREE.CapsuleGeometry(armRadius, armCore, 5, 12);
+    const handGeometry = new THREE.CapsuleGeometry(
+      handRadius * 0.72,
+      handCore,
+      4,
+      8,
+    );
+    const legGeometry = new THREE.CapsuleGeometry(legRadius, legCore, 5, 12);
+    const shoeGeometry = new THREE.BoxGeometry(
+      shoeWidth,
+      shoeHeight,
+      shoeLength,
+    );
+
     const leftArmPivot = new THREE.Group();
     leftArmPivot.position.set(-shoulderX, shoulderY, 0);
-    const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(armRadius, armCore, 5, 12), torsoMaterial);
+    const leftArm = new THREE.Mesh(armGeometry, torsoMaterial);
     leftArm.position.set(0, -armTotal * 0.5, 0);
     leftArmPivot.add(leftArm);
-    const leftHand = new THREE.Mesh(new THREE.CapsuleGeometry(handRadius * 0.72, handCore, 4, 8), skinMaterialPlain);
+    const leftHand = new THREE.Mesh(handGeometry, skinMaterialPlain);
     leftHand.position.set(0, -armTotal + handRadius * 0.7, 0);
     leftArmPivot.add(leftHand);
     poseRoot.add(leftArmPivot);
 
     const rightArmPivot = new THREE.Group();
     rightArmPivot.position.set(shoulderX, shoulderY, 0);
-    const rightArm = new THREE.Mesh(new THREE.CapsuleGeometry(armRadius, armCore, 5, 12), torsoMaterial);
+    const rightArm = new THREE.Mesh(armGeometry, torsoMaterial);
     rightArm.position.set(0, -armTotal * 0.5, 0);
     rightArmPivot.add(rightArm);
-    const rightHand = new THREE.Mesh(new THREE.CapsuleGeometry(handRadius * 0.72, handCore, 4, 8), skinMaterialPlain);
+    const rightHand = new THREE.Mesh(handGeometry, skinMaterialPlain);
     rightHand.position.set(0, -armTotal + handRadius * 0.7, 0);
     rightArmPivot.add(rightHand);
     poseRoot.add(rightArmPivot);
 
     const leftLegPivot = new THREE.Group();
     leftLegPivot.position.set(-legGap, hipY, 0);
-    const leftLeg = new THREE.Mesh(new THREE.CapsuleGeometry(legRadius, legCore, 5, 12), pantsMaterial);
+    const leftLeg = new THREE.Mesh(legGeometry, pantsMaterial);
     leftLeg.position.set(0, -legTotal * 0.5, 0);
     leftLegPivot.add(leftLeg);
-    const leftShoe = new THREE.Mesh(new THREE.BoxGeometry(shoeWidth, shoeHeight, shoeLength), shoeMaterial);
-    leftShoe.position.set(-shoeOutset, -legTotal - shoeHeight * 0.35, shoeLength * 0.08);
+    const leftShoe = new THREE.Mesh(shoeGeometry, shoeMaterial);
+    leftShoe.position.set(
+      -shoeOutset,
+      -legTotal - shoeHeight * 0.35,
+      shoeLength * 0.08,
+    );
     leftLegPivot.add(leftShoe);
     poseRoot.add(leftLegPivot);
 
     const rightLegPivot = new THREE.Group();
     rightLegPivot.position.set(legGap, hipY, 0);
-    const rightLeg = new THREE.Mesh(new THREE.CapsuleGeometry(legRadius, legCore, 5, 12), pantsMaterial);
+    const rightLeg = new THREE.Mesh(legGeometry, pantsMaterial);
     rightLeg.position.set(0, -legTotal * 0.5, 0);
     rightLegPivot.add(rightLeg);
-    const rightShoe = new THREE.Mesh(new THREE.BoxGeometry(shoeWidth, shoeHeight, shoeLength), shoeMaterial);
-    rightShoe.position.set(shoeOutset, -legTotal - shoeHeight * 0.35, shoeLength * 0.08);
+    const rightShoe = new THREE.Mesh(shoeGeometry, shoeMaterial);
+    rightShoe.position.set(
+      shoeOutset,
+      -legTotal - shoeHeight * 0.35,
+      shoeLength * 0.08,
+    );
     rightLegPivot.add(rightShoe);
     poseRoot.add(rightLegPivot);
     group.scale.setScalar(profile.visualScale);
@@ -690,7 +887,7 @@ export function createAvatarSystem({ scene, camera }) {
       headFace,
       eyeHeight: eyeHeight * profile.visualScale,
       skinColor: profile.skin,
-      lastKnockdownStarUpdateAt: 0
+      lastKnockdownStarUpdateAt: 0,
     };
   }
 
@@ -698,15 +895,29 @@ export function createAvatarSystem({ scene, camera }) {
     const wasDowned = avatar.isDowned;
     avatar.seenAtTick = true;
     avatar.targetYaw = visualYaw(character.yaw, character.controllerType);
-    avatar.lookPitch = THREE.MathUtils.clamp(Number(character.pitch || 0), -MAX_LOOK_PITCH_RAD, MAX_LOOK_PITCH_RAD);
-    avatar.inspectDownedTargetId = Number.isFinite(character.inspectDownedTargetId)
+    avatar.lookPitch = THREE.MathUtils.clamp(
+      Number(character.pitch || 0),
+      -MAX_LOOK_PITCH_RAD,
+      MAX_LOOK_PITCH_RAD,
+    );
+    avatar.inspectDownedTargetId = Number.isFinite(
+      character.inspectDownedTargetId,
+    )
       ? Number(character.inspectDownedTargetId)
       : -1;
-    avatar.inspectDownedActive = Boolean(character.inspectDownedActive) && avatar.inspectDownedTargetId >= 0;
+    avatar.inspectDownedActive =
+      Boolean(character.inspectDownedActive) &&
+      avatar.inspectDownedTargetId >= 0;
     avatar.attackFlashMsRemaining = character.attackFlashMsRemaining || 0;
     avatar.controllerType = character.controllerType || "AI";
-    const downedMsRemaining = Math.max(0, Number(character.downedMsRemaining || 0));
-    const downedDurationMs = Math.max(downedMsRemaining, Number(character.downedDurationMs || 0));
+    const downedMsRemaining = Math.max(
+      0,
+      Number(character.downedMsRemaining || 0),
+    );
+    const downedDurationMs = Math.max(
+      downedMsRemaining,
+      Number(character.downedDurationMs || 0),
+    );
 
     if (!avatar.initialized) {
       avatar.group.position.set(character.x, 0, character.z);
@@ -716,8 +927,12 @@ export function createAvatarSystem({ scene, camera }) {
     }
 
     if (downedMsRemaining > 0) {
-      const fallX = Number.isFinite(character.fallAwayX) ? Number(character.fallAwayX) : 0;
-      const fallZ = Number.isFinite(character.fallAwayZ) ? Number(character.fallAwayZ) : 1;
+      const fallX = Number.isFinite(character.fallAwayX)
+        ? Number(character.fallAwayX)
+        : 0;
+      const fallZ = Number.isFinite(character.fallAwayZ)
+        ? Number(character.fallAwayZ)
+        : 1;
       const fallLen = Math.hypot(fallX, fallZ);
       if (fallLen > 0.001) {
         avatar.fallAwayX = fallX / fallLen;
@@ -747,8 +962,15 @@ export function createAvatarSystem({ scene, camera }) {
       avatar.knockdownStarOrbit.visible = false;
     }
 
-    if (avatar.lastServerAt > 0 && avatar.lastServerX != null && avatar.lastServerZ != null) {
-      const serverJump = Math.hypot(character.x - avatar.lastServerX, character.z - avatar.lastServerZ);
+    if (
+      avatar.lastServerAt > 0 &&
+      avatar.lastServerX != null &&
+      avatar.lastServerZ != null
+    ) {
+      const serverJump = Math.hypot(
+        character.x - avatar.lastServerX,
+        character.z - avatar.lastServerZ,
+      );
       if (serverJump >= RESPAWN_JUMP_DISTANCE) {
         avatar.respawnHideMsRemaining = RESPAWN_HIDE_MS;
         avatar.group.visible = false;
@@ -762,10 +984,17 @@ export function createAvatarSystem({ scene, camera }) {
       }
 
       const dt = Math.max(0.001, (nowMs - avatar.lastServerAt) / 1000);
-      const dist = Math.hypot(character.x - avatar.lastServerX, character.z - avatar.lastServerZ);
-      const speedRatio = clamp01((dist / dt) / MOVE_SPEED_REFERENCE);
+      const dist = Math.hypot(
+        character.x - avatar.lastServerX,
+        character.z - avatar.lastServerZ,
+      );
+      const speedRatio = clamp01(dist / dt / MOVE_SPEED_REFERENCE);
       const moveTarget = avatar.isDowned ? 0 : speedRatio;
-      avatar.moveAmount = THREE.MathUtils.lerp(avatar.moveAmount, moveTarget, 0.5);
+      avatar.moveAmount = THREE.MathUtils.lerp(
+        avatar.moveAmount,
+        moveTarget,
+        0.5,
+      );
     } else {
       avatar.targetX = character.x;
       avatar.targetZ = character.z;
@@ -796,7 +1025,11 @@ export function createAvatarSystem({ scene, camera }) {
           const rightX = Math.cos(avatar.currentYaw);
           const rightZ = -Math.sin(avatar.currentYaw);
           const localX = rightX * dirX + rightZ * dirZ;
-          setAvatarEyeTarget(avatar, localX * INSPECT_EYE_SIDE_FACTOR, INSPECT_EYE_DOWN_LOOK);
+          setAvatarEyeTarget(
+            avatar,
+            localX * INSPECT_EYE_SIDE_FACTOR,
+            INSPECT_EYE_DOWN_LOOK,
+          );
           return;
         }
       }
@@ -812,7 +1045,8 @@ export function createAvatarSystem({ scene, camera }) {
         candidates.push(otherAvatar.id);
       }
       if (candidates.length > 0 && Math.random() < 0.78) {
-        avatar.gazeTargetId = candidates[Math.floor(Math.random() * candidates.length)];
+        avatar.gazeTargetId =
+          candidates[Math.floor(Math.random() * candidates.length)];
       } else {
         avatar.gazeTargetId = null;
       }
@@ -845,7 +1079,11 @@ export function createAvatarSystem({ scene, camera }) {
     const rightZ = -Math.sin(avatar.currentYaw);
     const localX = rightX * dirX + rightZ * dirZ;
 
-    const targetPitchY = THREE.MathUtils.clamp(-Number(target.lookPitch || 0) / MAX_LOOK_PITCH_RAD, -1, 1);
+    const targetPitchY = THREE.MathUtils.clamp(
+      -Number(target.lookPitch || 0) / MAX_LOOK_PITCH_RAD,
+      -1,
+      1,
+    );
     const driftY = Math.sin((nowMs + avatar.id * 53) * 0.002) * 0.24;
     const localY = THREE.MathUtils.clamp(targetPitchY * 0.88 + driftY, -1, 1);
     setAvatarEyeTarget(avatar, localX * 2.25, localY);
@@ -853,9 +1091,21 @@ export function createAvatarSystem({ scene, camera }) {
 
   function updatePlayerEyeTarget(avatar, nowMs) {
     const yawDrift = normalizeAngle(avatar.targetYaw - avatar.currentYaw);
-    const lookX = THREE.MathUtils.clamp(yawDrift * 6.1 + Math.sin(nowMs * 0.0018 + avatar.id * 1.3) * 0.32, -1, 1);
-    const pitchLookY = THREE.MathUtils.clamp(-avatar.lookPitch / MAX_LOOK_PITCH_RAD, -1, 1);
-    const lookY = THREE.MathUtils.clamp(pitchLookY * 0.95 + Math.cos(nowMs * 0.0016 + avatar.id * 1.1) * 0.15, -1, 1);
+    const lookX = THREE.MathUtils.clamp(
+      yawDrift * 6.1 + Math.sin(nowMs * 0.0018 + avatar.id * 1.3) * 0.32,
+      -1,
+      1,
+    );
+    const pitchLookY = THREE.MathUtils.clamp(
+      -avatar.lookPitch / MAX_LOOK_PITCH_RAD,
+      -1,
+      1,
+    );
+    const lookY = THREE.MathUtils.clamp(
+      pitchLookY * 0.95 + Math.cos(nowMs * 0.0016 + avatar.id * 1.1) * 0.15,
+      -1,
+      1,
+    );
     setAvatarEyeTarget(avatar, lookX, lookY);
   }
 
@@ -871,7 +1121,9 @@ export function createAvatarSystem({ scene, camera }) {
     } else {
       tmpFallAwayWorld.normalize();
     }
-    tmpFallAwayLocal.copy(tmpFallAwayWorld).applyAxisAngle(UP_AXIS, -avatar.currentYaw);
+    tmpFallAwayLocal
+      .copy(tmpFallAwayWorld)
+      .applyAxisAngle(UP_AXIS, -avatar.currentYaw);
     tmpFallAwayLocal.y = 0;
     if (tmpFallAwayLocal.lengthSq() < 0.000001) {
       tmpFallAwayLocal.set(0, 0, 1);
@@ -881,7 +1133,8 @@ export function createAvatarSystem({ scene, camera }) {
     tmpFallAxis.set(tmpFallAwayLocal.z, 0, -tmpFallAwayLocal.x).normalize();
     tmpFallQuat.setFromAxisAngle(tmpFallAxis, tiltRad);
 
-    const footX = tmpFallAwayLocal.x >= 0 ? avatar.footPivotX : -avatar.footPivotX;
+    const footX =
+      tmpFallAwayLocal.x >= 0 ? avatar.footPivotX : -avatar.footPivotX;
     tmpFootPivot.set(footX, avatar.footPivotY, avatar.footPivotZ);
     tmpRotatedFootPivot.copy(tmpFootPivot).applyQuaternion(tmpFallQuat);
 
@@ -891,7 +1144,8 @@ export function createAvatarSystem({ scene, camera }) {
 
   function updateKnockdownStars(avatar, nowMs) {
     if (!avatar.knockdownStarOrbit.visible) return;
-    if (nowMs - avatar.lastKnockdownStarUpdateAt < KNOCKDOWN_STAR_UPDATE_MS) return;
+    if (nowMs - avatar.lastKnockdownStarUpdateAt < KNOCKDOWN_STAR_UPDATE_MS)
+      return;
     avatar.lastKnockdownStarUpdateAt = nowMs;
     avatar.headMesh.getWorldPosition(tmpHeadWorld);
     tmpHeadLocal.copy(tmpHeadWorld);
@@ -906,7 +1160,7 @@ export function createAvatarSystem({ scene, camera }) {
       star.position.set(
         Math.cos(angle) * KNOCKDOWN_STAR_ORBIT_RADIUS,
         Math.sin(angle * 1.6 + phase) * 0.045,
-        Math.sin(angle) * KNOCKDOWN_STAR_ORBIT_RADIUS
+        Math.sin(angle) * KNOCKDOWN_STAR_ORBIT_RADIUS,
       );
       const pulse = 0.88 + 0.22 * Math.sin(nowMs * 0.008 + phase * 2.1);
       star.scale.setScalar(0.18 * pulse);
@@ -916,14 +1170,28 @@ export function createAvatarSystem({ scene, camera }) {
   function animateAvatar(avatar, deltaSec, avatarsById, nowMs) {
     if (!avatar.initialized) return;
     if (avatar.respawnHideMsRemaining > 0) {
-      avatar.respawnHideMsRemaining = Math.max(0, avatar.respawnHideMsRemaining - deltaSec * 1000);
+      avatar.respawnHideMsRemaining = Math.max(
+        0,
+        avatar.respawnHideMsRemaining - deltaSec * 1000,
+      );
       if (avatar.respawnHideMsRemaining <= 0) avatar.group.visible = true;
       return;
     }
-    avatar.attackFlashMsRemaining = Math.max(0, avatar.attackFlashMsRemaining - deltaSec * 1000);
+    avatar.attackFlashMsRemaining = Math.max(
+      0,
+      avatar.attackFlashMsRemaining - deltaSec * 1000,
+    );
     const posSmooth = 1 - Math.exp(-deltaSec * POSITION_SMOOTH_RATE);
-    avatar.group.position.x = THREE.MathUtils.lerp(avatar.group.position.x, avatar.targetX, posSmooth);
-    avatar.group.position.z = THREE.MathUtils.lerp(avatar.group.position.z, avatar.targetZ, posSmooth);
+    avatar.group.position.x = THREE.MathUtils.lerp(
+      avatar.group.position.x,
+      avatar.targetX,
+      posSmooth,
+    );
+    avatar.group.position.z = THREE.MathUtils.lerp(
+      avatar.group.position.z,
+      avatar.targetZ,
+      posSmooth,
+    );
 
     const yawDelta = normalizeAngle(avatar.targetYaw - avatar.currentYaw);
     const rotSmooth = 1 - Math.exp(-deltaSec * ROTATION_SMOOTH_RATE);
@@ -934,12 +1202,18 @@ export function createAvatarSystem({ scene, camera }) {
     avatar.yawGroup.rotation.y = avatar.currentYaw;
 
     if (avatar.isDowned) {
-      avatar.downedMsRemaining = Math.max(0, avatar.downedMsRemaining - deltaSec * 1000);
+      avatar.downedMsRemaining = Math.max(
+        0,
+        avatar.downedMsRemaining - deltaSec * 1000,
+      );
     }
 
     let tiltRad = 0;
     if (avatar.isDowned) {
-      const elapsedMs = Math.max(0, avatar.downedTotalMs - avatar.downedMsRemaining);
+      const elapsedMs = Math.max(
+        0,
+        avatar.downedTotalMs - avatar.downedMsRemaining,
+      );
       const fallT = clamp01(elapsedMs / KNOCKDOWN_FALL_MS);
       tiltRad = KNOCKDOWN_MAX_TILT_RAD * fallT;
     } else if (avatar.isRisingFromDowned) {
@@ -964,36 +1238,45 @@ export function createAvatarSystem({ scene, camera }) {
 
     let punch = 0;
     if (tiltRad <= 0.001 && avatar.attackFlashMsRemaining > 0) {
-      const progress = 1 - clamp01(avatar.attackFlashMsRemaining / ATTACK_ANIM_MS);
-      const extension = progress < 0.38 ? progress / 0.38 : 1 - (progress - 0.38) / 0.62;
+      const progress =
+        1 - clamp01(avatar.attackFlashMsRemaining / ATTACK_ANIM_MS);
+      const extension =
+        progress < 0.38 ? progress / 0.38 : 1 - (progress - 0.38) / 0.62;
       punch = clamp01(extension) * 1.9;
     }
 
     avatar.leftArmPivot.rotation.x = armBase;
     avatar.rightArmPivot.rotation.x = -armBase + punch;
 
-    if (avatar.controllerType === "AI") updateAIEyeTarget(avatar, avatarsById, nowMs);
+    if (avatar.controllerType === "AI")
+      updateAIEyeTarget(avatar, avatarsById, nowMs);
     else updatePlayerEyeTarget(avatar, nowMs);
 
     const eyeSmooth = 1 - Math.exp(-deltaSec * 14);
-    avatar.eyeX = THREE.MathUtils.lerp(avatar.eyeX, avatar.eyeTargetX, eyeSmooth);
-    avatar.eyeY = THREE.MathUtils.lerp(avatar.eyeY, avatar.eyeTargetY, eyeSmooth);
+    avatar.eyeX = THREE.MathUtils.lerp(
+      avatar.eyeX,
+      avatar.eyeTargetX,
+      eyeSmooth,
+    );
+    avatar.eyeY = THREE.MathUtils.lerp(
+      avatar.eyeY,
+      avatar.eyeTargetY,
+      eyeSmooth,
+    );
     const eyesClosed = avatar.isDowned;
     const dxCam = camera.position.x - avatar.group.position.x;
     const dzCam = camera.position.z - avatar.group.position.z;
     const distToCameraSq = dxCam * dxCam + dzCam * dzCam;
     const farFromCamera = distToCameraSq > EYE_DRAW_FAR_DISTANCE_SQ;
-    const drawIntervalMs = farFromCamera ? EYE_DRAW_INTERVAL_FAR_MS : EYE_DRAW_INTERVAL_NEAR_MS;
+    const drawIntervalMs = farFromCamera
+      ? EYE_DRAW_INTERVAL_FAR_MS
+      : EYE_DRAW_INTERVAL_NEAR_MS;
     const eyeThreshold = farFromCamera ? 0.03 : 0.01;
     if (
       eyesClosed !== avatar.lastDrawnEyesClosed ||
-      (
-        nowMs - avatar.lastEyeDrawAt >= drawIntervalMs &&
-        (
-          Math.abs(avatar.eyeX - avatar.lastDrawnEyeX) > eyeThreshold ||
-          Math.abs(avatar.eyeY - avatar.lastDrawnEyeY) > eyeThreshold
-        )
-      )
+      (nowMs - avatar.lastEyeDrawAt >= drawIntervalMs &&
+        (Math.abs(avatar.eyeX - avatar.lastDrawnEyeX) > eyeThreshold ||
+          Math.abs(avatar.eyeY - avatar.lastDrawnEyeY) > eyeThreshold))
     ) {
       avatar.headFace?.drawEyes?.(avatar.eyeX, avatar.eyeY, eyesClosed);
       avatar.lastDrawnEyeX = avatar.eyeX;
@@ -1014,7 +1297,8 @@ export function createAvatarSystem({ scene, camera }) {
     let punch = 0;
     if (firstPersonAttackMs > 0) {
       const progress = 1 - clamp01(firstPersonAttackMs / ATTACK_ANIM_MS);
-      const extension = progress < 0.35 ? progress / 0.35 : 1 - (progress - 0.35) / 0.65;
+      const extension =
+        progress < 0.35 ? progress / 0.35 : 1 - (progress - 0.35) / 0.65;
       punch = clamp01(extension) * 2.2;
     }
     firstPersonArmPivot.rotation.x = -1.12 + punch * 0.72;
@@ -1025,7 +1309,12 @@ export function createAvatarSystem({ scene, camera }) {
     firstPersonArmPivot.position.z = -0.5 - punch * 0.09;
   }
 
-  function applyWorldCharacters({ characters, myCharacterId, nowMs, hideMyCharacter = true }) {
+  function applyWorldCharacters({
+    characters,
+    myCharacterId,
+    nowMs,
+    hideMyCharacter = true,
+  }) {
     let myYaw = null;
     const downedHitEvents = [];
     for (const avatar of avatars.values()) avatar.seenAtTick = false;
@@ -1044,10 +1333,12 @@ export function createAvatarSystem({ scene, camera }) {
           characterId: character.id,
           x: Number(character.x) || 0,
           y: 0,
-          z: Number(character.z) || 0
+          z: Number(character.z) || 0,
         });
       }
-      avatar.group.visible = !(hideMyCharacter && character.id === myCharacterId);
+      avatar.group.visible = !(
+        hideMyCharacter && character.id === myCharacterId
+      );
 
       if (character.id === myCharacterId) {
         myYaw = character.yaw;
@@ -1071,11 +1362,18 @@ export function createAvatarSystem({ scene, camera }) {
       animateAvatar(avatar, deltaSec, avatars, nowMs);
       if (id === myCharacterId) {
         hasControl = true;
-        firstPersonAttackMs = Math.max(firstPersonAttackMs, avatar.attackFlashMsRemaining);
+        firstPersonAttackMs = Math.max(
+          firstPersonAttackMs,
+          avatar.attackFlashMsRemaining,
+        );
         if (firstPersonSkinMaterial.color && avatar.skinColor) {
           firstPersonSkinMaterial.color.copy(avatar.skinColor);
         }
-        camera.position.set(avatar.group.position.x, avatar.eyeHeight, avatar.group.position.z);
+        camera.position.set(
+          avatar.group.position.x,
+          avatar.eyeHeight,
+          avatar.group.position.z,
+        );
       }
     }
     animateFirstPersonArm(deltaSec, hasControl);
@@ -1096,22 +1394,52 @@ export function createAvatarSystem({ scene, camera }) {
     return dx * dx + dy * dy + dz * dz <= radius * radius;
   }
 
-  function isAimingAtCharacter({ myCharacterId, maxDistance = AIM_MAX_DISTANCE } = {}) {
+  function isAimingAtCharacter({
+    myCharacterId,
+    maxDistance = AIM_MAX_DISTANCE,
+  } = {}) {
     if (myCharacterId == null) return false;
     tmpAimOrigin.setFromMatrixPosition(camera.matrixWorld);
     camera.getWorldDirection(tmpAimDirection);
-    const safeMaxDistance = Math.max(0.2, Number(maxDistance) || AIM_MAX_DISTANCE);
+    const safeMaxDistance = Math.max(
+      0.2,
+      Number(maxDistance) || AIM_MAX_DISTANCE,
+    );
 
     for (const [id, avatar] of avatars.entries()) {
       if (id === myCharacterId) continue;
       if (!avatar.group.visible || avatar.isDowned) continue;
 
       tmpAimTarget.copy(avatar.group.position);
-      tmpAimTarget.y = Math.max(0.7, avatar.eyeHeight * AIM_HEAD_Y_OFFSET_RATIO);
-      if (rayHitsSphere(tmpAimOrigin, tmpAimDirection, tmpAimTarget, AIM_BODY_RADIUS, safeMaxDistance)) return true;
+      tmpAimTarget.y = Math.max(
+        0.7,
+        avatar.eyeHeight * AIM_HEAD_Y_OFFSET_RATIO,
+      );
+      if (
+        rayHitsSphere(
+          tmpAimOrigin,
+          tmpAimDirection,
+          tmpAimTarget,
+          AIM_BODY_RADIUS,
+          safeMaxDistance,
+        )
+      )
+        return true;
 
-      tmpAimTarget.y = Math.max(0.52, avatar.eyeHeight * AIM_CHEST_Y_OFFSET_RATIO);
-      if (rayHitsSphere(tmpAimOrigin, tmpAimDirection, tmpAimTarget, AIM_BODY_RADIUS, safeMaxDistance)) return true;
+      tmpAimTarget.y = Math.max(
+        0.52,
+        avatar.eyeHeight * AIM_CHEST_Y_OFFSET_RATIO,
+      );
+      if (
+        rayHitsSphere(
+          tmpAimOrigin,
+          tmpAimDirection,
+          tmpAimTarget,
+          AIM_BODY_RADIUS,
+          safeMaxDistance,
+        )
+      )
+        return true;
     }
     return false;
   }
@@ -1123,7 +1451,7 @@ export function createAvatarSystem({ scene, camera }) {
     return {
       x: avatar.group.position.x,
       y: avatar.group.position.y,
-      z: avatar.group.position.z
+      z: avatar.group.position.z,
     };
   }
 
@@ -1135,7 +1463,7 @@ export function createAvatarSystem({ scene, camera }) {
       x: avatar.group.position.x,
       z: avatar.group.position.z,
       yaw: avatar.currentYaw,
-      eyeHeight: avatar.eyeHeight
+      eyeHeight: avatar.eyeHeight,
     };
   }
 
@@ -1144,6 +1472,6 @@ export function createAvatarSystem({ scene, camera }) {
     animate,
     isAimingAtCharacter,
     getCharacterPosition,
-    getCharacterCameraState
+    getCharacterCameraState,
   };
 }

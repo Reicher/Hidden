@@ -29,7 +29,8 @@ const PRODUCT_SIDE_JITTER_METERS = 0.2; // +/- 20 cm along shelf length
 const PRODUCT_DEPTH_JITTER_METERS = 0.1; // +/- 10 cm toward/away from shelf front
 const POSTER_SIZE_METERS = 2.0;
 const POSTER_BOTTOM_Y_METERS = 1.2;
-const POSTER_CENTER_Y_METERS = POSTER_BOTTOM_Y_METERS + POSTER_SIZE_METERS * 0.5;
+const POSTER_CENTER_Y_METERS =
+  POSTER_BOTTOM_Y_METERS + POSTER_SIZE_METERS * 0.5;
 const POSTER_CORNER_MARGIN_METERS = 0.5;
 const POSTER_MIN_SPACING_METERS = 1.5;
 const POSTER_WALL_OFFSET_METERS = 0.012;
@@ -81,7 +82,10 @@ const TEXTURE_SPECS = Object.freeze({
 });
 
 function randomSeed32() {
-  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.getRandomValues === "function"
+  ) {
     const bytes = new Uint32Array(1);
     crypto.getRandomValues(bytes);
     return bytes[0] >>> 0;
@@ -92,11 +96,15 @@ function randomSeed32() {
 export function createRoomSystem({ scene, renderer }) {
   const textureLoader = new THREE.TextureLoader();
   const isLikelyTouchDevice = (() => {
-    const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
-    const hoverNone = window.matchMedia && window.matchMedia("(hover: none)").matches;
+    const coarsePointer =
+      window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    const hoverNone =
+      window.matchMedia && window.matchMedia("(hover: none)").matches;
     const touchApi = "ontouchstart" in window;
     const touchPoints = (navigator.maxTouchPoints || 0) > 0;
-    const mobileUa = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+    const mobileUa = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(
+      navigator.userAgent || "",
+    );
     return coarsePointer || hoverNone || touchApi || touchPoints || mobileUa;
   })();
   const textureAnisotropy = Math.min(
@@ -333,7 +341,8 @@ export function createRoomSystem({ scene, renderer }) {
       productVariantCount = 1;
       return;
     }
-    const cellWidth = imageWidth < PRODUCT_TILE_WIDTH ? imageWidth : PRODUCT_TILE_WIDTH;
+    const cellWidth =
+      imageWidth < PRODUCT_TILE_WIDTH ? imageWidth : PRODUCT_TILE_WIDTH;
     productVariantCount = Math.max(1, Math.floor(imageWidth / cellWidth));
   }
 
@@ -633,7 +642,8 @@ export function createRoomSystem({ scene, renderer }) {
 
   function loadTextureByKey(key) {
     const spec = TEXTURE_SPECS[key];
-    const url = Array.isArray(spec.urls) && spec.urls.length > 0 ? spec.urls[0] : null;
+    const url =
+      Array.isArray(spec.urls) && spec.urls.length > 0 ? spec.urls[0] : null;
     if (!url) {
       onTextureFailed(key);
       return;
@@ -783,7 +793,16 @@ export function createRoomSystem({ scene, renderer }) {
     target.push({ x, y, z, sx, sy, sz, yaw });
   }
 
-  function pushShelfLocalInstance(target, shelf, localX, localY, localZ, sx, sy, sz) {
+  function pushShelfLocalInstance(
+    target,
+    shelf,
+    localX,
+    localY,
+    localZ,
+    sx,
+    sy,
+    sz,
+  ) {
     const yaw = Number(shelf?.yaw || 0);
     const cos = Math.cos(yaw);
     const sin = Math.sin(yaw);
@@ -795,7 +814,10 @@ export function createRoomSystem({ scene, renderer }) {
   }
 
   function pushProductInstance(variantIndex, x, y, z, sx, sy, yaw) {
-    const normalized = ((Math.trunc(variantIndex) % Math.max(1, productVariantCount)) + Math.max(1, productVariantCount)) % Math.max(1, productVariantCount);
+    const normalized =
+      ((Math.trunc(variantIndex) % Math.max(1, productVariantCount)) +
+        Math.max(1, productVariantCount)) %
+      Math.max(1, productVariantCount);
     const bucket = productInstancesByVariant.get(normalized) || [];
     bucket.push({ x, y, z, sx, sy, yaw });
     if (!productInstancesByVariant.has(normalized)) {
@@ -806,7 +828,8 @@ export function createRoomSystem({ scene, renderer }) {
   function pushPosterInstance(variantIndex, x, y, z, yaw) {
     const state = textureStates.get("poster");
     const variantCount = Math.max(1, Number(state?.variantCount ?? 1));
-    const normalized = ((Math.trunc(variantIndex) % variantCount) + variantCount) % variantCount;
+    const normalized =
+      ((Math.trunc(variantIndex) % variantCount) + variantCount) % variantCount;
     const bucket = posterInstancesByVariant.get(normalized) || [];
     bucket.push({
       x,
@@ -814,14 +837,19 @@ export function createRoomSystem({ scene, renderer }) {
       z,
       sx: POSTER_SIZE_METERS,
       sy: POSTER_SIZE_METERS,
-      yaw
+      yaw,
     });
     if (!posterInstancesByVariant.has(normalized)) {
       posterInstancesByVariant.set(normalized, bucket);
     }
   }
 
-  function buildInstancedMesh({ geometry, material, instances, flipX = false }) {
+  function buildInstancedMesh({
+    geometry,
+    material,
+    instances,
+    flipX = false,
+  }) {
     if (!Array.isArray(instances) || instances.length <= 0) return null;
     const mesh = new THREE.InstancedMesh(geometry, material, instances.length);
     mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
@@ -856,12 +884,12 @@ export function createRoomSystem({ scene, renderer }) {
     buildInstancedMesh({
       geometry: shelfBoxGeometry,
       material: shelfBackMaterial,
-      instances: shelfBackInstances
+      instances: shelfBackInstances,
     });
     buildInstancedMesh({
-      geometry: shelfBoxGeometry.clone(),
+      geometry: shelfBoxGeometry,
       material: shelfBoardMaterial,
-      instances: shelfBoardInstances
+      instances: shelfBoardInstances,
     });
   }
 
@@ -875,7 +903,7 @@ export function createRoomSystem({ scene, renderer }) {
         geometry,
         material,
         instances: bucket,
-        flipX: true
+        flipX: true,
       });
     }
   }
@@ -888,16 +916,13 @@ export function createRoomSystem({ scene, renderer }) {
       buildInstancedMesh({
         geometry,
         material,
-        instances: bucket
+        instances: bucket,
       });
     }
   }
 
   function createWall(x, z, width, yaw) {
-    const material = createWallMaterial(
-      chooseVariantSeed(wallRng),
-      width,
-    );
+    const material = createWallMaterial(chooseVariantSeed(wallRng), width);
     const mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(width, WALL_HEIGHT),
       material,
@@ -959,7 +984,7 @@ export function createRoomSystem({ scene, renderer }) {
     for (let meter = 0; meter < meterCount; meter += 1) {
       const zCenter = zStart + meter + 0.5;
       for (let level = 0; level < shelfYs.length; level += 1) {
-        if (Math.random() > PRODUCT_SPAWN_CHANCE) continue;
+        if (productRng() > PRODUCT_SPAWN_CHANCE) continue;
         const currentTopY = shelfYs[level] + shelfThickness * 0.5;
         const nextBottomY =
           level < shelfYs.length - 1
@@ -970,15 +995,17 @@ export function createRoomSystem({ scene, renderer }) {
         if (!Number.isFinite(productHeight) || productHeight < 0.06) continue;
 
         const productIndex = chooseProductVariantIndex();
-        const sideJitter = (Math.random() * 2 - 1) * PRODUCT_SIDE_JITTER_METERS;
+        const sideJitter = (productRng() * 2 - 1) * PRODUCT_SIDE_JITTER_METERS;
         const depthJitter =
-          (Math.random() * 2 - 1) * PRODUCT_DEPTH_JITTER_METERS;
-        const yawJitter = (Math.random() * 2 - 1) * PRODUCT_YAW_JITTER_RAD;
+          (productRng() * 2 - 1) * PRODUCT_DEPTH_JITTER_METERS;
+        const yawJitter = (productRng() * 2 - 1) * PRODUCT_YAW_JITTER_RAD;
         const localX = centerX + depthJitter;
         const localY = currentTopY + productHeight * 0.5;
         const localZ = zCenter + sideJitter;
-        const worldX = shelf.x + localX * Math.cos(yaw) + localZ * Math.sin(yaw);
-        const worldZ = shelf.z + -localX * Math.sin(yaw) + localZ * Math.cos(yaw);
+        const worldX =
+          shelf.x + localX * Math.cos(yaw) + localZ * Math.sin(yaw);
+        const worldZ =
+          shelf.z + -localX * Math.sin(yaw) + localZ * Math.cos(yaw);
         pushProductInstance(
           productIndex,
           worldX,
@@ -1104,8 +1131,10 @@ export function createRoomSystem({ scene, renderer }) {
   }
 
   function fixtureAabb(fixture, fallbackWidth, fallbackDepth) {
-    const width = typeof fixture?.width === "number" ? fixture.width : fallbackWidth;
-    const depth = typeof fixture?.depth === "number" ? fixture.depth : fallbackDepth;
+    const width =
+      typeof fixture?.width === "number" ? fixture.width : fallbackWidth;
+    const depth =
+      typeof fixture?.depth === "number" ? fixture.depth : fallbackDepth;
     const yaw = typeof fixture?.yaw === "number" ? fixture.yaw : 0;
     const cos = Math.abs(Math.cos(yaw));
     const sin = Math.abs(Math.sin(yaw));
@@ -1117,7 +1146,7 @@ export function createRoomSystem({ scene, renderer }) {
       minX: x - halfX,
       maxX: x + halfX,
       minZ: z - halfZ,
-      maxZ: z + halfZ
+      maxZ: z + halfZ,
     };
   }
 
@@ -1152,7 +1181,7 @@ export function createRoomSystem({ scene, renderer }) {
     worldHeightMeters,
     shelves,
     coolers,
-    fixturesSignature
+    fixturesSignature,
   }) {
     const halfWorldWidth = worldWidthMeters * 0.5;
     const halfWorldHeight = worldHeightMeters * 0.5;
@@ -1168,7 +1197,7 @@ export function createRoomSystem({ scene, renderer }) {
         fixed: -halfWorldHeight + POSTER_WALL_OFFSET_METERS,
         min: horizontalMin,
         max: horizontalMax,
-        yaw: 0
+        yaw: 0,
       },
       {
         key: "posZ",
@@ -1176,7 +1205,7 @@ export function createRoomSystem({ scene, renderer }) {
         fixed: halfWorldHeight - POSTER_WALL_OFFSET_METERS,
         min: horizontalMin,
         max: horizontalMax,
-        yaw: Math.PI
+        yaw: Math.PI,
       },
       {
         key: "negX",
@@ -1184,7 +1213,7 @@ export function createRoomSystem({ scene, renderer }) {
         fixed: -halfWorldWidth + POSTER_WALL_OFFSET_METERS,
         min: verticalMin,
         max: verticalMax,
-        yaw: Math.PI / 2
+        yaw: Math.PI / 2,
       },
       {
         key: "posX",
@@ -1192,11 +1221,11 @@ export function createRoomSystem({ scene, renderer }) {
         fixed: halfWorldWidth - POSTER_WALL_OFFSET_METERS,
         min: verticalMin,
         max: verticalMax,
-        yaw: -Math.PI / 2
-      }
+        yaw: -Math.PI / 2,
+      },
     ].map((side) => ({
       ...side,
-      ranges: side.max > side.min ? [{ min: side.min, max: side.max }] : []
+      ranges: side.max > side.min ? [{ min: side.min, max: side.max }] : [],
     }));
     const sideByKey = new Map(sides.map((side) => [side.key, side]));
     const wallSnapTolerance = 0.65;
@@ -1223,20 +1252,25 @@ export function createRoomSystem({ scene, renderer }) {
         side.ranges = subtractBlockedRange(
           side.ranges,
           blocker.min - posterHalf,
-          blocker.max + posterHalf
+          blocker.max + posterHalf,
         );
       }
     }
 
     for (const shelf of shelves) blockFixture(shelf, SHELF_WIDTH, SHELF_DEPTH);
-    for (const cooler of coolers) blockFixture(cooler, COOLER_WIDTH, COOLER_DEPTH);
+    for (const cooler of coolers)
+      blockFixture(cooler, COOLER_WIDTH, COOLER_DEPTH);
 
-    const rng = seededRandom(hashString32([
-      worldWidthMeters,
-      worldHeightMeters,
-      fixturesSignature,
-      "posters"
-    ].join("|")));
+    const rng = seededRandom(
+      hashString32(
+        [
+          worldWidthMeters,
+          worldHeightMeters,
+          fixturesSignature,
+          "posters",
+        ].join("|"),
+      ),
+    );
     const candidates = [];
     for (const side of sides) {
       for (const range of side.ranges) {
@@ -1417,7 +1451,7 @@ export function createRoomSystem({ scene, renderer }) {
         fixtureSignature(shelves),
         fixtureSignature(coolers),
         fixtureSignature(freezers),
-      ].join("||")
+      ].join("||"),
     });
     buildStaticInstancedGeometry();
     buildProductInstancedMeshes();
