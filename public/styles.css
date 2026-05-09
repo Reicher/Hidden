@@ -416,6 +416,33 @@ button:disabled {
   background: var(--surface-3);
 }
 
+#countdownJoinBtn {
+  pointer-events: auto;
+  align-self: center;
+  justify-self: center;
+  padding: 14px 36px;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent, #4f8ef7);
+  color: #fff;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+#countdownJoinBtn:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+#countdownJoinBtn:active {
+  opacity: 0.75;
+  transform: translateY(0);
+}
+
 #countdownControlsCard {
   pointer-events: auto;
   background: var(--surface-glass);

@@ -31,7 +31,7 @@ export function createClientMessageProcessor({
   emitStatsEvent,
   logEvent,
   clampPitch,
-  normalizeAngle
+  normalizeAngle,
 }) {
   function dropMessage(session, reason) {
     session.net.droppedMessages += 1;
@@ -42,12 +42,15 @@ export function createClientMessageProcessor({
       session.net.dropWindowCount = 0;
     }
     session.net.dropWindowCount += 1;
-    if (session.net.droppedMessages === 1 || session.net.droppedMessages % 10 === 0) {
+    if (
+      session.net.droppedMessages === 1 ||
+      session.net.droppedMessages % 10 === 0
+    ) {
       logEvent("message_drop", {
         sessionId: shortSessionId(session.id),
         reason,
         droppedTotal: session.net.droppedMessages,
-        droppedInWindow: session.net.dropWindowCount
+        droppedInWindow: session.net.dropWindowCount,
       });
     }
     return session.net.dropWindowCount > constants.SPAM_MAX_DROPS_PER_WINDOW;
@@ -57,14 +60,16 @@ export function createClientMessageProcessor({
     const session = sessions.get(sessionId);
     if (!session) return "ignored";
     if (session.authenticated) {
-      sendToSession(sessionId, "login_error", { message: "Du är redan inloggad." });
+      sendToSession(sessionId, "login_error", {
+        message: "Du är redan inloggad.",
+      });
       return "ok";
     }
 
     const normalizedName = normalizePlayerName(name);
     if (normalizedName.length < constants.NAME_MIN_LEN) {
       sendToSession(sessionId, "login_error", {
-        message: `Namnet måste vara minst ${constants.NAME_MIN_LEN} tecken.`
+        message: `Namnet måste vara minst ${constants.NAME_MIN_LEN} tecken.`,
       });
       return "ok";
     }
@@ -74,13 +79,15 @@ export function createClientMessageProcessor({
         message: "Rummet är fullt.",
         reason: "room_full",
         roomCode: roomCode || null,
-        isPrivate
+        isPrivate,
       });
       return "ok";
     }
 
     if (findAuthenticatedByName(normalizedName)) {
-      sendToSession(sessionId, "login_error", { message: "Namnet är upptaget." });
+      sendToSession(sessionId, "login_error", {
+        message: "Namnet är upptaget.",
+      });
       return "ok";
     }
 
@@ -113,7 +120,7 @@ export function createClientMessageProcessor({
           session.input.attackRequested = false;
           appendSystemChat([
             { type: "player", name: normalizedName },
-            { type: "text", text: " återanslöt till pågående runda" }
+            { type: "text", text: " återanslöt till pågående runda" },
           ]);
         }
       }
@@ -122,11 +129,11 @@ export function createClientMessageProcessor({
 
     logEvent("session_login", {
       sessionId: shortSessionId(sessionId),
-      name: normalizedName
+      name: normalizedName,
     });
     emitStatsEvent("session_login", {
       sessionId: shortSessionId(sessionId),
-      name: normalizedName
+      name: normalizedName,
     });
 
     sendToSession(sessionId, "login_ok", {
@@ -134,11 +141,25 @@ export function createClientMessageProcessor({
       chatHistory: constants.chatHistory,
       maxPlayers: constants.MAX_PLAYERS,
       roomCode: roomCode || null,
-      isPrivate
+      isPrivate,
     });
+
+    // If a countdown is running, immediately inform the new player so they
+    // see the join-prompt without waiting for the first world-tick.
+    const activeCountdown = getLobbyCountdown();
+    if (activeCountdown) {
+      const msRemaining = Math.max(0, activeCountdown.endsAt - Date.now());
+      if (msRemaining > 0) {
+        sendToSession(sessionId, "countdown_info", {
+          msRemaining,
+          seconds: Math.max(1, Math.ceil(msRemaining / 1000)),
+        });
+      }
+    }
+
     appendSystemChat([
       { type: "player", name: normalizedName },
-      { type: "text", text: " joinade spelet" }
+      { type: "text", text: " joinade spelet" },
     ]);
     return "ok";
   }
@@ -154,7 +175,7 @@ export function createClientMessageProcessor({
       logEvent("chat", {
         sessionId: shortSessionId(sessionId),
         name: session.name,
-        text
+        text,
       });
       constants.broadcastChatToNonActivePlayers(entry);
       return "ok";
@@ -164,7 +185,7 @@ export function createClientMessageProcessor({
     logEvent("chat", {
       sessionId: shortSessionId(sessionId),
       name: session.name,
-      text
+      text,
     });
     constants.broadcast("chat", { entry });
     return "ok";
@@ -202,7 +223,7 @@ export function createClientMessageProcessor({
       const clientSentAt = Number(msg.clientSentAt);
       sendToSession(sessionId, "pong", {
         clientSentAt: Number.isFinite(clientSentAt) ? clientSentAt : null,
-        serverAt: at
+        serverAt: at,
       });
       return "ok";
     }
@@ -213,11 +234,15 @@ export function createClientMessageProcessor({
 
     if (msg.type === "spectate") {
       if (session.state === "alive" || session.state === "countdown") {
-        sendToSession(sessionId, "action_error", { message: "Du spelar redan i den här rundan." });
+        sendToSession(sessionId, "action_error", {
+          message: "Du spelar redan i den här rundan.",
+        });
         return "ok";
       }
       if (getActiveMatchStartedAt() <= 0) {
-        sendToSession(sessionId, "action_error", { message: "Ingen match pågår just nu." });
+        sendToSession(sessionId, "action_error", {
+          message: "Ingen match pågår just nu.",
+        });
         return "ok";
       }
       setSessionSpectating(session, at, { randomTarget: true });
@@ -234,23 +259,33 @@ export function createClientMessageProcessor({
     if (msg.type === "ready" || msg.type === "play") {
       if (session.state === "alive") return "ok";
       if (session.state === "spectating") {
-        sendToSession(sessionId, "action_error", { message: "Du åskådar just nu. Återgå till lobbyn först." });
+        sendToSession(sessionId, "action_error", {
+          message: "Du åskådar just nu. Återgå till lobbyn först.",
+        });
         return "ok";
       }
       if (session.state === "won") {
-        sendToSession(sessionId, "action_error", { message: "Du vann nyss. Återgå till lobbyn för ny runda." });
+        sendToSession(sessionId, "action_error", {
+          message: "Du vann nyss. Återgå till lobbyn för ny runda.",
+        });
         return "ok";
       }
       if (session.state === "downed") {
-        sendToSession(sessionId, "action_error", { message: "Du är nedslagen. Återgå till lobbyn med knappen." });
+        sendToSession(sessionId, "action_error", {
+          message: "Du är nedslagen. Återgå till lobbyn med knappen.",
+        });
         return "ok";
       }
       if (getPendingRoundReset()) {
-        sendToSession(sessionId, "action_error", { message: "Vänta tills vinnaren återgår till lobbyn." });
+        sendToSession(sessionId, "action_error", {
+          message: "Vänta tills vinnaren återgår till lobbyn.",
+        });
         return "ok";
       }
       if (getActiveMatchStartedAt() > 0) {
-        sendToSession(sessionId, "action_error", { message: "Match pågår. Vänta tills rundan är slut." });
+        sendToSession(sessionId, "action_error", {
+          message: "Match pågår. Vänta tills rundan är slut.",
+        });
         return "ok";
       }
       const wantsReady = msg.type === "play" ? true : msg.ready !== false;
@@ -263,7 +298,9 @@ export function createClientMessageProcessor({
         }
       } else if (session.ready) {
         if (session.state === "countdown") {
-          sendToSession(sessionId, "action_error", { message: "Nedräkning pågår. Du kan inte ångra ready nu." });
+          sendToSession(sessionId, "action_error", {
+            message: "Nedräkning pågår. Du kan inte ångra ready nu.",
+          });
           return "ok";
         }
         session.ready = false;
@@ -283,7 +320,7 @@ export function createClientMessageProcessor({
         returnToLobby(session, "left_match");
         appendSystemChat([
           { type: "player", name: session.name },
-          { type: "text", text: " lämnade matchen" }
+          { type: "text", text: " lämnade matchen" },
         ]);
       }
       return "ok";
@@ -312,11 +349,15 @@ export function createClientMessageProcessor({
     }
 
     if (msg.type === "attack") {
-      if (at - session.net.lastAttackRequestAt < constants.ATTACK_MESSAGE_MIN_MS) {
+      if (
+        at - session.net.lastAttackRequestAt <
+        constants.ATTACK_MESSAGE_MIN_MS
+      ) {
         return dropMessage(session, "rate_attack") ? "abuse" : "dropped";
       }
       session.net.lastAttackRequestAt = at;
-      session.input.attackRequested = session.state === "alive" && session.characterId != null;
+      session.input.attackRequested =
+        session.state === "alive" && session.characterId != null;
       return "ok";
     }
 
@@ -324,6 +365,6 @@ export function createClientMessageProcessor({
   }
 
   return {
-    processClientMessage
+    processClientMessage,
   };
 }

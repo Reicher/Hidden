@@ -82,6 +82,7 @@ import {
   countdownTextEl,
   countdownCharacterCanvasEl,
   countdownControlsTextEl,
+  countdownJoinBtnEl,
   gameHudEl,
   crosshairHudEl,
   crosshairCooldownArcEl,
@@ -946,6 +947,12 @@ function updateReadyButton() {
     playBtnEl.disabled = false;
     playBtnEl.textContent = "Inte redo";
     buttonReadyState = "ready";
+  } else if (lobbyCountdownMsRemaining > 0) {
+    // Player is in lobby watching an active countdown – join button is shown in overlay,
+    // but keep lobby button usable as backup (labelled clearly).
+    playBtnEl.disabled = false;
+    playBtnEl.textContent = "Gå med";
+    buttonReadyState = "not-ready";
   } else {
     playBtnEl.disabled = false;
     playBtnEl.textContent = "Redo";
@@ -1276,6 +1283,10 @@ function setCountdownTextFromSession(state) {
   lobbyCountdownMsRemaining = ms;
   if (countdownControlsTextEl)
     countdownControlsTextEl.textContent = controlsTextForCurrentMode();
+  // Show join button when the player is in lobby (watching countdown) but not yet participating
+  const canJoin =
+    ms > 0 && state?.state === "lobby" && Boolean(state?.authenticated);
+  countdownJoinBtnEl?.classList.toggle("hidden", !canJoin);
   if (ms > 0) {
     const sec = Math.max(1, Math.ceil(ms / 1000));
     countdownTextEl.textContent = String(sec);
@@ -1501,6 +1512,8 @@ const socketMessageContext = createSocketMessageContext({
     requestPointerLockSafe,
     renderScoreboard,
     playHitHurtAtPosition,
+    cancelAutoReconnect: () =>
+      socketConnection?.cancelAutoReconnectOnLoginError?.(),
     setViewYaw: (value) => {
       viewYaw = value;
     },
@@ -1522,6 +1535,11 @@ socketConnection = createSocketConnectionController({
   resetInputState,
   onConnectingChanged: () => {
     updateConnectButton();
+  },
+  onAutoReconnecting: ({ attempt, maxAttempts }) => {
+    setConnectError(
+      `Anslutningen bröts. Återansluter om ${2}s\u2026 (försök ${attempt}/${maxAttempts})`,
+    );
   },
 });
 
@@ -1644,6 +1662,7 @@ bindAppEventHandlers({
     mobileControlsModeBtnEl,
     fullscreenModeCheckboxEl,
     countdownControlsTextEl,
+    countdownJoinBtnEl,
   },
   constants: {
     GAME_CREDITS_TEXT,
@@ -1688,6 +1707,14 @@ bindAppEventHandlers({
     resize,
     playUiBlipSfx,
     getActiveSocket: () => socketConnection?.getSocket() || null,
+    requestJoinCountdown: () => {
+      const activeSocket = socketConnection?.getSocket();
+      if (!activeSocket || !authenticated) return;
+      if (sessionState !== "lobby" || lobbyCountdownMsRemaining <= 0) return;
+      activeSocket.sendJson({ type: "ready", ready: true });
+      sessionReady = true;
+      updateReadyButton();
+    },
   },
   state: {
     getAuthenticated: () => authenticated,

@@ -21,6 +21,7 @@ export function handleSocketMessage(msg, ctx) {
   }
 
   if (msg.type === "login_error") {
+    actions.cancelAutoReconnect?.();
     actions.resetSessionRuntimeState({ clearIdentity: true });
     actions.setAppMode("connect");
     actions.setConnectError(msg.message || "Inloggning misslyckades.");
@@ -52,6 +53,17 @@ export function handleSocketMessage(msg, ctx) {
   if (msg.type === "countdown") {
     actions.setCountdownTextFromSession({
       countdownMsRemaining: Number(msg.seconds || 1) * 1000,
+    });
+    return;
+  }
+
+  // Sent right after login_ok when a countdown is already running.
+  // Use it to show the join-prompt immediately without waiting for the first world tick.
+  if (msg.type === "countdown_info") {
+    actions.setCountdownTextFromSession({
+      countdownMsRemaining: Number(msg.msRemaining || 0),
+      state: "lobby",
+      authenticated: state.authenticated,
     });
     return;
   }

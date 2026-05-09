@@ -16,16 +16,26 @@
           <div class="card login-card">
             <h1>Hidden</h1>
             <p class="connect-tagline">Smält in. Hitta spelarna. Slå först.</p>
-            <input id="nameInput" type="text" placeholder="Ditt namn" maxlength="20" autocomplete="off" />
+            <input
+              id="nameInput"
+              type="text"
+              placeholder="Ditt namn"
+              maxlength="20"
+              autocomplete="off"
+            />
             <button id="connectBtn" type="button">Anslut</button>
             <div id="connectError" class="error" aria-live="polite"></div>
-            <button id="createPrivateRoomBtn" class="hidden" type="button">Skapa privat rum</button>
+            <button id="createPrivateRoomBtn" class="hidden" type="button">
+              Skapa privat rum
+            </button>
             <p id="roomInfo" class="room-info"></p>
           </div>
           <aside id="newsCard" class="news-card" aria-live="polite">
             <p id="newsVersion" class="news-meta">Nyheter version -</p>
             <p id="newsPublishedAt" class="news-meta hidden"></p>
-            <p id="newsNotes" class="news-notes">Hämtar senaste versionsnyheter.</p>
+            <p id="newsNotes" class="news-notes">
+              Hämtar senaste versionsnyheter.
+            </p>
           </aside>
         </div>
       </section>
@@ -33,8 +43,21 @@
       <section id="lobbyView" class="view hidden">
         <div id="lobbyMatchStatus" aria-live="polite">
           <span id="lobbyMatchStatusTitle">Offentligt rum</span>
-          <button id="playBtn" type="button" data-ready-state="not-ready" aria-pressed="false">Redo</button>
-          <button id="lobbySettingsBtn" type="button" aria-label="Inställningar">⚙</button>
+          <button
+            id="playBtn"
+            type="button"
+            data-ready-state="not-ready"
+            aria-pressed="false"
+          >
+            Redo
+          </button>
+          <button
+            id="lobbySettingsBtn"
+            type="button"
+            aria-label="Inställningar"
+          >
+            ⚙
+          </button>
         </div>
 
         <div id="lobbyMain">
@@ -42,13 +65,34 @@
             <table id="scoreTable">
               <thead>
                 <tr>
-                  <th><span class="th-full">Namn</span><span class="th-short"></span></th>
-                  <th><span class="th-full">Vinster</span><span class="th-short">V</span></th>
-                  <th><span class="th-full">Nedslagningar</span><span class="th-short">K</span></th>
-                  <th><span class="th-full">Streak</span><span class="th-short">S</span></th>
-                  <th><span class="th-full">Nedslagen</span><span class="th-short">D</span></th>
-                  <th><span class="th-full">Oskyldiga</span><span class="th-short">O</span></th>
-                  <th><span class="th-full">Status</span><span class="th-short">St</span></th>
+                  <th>
+                    <span class="th-full">Namn</span
+                    ><span class="th-short"></span>
+                  </th>
+                  <th>
+                    <span class="th-full">Vinster</span
+                    ><span class="th-short">V</span>
+                  </th>
+                  <th>
+                    <span class="th-full">Nedslagningar</span
+                    ><span class="th-short">K</span>
+                  </th>
+                  <th>
+                    <span class="th-full">Streak</span
+                    ><span class="th-short">S</span>
+                  </th>
+                  <th>
+                    <span class="th-full">Nedslagen</span
+                    ><span class="th-short">D</span>
+                  </th>
+                  <th>
+                    <span class="th-full">Oskyldiga</span
+                    ><span class="th-short">O</span>
+                  </th>
+                  <th>
+                    <span class="th-full">Status</span
+                    ><span class="th-short">St</span>
+                  </th>
                 </tr>
               </thead>
               <tbody id="scoreBody"></tbody>
@@ -61,22 +105,40 @@
           <div id="chatPanel">
             <div id="chatMessages"></div>
             <div id="chatInputRow">
-              <input id="chatInput" type="text" placeholder="Skriv i chatten..." maxlength="220" autocomplete="off" />
+              <input
+                id="chatInput"
+                type="text"
+                placeholder="Skriv i chatten..."
+                maxlength="220"
+                autocomplete="off"
+              />
               <button id="chatSendBtn" type="button">Skicka</button>
             </div>
           </div>
         </div>
         <div id="lobbyMenuBackdrop" class="hidden">
-          <div id="lobbyMenuCard" role="dialog" aria-modal="true" aria-labelledby="lobbyMenuTitle">
+          <div
+            id="lobbyMenuCard"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lobbyMenuTitle"
+          >
             <h2 id="lobbyMenuTitle">Meny</h2>
-            <button id="lobbyMenuSettingsBtn" type="button">Inställningar</button>
+            <button id="lobbyMenuSettingsBtn" type="button">
+              Inställningar
+            </button>
             <button id="lobbyMenuCreditsBtn" type="button">Om spelet</button>
             <button id="lobbyMenuCloseBtn" type="button">Stäng</button>
           </div>
         </div>
       </section>
       <div id="lobbyDialogBackdrop" class="hidden">
-        <div id="lobbyDialogCard" role="dialog" aria-modal="true" aria-labelledby="lobbyDialogTitle">
+        <div
+          id="lobbyDialogCard"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="lobbyDialogTitle"
+        >
           <h2 id="lobbyDialogTitle"></h2>
           <p id="lobbyDialogText"></p>
           <div id="settingsPanel" class="hidden">
@@ -87,14 +149,32 @@
             <div class="settingsOptionRow settingsFullscreenRow">
               <span>Helskärm</span>
               <span class="settingsInlineHint">kan saknas</span>
-              <input id="fullscreenModeCheckbox" type="checkbox" aria-label="Helskärmsläge" />
+              <input
+                id="fullscreenModeCheckbox"
+                type="checkbox"
+                aria-label="Helskärmsläge"
+              />
             </div>
-            <p id="settingsFullscreenHelp">Helskärm stöds inte i den här webbläsaren.</p>
-            <p id="settingsTrackpadHelp">Styrplatta: prova högre känslighet (160-220%) och stäng av utjämning.</p>
+            <p id="settingsFullscreenHelp">
+              Helskärm stöds inte i den här webbläsaren.
+            </p>
+            <p id="settingsTrackpadHelp">
+              Styrplatta: prova högre känslighet (160-220%) och stäng av
+              utjämning.
+            </p>
             <div class="settingsAudioRow">
               <span>Tittkänslighet</span>
-              <input id="lookSensitivityInput" type="range" min="50" max="220" step="1" value="100" />
-              <span id="lookSensitivityValue" class="settingsRangeValue">100%</span>
+              <input
+                id="lookSensitivityInput"
+                type="range"
+                min="50"
+                max="220"
+                step="1"
+                value="100"
+              />
+              <span id="lookSensitivityValue" class="settingsRangeValue"
+                >100%</span
+              >
             </div>
             <div class="settingsOptionRow settingsLookSmoothingRow">
               <span>Siktesutjämning</span>
@@ -102,12 +182,26 @@
             </div>
             <div class="settingsAudioRow">
               <span>Musikvolym</span>
-              <input id="musicVolumeInput" type="range" min="0" max="100" step="1" value="80" />
+              <input
+                id="musicVolumeInput"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value="80"
+              />
               <button id="musicMuteBtn" type="button">Tysta</button>
             </div>
             <div class="settingsAudioRow">
               <span>Ljudvolym</span>
-              <input id="sfxVolumeInput" type="range" min="0" max="100" step="1" value="90" />
+              <input
+                id="sfxVolumeInput"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value="90"
+              />
               <button id="sfxMuteBtn" type="button">Tysta</button>
             </div>
             <p id="settingsAudioHelp">Inställningarna sparas lokalt</p>
@@ -122,9 +216,17 @@
           <div id="countdownText"></div>
           <div id="countdownCharacterCard">
             <span id="countdownCharacterLabel">Din karaktär</span>
-            <canvas id="countdownCharacterCanvas" width="164" height="164" aria-label="Karaktärspreview"></canvas>
+            <canvas
+              id="countdownCharacterCanvas"
+              width="164"
+              height="164"
+              aria-label="Karaktärspreview"
+            ></canvas>
           </div>
         </div>
+        <button id="countdownJoinBtn" type="button" class="hidden">
+          Gå med i matchen
+        </button>
         <div id="countdownControlsCard">
           <h3 id="countdownControlsTitle">Kontroller</h3>
           <p id="countdownControlsText"></p>
@@ -151,11 +253,25 @@
       <div id="spectatorHud" class="hidden">
         <p id="spectatorTargetText">Åskådar ingen</p>
         <div id="spectatorCycleButtons">
-          <button id="spectatorPrevBtn" type="button" aria-label="Föregående spelare">◀</button>
-          <button id="spectatorNextBtn" type="button" aria-label="Nästa spelare">▶</button>
+          <button
+            id="spectatorPrevBtn"
+            type="button"
+            aria-label="Föregående spelare"
+          >
+            ◀
+          </button>
+          <button
+            id="spectatorNextBtn"
+            type="button"
+            aria-label="Nästa spelare"
+          >
+            ▶
+          </button>
         </div>
         <div id="spectatorActionRow">
-          <button id="spectatorLobbyBtn" type="button">Återgå till lobbyn</button>
+          <button id="spectatorLobbyBtn" type="button">
+            Återgå till lobbyn
+          </button>
         </div>
       </div>
       <div id="knockdownToast" class="hidden">Du slog ner X</div>
@@ -176,16 +292,29 @@
       <div id="gameChatBox">
         <div id="gameChatMessages"></div>
         <div id="gameChatInputRow" class="hidden">
-          <input id="gameChatInput" type="text" placeholder="Skriv meddelande..." maxlength="220" autocomplete="off" />
+          <input
+            id="gameChatInput"
+            type="text"
+            placeholder="Skriv meddelande..."
+            maxlength="220"
+            autocomplete="off"
+          />
           <button id="gameChatSendBtn" type="button">Chatta</button>
         </div>
       </div>
       <div id="gameMenuBackdrop" class="hidden">
-        <div id="gameMenuCard" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
+        <div
+          id="gameMenuCard"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gameMenuTitle"
+        >
           <h2 id="gameMenuTitle">Meny</h2>
           <button id="gameMenuSettingsBtn" type="button">Inställningar</button>
           <button id="gameMenuCreditsBtn" type="button">Om spelet</button>
-          <button id="gameMenuLobbyBtn" type="button">Återgå till lobbyn</button>
+          <button id="gameMenuLobbyBtn" type="button">
+            Återgå till lobbyn
+          </button>
           <button id="gameMenuCloseBtn" type="button">Stäng</button>
         </div>
       </div>

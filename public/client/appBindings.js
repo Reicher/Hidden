@@ -10,7 +10,7 @@ export function bindAppEventHandlers({
   constants,
   deps,
   actions,
-  state
+  state,
 }) {
   const {
     canvas,
@@ -49,7 +49,8 @@ export function bindAppEventHandlers({
     sfxMuteBtnEl,
     mobileControlsModeBtnEl,
     fullscreenModeCheckboxEl,
-    countdownControlsTextEl
+    countdownControlsTextEl,
+    countdownJoinBtnEl,
   } = elements;
 
   const {
@@ -59,14 +60,14 @@ export function bindAppEventHandlers({
     DEBUG_OVERLAY_TOGGLE_SHORTCUT,
     DEBUG_OVERLAY_TOUCH_HOLD_MS,
     DEBUG_OVERLAY_UNLOCK_TOUCH_HOLD_MS,
-    IS_TOUCH_DEVICE
+    IS_TOUCH_DEVICE,
   } = constants;
 
   const {
     randomPrivateRoomCode,
     clampVolume,
     persistAudioSettings,
-    persistLookSettings
+    persistLookSettings,
   } = deps;
 
   const {
@@ -94,7 +95,8 @@ export function bindAppEventHandlers({
     updateReadyButton,
     resize,
     playUiBlipSfx,
-    getActiveSocket
+    getActiveSocket,
+    requestJoinCountdown,
   } = actions;
 
   let debugLongPressTimer = null;
@@ -107,6 +109,9 @@ export function bindAppEventHandlers({
   }
 
   connectBtnEl?.addEventListener("click", connectAndLogin);
+  countdownJoinBtnEl?.addEventListener("click", () => {
+    requestJoinCountdown?.();
+  });
   createPrivateRoomBtnEl?.addEventListener("click", () => {
     const code = randomPrivateRoomCode();
     location.assign(`/${encodeURIComponent(code)}`);
@@ -122,7 +127,12 @@ export function bindAppEventHandlers({
       return;
     }
     const sessionState = state.getSessionState();
-    if (sessionState === "alive" || sessionState === "downed" || sessionState === "won") return;
+    if (
+      sessionState === "alive" ||
+      sessionState === "downed" ||
+      sessionState === "won"
+    )
+      return;
     if (state.getSessionReady() && sessionState === "countdown") return;
     const nextReady = !state.getSessionReady();
     activeSocket.sendJson({ type: "ready", ready: nextReady });
@@ -181,7 +191,9 @@ export function bindAppEventHandlers({
     if (event.pointerType && event.pointerType !== "touch") return;
     if (state.getAppMode() !== "playing") return;
     const unlockMode = !canUseDebugOverlay?.();
-    const holdMs = unlockMode ? DEBUG_OVERLAY_UNLOCK_TOUCH_HOLD_MS : DEBUG_OVERLAY_TOUCH_HOLD_MS;
+    const holdMs = unlockMode
+      ? DEBUG_OVERLAY_UNLOCK_TOUCH_HOLD_MS
+      : DEBUG_OVERLAY_TOUCH_HOLD_MS;
     clearDebugLongPressTimer();
     debugLongPressTimer = setTimeout(() => {
       debugLongPressTimer = null;
@@ -192,7 +204,10 @@ export function bindAppEventHandlers({
   });
   gameMenuBtnEl?.addEventListener("pointerup", clearDebugLongPressTimer);
   gameMenuBtnEl?.addEventListener("pointercancel", clearDebugLongPressTimer);
-  gameMenuBtnEl?.addEventListener("lostpointercapture", clearDebugLongPressTimer);
+  gameMenuBtnEl?.addEventListener(
+    "lostpointercapture",
+    clearDebugLongPressTimer,
+  );
   gameMenuCloseBtnEl?.addEventListener("click", () => {
     setGameMenuOpen(false, { restorePointerLock: true });
   });
@@ -215,7 +230,8 @@ export function bindAppEventHandlers({
   });
   spectatorLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
   gameMenuBackdropEl?.addEventListener("click", (event) => {
-    if (event.target === gameMenuBackdropEl) setGameMenuOpen(false, { restorePointerLock: true });
+    if (event.target === gameMenuBackdropEl)
+      setGameMenuOpen(false, { restorePointerLock: true });
   });
   lobbyDialogCloseBtnEl?.addEventListener("click", closeLobbyDialog);
   lobbyDialogBackdropEl?.addEventListener("click", (event) => {
@@ -246,22 +262,28 @@ export function bindAppEventHandlers({
     refreshAudioSettingsUi();
   });
   mobileControlsModeBtnEl?.addEventListener("click", () => {
-    const idx = MOBILE_CONTROLS_PREFS.indexOf(state.getMobileControlsPreference());
-    const next = MOBILE_CONTROLS_PREFS[(idx + 1) % MOBILE_CONTROLS_PREFS.length];
+    const idx = MOBILE_CONTROLS_PREFS.indexOf(
+      state.getMobileControlsPreference(),
+    );
+    const next =
+      MOBILE_CONTROLS_PREFS[(idx + 1) % MOBILE_CONTROLS_PREFS.length];
     persistMobileControlsPreference(next);
     refreshAudioSettingsUi();
-    if (countdownControlsTextEl) countdownControlsTextEl.textContent = controlsTextForCurrentMode();
+    if (countdownControlsTextEl)
+      countdownControlsTextEl.textContent = controlsTextForCurrentMode();
     updateMobileControlsVisibility();
   });
   fullscreenModeCheckboxEl?.addEventListener("change", () => {
     const nextEnabled = Boolean(fullscreenModeCheckboxEl.checked);
     const maybePromise = setFullscreenEnabled?.(nextEnabled);
     if (maybePromise && typeof maybePromise.then === "function") {
-      maybePromise.then((applied) => {
-        if (applied === false) refreshAudioSettingsUi();
-      }).catch(() => {
-        refreshAudioSettingsUi();
-      });
+      maybePromise
+        .then((applied) => {
+          if (applied === false) refreshAudioSettingsUi();
+        })
+        .catch(() => {
+          refreshAudioSettingsUi();
+        });
       return;
     }
     refreshAudioSettingsUi();
@@ -269,7 +291,12 @@ export function bindAppEventHandlers({
   lookSensitivityInputEl?.addEventListener("input", () => {
     const lookSettings = state.getLookSettings();
     const nextValue = Number(lookSensitivityInputEl.value);
-    const next = { ...lookSettings, sensitivity: Number.isFinite(nextValue) ? nextValue : lookSettings.sensitivity };
+    const next = {
+      ...lookSettings,
+      sensitivity: Number.isFinite(nextValue)
+        ? nextValue
+        : lookSettings.sensitivity,
+    };
     if (typeof setLookSettings === "function") setLookSettings(next);
     if (lookSensitivityValueEl) {
       const liveValue = Number(lookSensitivityInputEl.value);
@@ -279,7 +306,10 @@ export function bindAppEventHandlers({
   });
   lookSmoothingToggleBtnEl?.addEventListener("click", () => {
     const lookSettings = state.getLookSettings();
-    const next = { ...lookSettings, smoothingEnabled: !lookSettings.smoothingEnabled };
+    const next = {
+      ...lookSettings,
+      smoothingEnabled: !lookSettings.smoothingEnabled,
+    };
     setLookSettings(next);
     refreshAudioSettingsUi();
     persistLookSettings(next);
@@ -330,7 +360,11 @@ export function bindAppEventHandlers({
       return;
     }
     if (state.getAppMode() === "lobby" && event.key === "Escape") {
-      if (!state.getLobbyMenuOpen() && lobbyDialogBackdropEl?.classList.contains("hidden")) return;
+      if (
+        !state.getLobbyMenuOpen() &&
+        lobbyDialogBackdropEl?.classList.contains("hidden")
+      )
+        return;
       event.preventDefault();
       if (state.getLobbyMenuOpen()) {
         setLobbyMenuOpen(false);
@@ -347,7 +381,10 @@ export function bindAppEventHandlers({
       }
       const sessionState = state.getSessionState();
       if (sessionState !== "alive" && sessionState !== "spectating") return;
-      if (lobbyDialogBackdropEl && !lobbyDialogBackdropEl.classList.contains("hidden")) {
+      if (
+        lobbyDialogBackdropEl &&
+        !lobbyDialogBackdropEl.classList.contains("hidden")
+      ) {
         event.preventDefault();
         closeLobbyDialog();
         requestPointerLockSafe(canvas);
