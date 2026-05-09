@@ -30,7 +30,7 @@ export function createRoomTickLoop({
   scoreboardSnapshot,
   countdownMsRemaining,
   send,
-  onTick = null
+  onTick = null,
 }) {
   const KNOCKDOWN_RISE_LOCK_MS = 420;
   let lastTickAt = Date.now();
@@ -49,9 +49,15 @@ export function createRoomTickLoop({
     let matchEndedByTimeout = false;
     for (const session of sessions.values()) {
       if (!session.authenticated) continue;
-      if (session.state !== "won" && session.state !== "downed" && session.state !== "spectating") continue;
+      if (
+        session.state !== "won" &&
+        session.state !== "downed" &&
+        session.state !== "spectating"
+      )
+        continue;
       const returnAt = Number(session.returnToLobbyAt || 0);
-      if (!Number.isFinite(returnAt) || returnAt <= 0 || now < returnAt) continue;
+      if (!Number.isFinite(returnAt) || returnAt <= 0 || now < returnAt)
+        continue;
       releaseOwnedCharacter(session.id);
       returnToLobby(session, "match_end_timeout");
       matchEndedByTimeout = true;
@@ -61,7 +67,10 @@ export function createRoomTickLoop({
     }
     if (getPendingRoundReset()) {
       const hasEndMatchParticipants = authenticatedSessions().some(
-        (session) => session.state === "won" || session.state === "downed" || session.state === "spectating"
+        (session) =>
+          session.state === "won" ||
+          session.state === "downed" ||
+          session.state === "spectating",
       );
       if (!hasEndMatchParticipants) {
         resetArenaForNextRound(now);
@@ -88,10 +97,16 @@ export function createRoomTickLoop({
       }
       if (c.wasDownedLastTick) {
         c.wasDownedLastTick = false;
-        c.downedRecoveryUntil = Math.max(Number(c.downedRecoveryUntil || 0), now + KNOCKDOWN_RISE_LOCK_MS);
+        c.downedRecoveryUntil = Math.max(
+          Number(c.downedRecoveryUntil || 0),
+          now + KNOCKDOWN_RISE_LOCK_MS,
+        );
         c.ai.mode = "stop";
         c.ai.desiredYaw = c.yaw;
-        c.ai.nextDecisionAt = Math.max(Number(c.ai.nextDecisionAt || 0), c.downedRecoveryUntil);
+        c.ai.nextDecisionAt = Math.max(
+          Number(c.ai.nextDecisionAt || 0),
+          c.downedRecoveryUntil,
+        );
       }
       if (now < Number(c.downedRecoveryUntil || 0)) continue;
 
@@ -100,16 +115,27 @@ export function createRoomTickLoop({
         continue;
       }
 
-      const ownerSession = c.ownerSessionId ? sessions.get(c.ownerSessionId) : null;
-      if (!ownerSession || (ownerSession.state !== "alive" && ownerSession.state !== "countdown" && ownerSession.state !== "won")) {
+      const ownerSession = c.ownerSessionId
+        ? sessions.get(c.ownerSessionId)
+        : null;
+      if (
+        !ownerSession ||
+        (ownerSession.state !== "alive" &&
+          ownerSession.state !== "countdown" &&
+          ownerSession.state !== "won")
+      ) {
         c.controllerType = "AI";
         c.ownerSessionId = null;
         continue;
       }
 
-      if (ownerSession.state === "alive" || ownerSession.state === "won") movement.updatePlayer(c, ownerSession, dt);
+      if (ownerSession.state === "alive" || ownerSession.state === "won")
+        movement.updatePlayer(c, ownerSession, dt);
 
-      if (ownerSession.state === "alive" && ownerSession.input.attackRequested) {
+      if (
+        ownerSession.state === "alive" &&
+        ownerSession.input.attackRequested
+      ) {
         handleAttack(c.id, now);
         ownerSession.input.attackRequested = false;
       }
@@ -123,7 +149,10 @@ export function createRoomTickLoop({
       let winnerSession = null;
       if (alivePlayers === 1) {
         winnerSession =
-          authenticatedSessions().find((session) => session.state === "alive" && session.characterId != null) || null;
+          authenticatedSessions().find(
+            (session) =>
+              session.state === "alive" && session.characterId != null,
+          ) || null;
       }
       endCurrentMatch(now, winnerSession);
       alivePlayers = activePlayerCount();
@@ -138,13 +167,15 @@ export function createRoomTickLoop({
       activeMatchStartedAt = 0;
     }
 
-    for (const session of sessions.values()) maintainSpectatorTarget(session, now);
+    for (const session of sessions.values())
+      maintainSpectatorTarget(session, now);
 
     const match = {
       inProgress: alivePlayers > 0,
       alivePlayers,
       startedAt: activeMatchStartedAt || null,
-      elapsedMs: activeMatchStartedAt ? now - activeMatchStartedAt : 0
+      elapsedMs: activeMatchStartedAt ? now - activeMatchStartedAt : 0,
+      pendingReset: getPendingRoundReset(),
     };
     if (now >= nextScoreboardRefreshAt) {
       cachedScoreboard = scoreboardSnapshot();
@@ -175,20 +206,31 @@ export function createRoomTickLoop({
           c.ai.inspectDownedTargetId >= 0 &&
           now < Number(c.ai?.inspectDownedUntil || 0),
         controllerType: c.controllerType,
-        cooldownMsRemaining: Math.max(0, constants.ATTACK_COOLDOWN_MS - (now - c.lastAttackAt)),
-        attackFlashMsRemaining: Math.max(0, constants.ATTACK_FLASH_MS - (now - c.lastAttackAt)),
+        cooldownMsRemaining: Math.max(
+          0,
+          constants.ATTACK_COOLDOWN_MS - (now - c.lastAttackAt),
+        ),
+        attackFlashMsRemaining: Math.max(
+          0,
+          constants.ATTACK_FLASH_MS - (now - c.lastAttackAt),
+        ),
         downedMsRemaining: Math.max(0, c.downedUntil - now),
         downedDurationMs: constants.NPC_DOWNED_RESPAWN_MS,
         fallAwayX: Number((c.fallAwayX || 0).toFixed(3)),
-        fallAwayZ: Number((c.fallAwayZ || 1).toFixed(3))
-      }))
+        fallAwayZ: Number((c.fallAwayZ || 1).toFixed(3)),
+      })),
     };
 
     for (const [sessionId, ws] of sockets.entries()) {
       const session = sessions.get(sessionId);
-      const playerCharacter = session && session.characterId != null ? characters[session.characterId] : null;
+      const playerCharacter =
+        session && session.characterId != null
+          ? characters[session.characterId]
+          : null;
       const spectatorTargetSession =
-        session?.spectatingSessionId != null ? sessions.get(session.spectatingSessionId) : null;
+        session?.spectatingSessionId != null
+          ? sessions.get(session.spectatingSessionId)
+          : null;
       const spectatorTargetName = spectatorTargetSession?.name || null;
       send(ws, "world", {
         ...worldState,
@@ -205,7 +247,9 @@ export function createRoomTickLoop({
               minPlayersToStart: constants.MIN_PLAYERS_TO_START,
               maxPlayers: constants.MAX_PLAYERS,
               returnToLobbyMsRemaining:
-                session.state === "won" || session.state === "downed" || session.state === "spectating"
+                session.state === "won" ||
+                session.state === "downed" ||
+                session.state === "spectating"
                   ? Math.max(0, (session.returnToLobbyAt || 0) - now)
                   : 0,
               eliminatedByName:
@@ -213,27 +257,34 @@ export function createRoomTickLoop({
                   ? session.eliminatedByName || null
                   : null,
               spectatorTargetCharacterId:
-                session.state === "spectating" ? session.spectatingCharacterId ?? null : null,
-              spectatorTargetName: session.state === "spectating" ? spectatorTargetName : null,
+                session.state === "spectating"
+                  ? (session.spectatingCharacterId ?? null)
+                  : null,
+              spectatorTargetName:
+                session.state === "spectating" ? spectatorTargetName : null,
               spectatorCandidates:
                 session.state === "spectating"
                   ? spectatorCandidates.map((candidate) => ({
                       name: candidate.name,
-                      characterId: candidate.characterId
+                      characterId: candidate.characterId,
                     }))
                   : [],
               attackCooldownMsRemaining: playerCharacter
-                ? Math.max(0, constants.ATTACK_COOLDOWN_MS - (now - playerCharacter.lastAttackAt))
-                : 0
+                ? Math.max(
+                    0,
+                    constants.ATTACK_COOLDOWN_MS -
+                      (now - playerCharacter.lastAttackAt),
+                  )
+                : 0,
             }
-          : null
+          : null,
       });
     }
 
     if (typeof onTick === "function") {
       onTick({
         at: now,
-        durationMs: Math.max(0, Date.now() - tickStartedAt)
+        durationMs: Math.max(0, Date.now() - tickStartedAt),
       });
     }
   }, constants.TICK_MS);

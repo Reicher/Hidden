@@ -79,6 +79,7 @@ export function handleSocketMessage(msg, ctx) {
       alivePlayers: Number(msg.match.alivePlayers || 0),
       startedAt: msg.match.startedAt || null,
       elapsedMs: Number(msg.match.elapsedMs || 0),
+      pendingReset: Boolean(msg.match.pendingReset),
     };
   } else {
     state.currentMatch = { ...constants.DEFAULT_MATCH_STATE };

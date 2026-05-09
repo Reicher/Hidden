@@ -933,6 +933,9 @@ function updateReadyButton() {
   } else if (sessionState === "spectating") {
     playBtnEl.disabled = true;
     playBtnEl.textContent = "Åskådar";
+  } else if (currentMatch.pendingReset) {
+    playBtnEl.disabled = true;
+    playBtnEl.textContent = "Avslutar match...";
   } else if (currentMatch.inProgress) {
     playBtnEl.disabled = false;
     playBtnEl.textContent = "Åskåda";
