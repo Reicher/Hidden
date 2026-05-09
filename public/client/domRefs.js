@@ -78,6 +78,7 @@ export const gameChatBoxEl           = document.getElementById("gameChatBox");
 export const gameChatMessagesEl      = document.getElementById("gameChatMessages");
 export const gameChatInputRowEl      = document.getElementById("gameChatInputRow");
 export const gameChatInputEl         = document.getElementById("gameChatInput");
+export const gameChatSendBtnEl       = document.getElementById("gameChatSendBtn");
 
 // ─── Settings panel ───────────────────────────────────────────────────────────
 export const mobileControlsModeBtnEl = document.getElementById("mobileControlsModeBtn");
@@ -105,8 +106,6 @@ export const downedOverlayEl         = document.getElementById("downedOverlay");
 export const downedByTextEl          = document.getElementById("downedByText");
 export const downedCountdownTextEl   = document.getElementById("downedCountdownText");
 export const downedLobbyBtnEl        = document.getElementById("downedLobbyBtn");
-export const downedChatBtnEl         = document.getElementById("downedChatBtn");
-export const downedSpectateBtnEl     = document.getElementById("downedSpectateBtn");
 
 // ─── Win overlay ──────────────────────────────────────────────────────────────
 export const winOverlayEl            = document.getElementById("winOverlay");
@@ -119,5 +118,5 @@ export const spectatorHudEl          = document.getElementById("spectatorHud");
 export const spectatorTargetTextEl   = document.getElementById("spectatorTargetText");
 export const spectatorPrevBtnEl      = document.getElementById("spectatorPrevBtn");
 export const spectatorNextBtnEl      = document.getElementById("spectatorNextBtn");
+export const spectatorActionRowEl    = document.getElementById("spectatorActionRow");
 export const spectatorLobbyBtnEl     = document.getElementById("spectatorLobbyBtn");
-export const spectatorChatBtnEl      = document.getElementById("spectatorChatBtn");

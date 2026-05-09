@@ -26,6 +26,7 @@ export function bindAppEventHandlers({
     chatSendBtnEl,
     chatInputEl,
     gameChatInputEl,
+    gameChatSendBtnEl,
     gameMenuBtnEl,
     gameMenuBackdropEl,
     gameMenuSettingsBtnEl,
@@ -33,13 +34,10 @@ export function bindAppEventHandlers({
     gameMenuCloseBtnEl,
     gameMenuLobbyBtnEl,
     downedLobbyBtnEl,
-    downedChatBtnEl,
-    downedSpectateBtnEl,
     winLobbyBtnEl,
     spectatorPrevBtnEl,
     spectatorNextBtnEl,
     spectatorLobbyBtnEl,
-    spectatorChatBtnEl,
     lobbyDialogBackdropEl,
     lobbyDialogCloseBtnEl,
     lookSensitivityInputEl,
@@ -167,6 +165,7 @@ export function bindAppEventHandlers({
       setGameChatOpen(false, { restorePointerLock: true });
     }
   });
+  gameChatSendBtnEl?.addEventListener("click", sendInGameChat);
   gameMenuBtnEl?.addEventListener("click", () => {
     if (suppressNextGameMenuClick) {
       suppressNextGameMenuClick = false;
@@ -207,10 +206,6 @@ export function bindAppEventHandlers({
   });
   gameMenuLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
   downedLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
-  downedChatBtnEl?.addEventListener("click", () => {
-    setGameChatOpen(!state.getGameChatOpen());
-  });
-  downedSpectateBtnEl?.addEventListener("click", requestSpectate);
   winLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
   spectatorPrevBtnEl?.addEventListener("click", () => {
     requestSpectatorCycle(-1);
@@ -219,9 +214,6 @@ export function bindAppEventHandlers({
     requestSpectatorCycle(1);
   });
   spectatorLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
-  spectatorChatBtnEl?.addEventListener("click", () => {
-    setGameChatOpen(!state.getGameChatOpen());
-  });
   gameMenuBackdropEl?.addEventListener("click", (event) => {
     if (event.target === gameMenuBackdropEl) setGameMenuOpen(false, { restorePointerLock: true });
   });

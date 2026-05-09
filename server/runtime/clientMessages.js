@@ -149,6 +149,16 @@ export function createClientMessageProcessor({
     if (session.state === "alive") return "ok";
     const text = normalizeChatText(textRaw);
     if (!text) return "ok";
+    if (session.state === "spectating") {
+      const entry = constants.appendChat({ name: session.name, text });
+      logEvent("chat", {
+        sessionId: shortSessionId(sessionId),
+        name: session.name,
+        text
+      });
+      constants.broadcastChatToNonActivePlayers(entry);
+      return "ok";
+    }
 
     const entry = constants.appendChat({ name: session.name, text });
     logEvent("chat", {

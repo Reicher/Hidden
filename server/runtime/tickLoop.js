@@ -208,7 +208,10 @@ export function createRoomTickLoop({
                 session.state === "won" || session.state === "downed" || session.state === "spectating"
                   ? Math.max(0, (session.returnToLobbyAt || 0) - now)
                   : 0,
-              eliminatedByName: session.state === "downed" ? session.eliminatedByName || null : null,
+              eliminatedByName:
+                session.state === "downed" || session.state === "spectating"
+                  ? session.eliminatedByName || null
+                  : null,
               spectatorTargetCharacterId:
                 session.state === "spectating" ? session.spectatingCharacterId ?? null : null,
               spectatorTargetName: session.state === "spectating" ? spectatorTargetName : null,

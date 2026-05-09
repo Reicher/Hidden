@@ -1,6 +1,9 @@
 import { createSceneSystem } from "./client/scene.js";
 import { createRoomSystem } from "./client/room.js";
-import { createAvatarSystem, drawCountdownCharacterPreview } from "./client/avatars.js";
+import {
+  createAvatarSystem,
+  drawCountdownCharacterPreview,
+} from "./client/avatars.js";
 import { createGameSocket } from "./client/network.js";
 import { createChatUi } from "./client/chatUi.js";
 import {
@@ -8,13 +11,16 @@ import {
   updateDownedOverlay as updateDownedOverlayUi,
   updateInGameHud as updateInGameHudUi,
   updateKnockdownToast as updateKnockdownToastUi,
-  updateWinOverlay as updateWinOverlayUi
+  updateWinOverlay as updateWinOverlayUi,
 } from "./client/hudUi.js";
 import { GAME_CREDITS_TEXT } from "./client/about.js";
 import { createInputController } from "./client/inputControls.js";
 import { handleSocketMessage } from "./client/socketMessages.js";
 import { createSocketConnectionController } from "./client/socketConnection.js";
-import { createSocketState, createSocketMessageContext } from "./client/socketContext.js";
+import {
+  createSocketState,
+  createSocketMessageContext,
+} from "./client/socketContext.js";
 import { bindAppEventHandlers } from "./client/appBindings.js";
 import { normalizeAngle, colorForName } from "./client/utils.js";
 import { renderScoreboard as renderScoreboardFn } from "./client/scoreboard.js";
@@ -25,39 +31,109 @@ import {
   activeRoomPath,
   randomPrivateRoomCode,
   normalizeMobileControlsPreference,
-  mobileControlsLabel
+  mobileControlsLabel,
 } from "./client/appHelpers.js";
 import {
   clampVolume,
   loadAudioSettings,
-  persistAudioSettings
+  persistAudioSettings,
 } from "./client/audioSettings.js";
 import {
   loadLookSettings,
   persistLookSettings,
   lookSensitivityMultiplier,
-  lookSmoothingRate
+  lookSmoothingRate,
 } from "./client/lookSettings.js";
 import {
-  canvas, screenRootEl,
-  connectViewEl, connectErrorEl, roomInfoEl, nameInputEl, connectBtnEl, createPrivateRoomBtnEl,
-  newsCardEl, newsVersionEl, newsPublishedAtEl, newsNotesEl,
-  lobbyViewEl, scoreBodyEl, chatMessagesEl, chatInputEl, chatSendBtnEl, playBtnEl,
-  lobbyMatchStatusEl, lobbyMatchStatusTitleEl, lobbyStatusRowEl, lobbyStatusTextEl, lobbyPlayersMetaEl,
-  lobbySettingsBtnEl, lobbyMenuBackdropEl, lobbyMenuSettingsBtnEl, lobbyMenuCreditsBtnEl, lobbyMenuCloseBtnEl,
-  lobbyDialogBackdropEl, lobbyDialogTitleEl, lobbyDialogTextEl, lobbyDialogCloseBtnEl, settingsPanelEl,
-  countdownOverlayEl, countdownTextEl, countdownCharacterCanvasEl, countdownControlsTextEl,
-  gameHudEl, crosshairHudEl, crosshairCooldownArcEl, aliveOthersTextEl,
-  debugOverlayEl, debugFpsTextEl, debugFrameTimeTextEl, debugPingTextEl, knockdownToastEl,
-  gameMenuBtnEl, gameMenuBackdropEl, gameMenuSettingsBtnEl, gameMenuCreditsBtnEl, gameMenuCloseBtnEl, gameMenuLobbyBtnEl,
-  gameChatNoticeEl, gameChatBoxEl, gameChatMessagesEl, gameChatInputRowEl, gameChatInputEl,
-  mobileControlsModeBtnEl, fullscreenModeCheckboxEl, settingsFullscreenHelpEl,
-  lookSensitivityInputEl, lookSensitivityValueEl, lookSmoothingToggleBtnEl,
-  musicVolumeInputEl, musicMuteBtnEl, sfxVolumeInputEl, sfxMuteBtnEl,
-  mobileControlsEl, mobileJoystickBaseEl, mobileJoystickKnobEl, mobileLookPadEl, mobileSprintBtnEl, mobileAttackBtnEl, mobileLandscapePromptEl,
-  downedOverlayEl, downedByTextEl, downedCountdownTextEl, downedLobbyBtnEl, downedChatBtnEl, downedSpectateBtnEl,
-  winOverlayEl, winTitleEl, winCountdownTextEl, winLobbyBtnEl,
-  spectatorHudEl, spectatorTargetTextEl, spectatorPrevBtnEl, spectatorNextBtnEl, spectatorLobbyBtnEl, spectatorChatBtnEl
+  canvas,
+  screenRootEl,
+  connectViewEl,
+  connectErrorEl,
+  roomInfoEl,
+  nameInputEl,
+  connectBtnEl,
+  createPrivateRoomBtnEl,
+  newsCardEl,
+  newsVersionEl,
+  newsPublishedAtEl,
+  newsNotesEl,
+  lobbyViewEl,
+  scoreBodyEl,
+  chatMessagesEl,
+  chatInputEl,
+  chatSendBtnEl,
+  playBtnEl,
+  lobbyMatchStatusEl,
+  lobbyMatchStatusTitleEl,
+  lobbyStatusRowEl,
+  lobbyStatusTextEl,
+  lobbyPlayersMetaEl,
+  lobbySettingsBtnEl,
+  lobbyMenuBackdropEl,
+  lobbyMenuSettingsBtnEl,
+  lobbyMenuCreditsBtnEl,
+  lobbyMenuCloseBtnEl,
+  lobbyDialogBackdropEl,
+  lobbyDialogTitleEl,
+  lobbyDialogTextEl,
+  lobbyDialogCloseBtnEl,
+  settingsPanelEl,
+  countdownOverlayEl,
+  countdownTextEl,
+  countdownCharacterCanvasEl,
+  countdownControlsTextEl,
+  gameHudEl,
+  crosshairHudEl,
+  crosshairCooldownArcEl,
+  aliveOthersTextEl,
+  debugOverlayEl,
+  debugFpsTextEl,
+  debugFrameTimeTextEl,
+  debugPingTextEl,
+  knockdownToastEl,
+  gameMenuBtnEl,
+  gameMenuBackdropEl,
+  gameMenuSettingsBtnEl,
+  gameMenuCreditsBtnEl,
+  gameMenuCloseBtnEl,
+  gameMenuLobbyBtnEl,
+  gameChatNoticeEl,
+  gameChatBoxEl,
+  gameChatMessagesEl,
+  gameChatInputRowEl,
+  gameChatInputEl,
+  gameChatSendBtnEl,
+  mobileControlsModeBtnEl,
+  fullscreenModeCheckboxEl,
+  settingsFullscreenHelpEl,
+  lookSensitivityInputEl,
+  lookSensitivityValueEl,
+  lookSmoothingToggleBtnEl,
+  musicVolumeInputEl,
+  musicMuteBtnEl,
+  sfxVolumeInputEl,
+  sfxMuteBtnEl,
+  mobileControlsEl,
+  mobileJoystickBaseEl,
+  mobileJoystickKnobEl,
+  mobileLookPadEl,
+  mobileSprintBtnEl,
+  mobileAttackBtnEl,
+  mobileLandscapePromptEl,
+  downedOverlayEl,
+  downedByTextEl,
+  downedCountdownTextEl,
+  downedLobbyBtnEl,
+  winOverlayEl,
+  winTitleEl,
+  winCountdownTextEl,
+  winLobbyBtnEl,
+  spectatorHudEl,
+  spectatorTargetTextEl,
+  spectatorPrevBtnEl,
+  spectatorNextBtnEl,
+  spectatorActionRowEl,
+  spectatorLobbyBtnEl,
 } from "./client/domRefs.js";
 
 const PLAYER_NAME_KEY = "hidden_player_name";
@@ -65,7 +141,8 @@ const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
 const DEBUG_OVERLAY_ALLOWED_KEY = "hidden_debug_overlay_allowed";
 
 const sceneSystem = createSceneSystem(canvas);
-const { renderer, scene, camera, resize, setRenderScale, getRenderScale } = sceneSystem;
+const { renderer, scene, camera, resize, setRenderScale, getRenderScale } =
+  sceneSystem;
 const roomSystem = createRoomSystem({ scene, renderer });
 const avatarSystem = createAvatarSystem({ scene, camera });
 
@@ -82,14 +159,22 @@ let gameChatOpen = false;
 let gameMenuOpen = false;
 let lobbyMenuOpen = false;
 let forceYawSyncOnNextWorld = false;
-const DEFAULT_MATCH_STATE = Object.freeze({ inProgress: false, alivePlayers: 0, startedAt: null, elapsedMs: 0 });
+const DEFAULT_MATCH_STATE = Object.freeze({
+  inProgress: false,
+  alivePlayers: 0,
+  startedAt: null,
+  elapsedMs: 0,
+});
 let currentMatch = { ...DEFAULT_MATCH_STATE };
 let lobbyScoreboard = [];
 let lobbyCountdownMsRemaining = 0;
 let lobbyMinPlayersToStart = 2;
 let lobbyMaxPlayers = 0;
 let winReturnToLobbyMsRemaining = 0;
+let winMessageHideAtMs = 0;
 let downedByName = "";
+let downedMessageHideAtMs = 0;
+let downedMessageSuppressed = false;
 let knockdownToastText = "";
 let knockdownToastMsRemaining = 0;
 let pendingLoginName = "";
@@ -119,6 +204,8 @@ const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
 const JOYSTICK_DEADZONE = 0.16;
 const DOWNED_CAMERA_HEIGHT = 4.6;
 const DOWNED_CAMERA_POS_SMOOTH_RATE = 9;
+const DOWNED_MESSAGE_VISIBLE_MS = 2800;
+const WIN_MESSAGE_VISIBLE_MS = 2000;
 const KNOCKDOWN_TOAST_MS = 5000;
 const SPECTATOR_CAMERA_DISTANCE = 1.42;
 const SPECTATOR_CAMERA_HEIGHT_OFFSET = 0.28;
@@ -131,17 +218,32 @@ const MOBILE_RENDER_SCALE_MAX = 1;
 const MOBILE_RENDER_SCALE_STEP_DOWN = 0.07;
 const MOBILE_RENDER_SCALE_STEP_UP = 0.04;
 const MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS = 1500;
-const FORCE_MOBILE_UI = new URLSearchParams(location.search).get("mobileUi") === "1";
-const DEBUG_OVERLAY_QUERY_PARAM = new URLSearchParams(location.search).get("debugOverlay");
+const FORCE_MOBILE_UI =
+  new URLSearchParams(location.search).get("mobileUi") === "1";
+const DEBUG_OVERLAY_QUERY_PARAM = new URLSearchParams(location.search).get(
+  "debugOverlay",
+);
 const IS_TOUCH_DEVICE = (() => {
-  const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
-  const hoverNone = window.matchMedia && window.matchMedia("(hover: none)").matches;
+  const coarsePointer =
+    window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  const hoverNone =
+    window.matchMedia && window.matchMedia("(hover: none)").matches;
   const touchApi = "ontouchstart" in window;
   const touchPoints = (navigator.maxTouchPoints || 0) > 0;
-  const mobileUa = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
-  return coarsePointer || hoverNone || touchApi || touchPoints || mobileUa || FORCE_MOBILE_UI;
+  const mobileUa = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(
+    navigator.userAgent || "",
+  );
+  return (
+    coarsePointer ||
+    hoverNone ||
+    touchApi ||
+    touchPoints ||
+    mobileUa ||
+    FORCE_MOBILE_UI
+  );
 })();
-let debugOverlayAllowed = !IS_TOUCH_DEVICE || localStorage.getItem(DEBUG_OVERLAY_ALLOWED_KEY) === "1";
+let debugOverlayAllowed =
+  !IS_TOUCH_DEVICE || localStorage.getItem(DEBUG_OVERLAY_ALLOWED_KEY) === "1";
 if (DEBUG_OVERLAY_QUERY_PARAM === "1") {
   debugOverlayAllowed = true;
   localStorage.setItem(DEBUG_OVERLAY_ALLOWED_KEY, "1");
@@ -154,7 +256,9 @@ if (DEBUG_OVERLAY_QUERY_PARAM === "0") {
 let viewPitch = 0;
 let viewYaw = 0;
 let lastFrameAt = performance.now();
-let mobileControlsPreference = normalizeMobileControlsPreference(localStorage.getItem(MOBILE_CONTROLS_PREF_KEY));
+let mobileControlsPreference = normalizeMobileControlsPreference(
+  localStorage.getItem(MOBILE_CONTROLS_PREF_KEY),
+);
 let audioSettings = loadAudioSettings();
 let lookSettings = loadLookSettings();
 let debugOverlayOpen = false;
@@ -173,25 +277,22 @@ let lastScoreboardSignature = "";
 const musicLoopEl = new Audio("/assets/sounds/music.wav");
 const uiBlipSfxTemplateEl = new Audio("/assets/sounds/blipSelect.wav");
 const hitHurtSfxTemplateEl = new Audio("/assets/sounds/hitHurt.wav");
-const winSfxTemplateEl = new Audio("/assets/sounds/win.wav");
 uiBlipSfxTemplateEl.preload = "auto";
 hitHurtSfxTemplateEl.preload = "auto";
-winSfxTemplateEl.preload = "auto";
 musicLoopEl.loop = true;
 musicLoopEl.preload = "auto";
 const HIT_SFX_MIN_DISTANCE = 0.8;
 const HIT_SFX_MAX_DISTANCE = 13;
 const HIT_SFX_BASE_GAIN = 0.95;
-const WIN_SFX_DELAY_MS = 1100;
 const GAMEPLAY_SUMMARY_TEXT = "Håll dig gömd, hitta spelare och slå ner dem.";
-const DESKTOP_CONTROLS_TEXT = "Desktop: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack.";
+const DESKTOP_CONTROLS_TEXT =
+  "Desktop: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack.";
 const MOBILE_CONTROLS_TEXT =
   "Mobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta.";
 let lastCountdownPreviewCharacterId = null;
-let winSfxTimeout = null;
 const ROOM_INFO_DEFAULTS = Object.freeze({
   maxPlayers: 10,
-  totalCharacters: 20
+  totalCharacters: 20,
 });
 
 const chatUi = createChatUi({
@@ -202,7 +303,7 @@ const chatUi = createChatUi({
     if (sessionState === "alive") return Boolean(entry?.system);
     return true;
   },
-  maxGameLines: GAME_CHAT_MAX_LINES
+  maxGameLines: GAME_CHAT_MAX_LINES,
 });
 
 function clampPitch(value) {
@@ -234,10 +335,14 @@ const inputController = createInputController({
   getGameMenuOpen: () => gameMenuOpen,
   getGameChatOpen: () => gameChatOpen,
   isGameChatFocused,
-  requestPointerLock: requestPointerLockSafe
+  requestPointerLock: requestPointerLockSafe,
 });
 
-function roomInfoText({ roomCode = null, maxPlayers = ROOM_INFO_DEFAULTS.maxPlayers, totalCharacters = ROOM_INFO_DEFAULTS.totalCharacters } = {}) {
+function roomInfoText({
+  roomCode = null,
+  maxPlayers = ROOM_INFO_DEFAULTS.maxPlayers,
+  totalCharacters = ROOM_INFO_DEFAULTS.totalCharacters,
+} = {}) {
   const scopeText = roomCode ? `Privat rum: ${roomCode}` : "Offentligt rum";
   return `${scopeText} · Max ${maxPlayers} spelare av ${totalCharacters} karaktärer`;
 }
@@ -250,31 +355,48 @@ function lobbyRoomNameFromPath() {
 
 function scoreboardSignature(players) {
   if (!Array.isArray(players) || players.length <= 0) return "";
-  return players.map((p) => [
-    p?.name || "",
-    p?.ready ? 1 : 0,
-    p?.wins ?? 0,
-    p?.knockdowns ?? 0,
-    p?.streak ?? 0,
-    p?.downed ?? 0,
-    p?.innocents ?? 0,
-    p?.status || ""
-  ].join(":")).join("|");
+  return players
+    .map((p) =>
+      [
+        p?.name || "",
+        p?.ready ? 1 : 0,
+        p?.wins ?? 0,
+        p?.knockdowns ?? 0,
+        p?.streak ?? 0,
+        p?.downed ?? 0,
+        p?.innocents ?? 0,
+        p?.status || "",
+      ].join(":"),
+    )
+    .join("|");
 }
 
 function adaptRenderScale(nowMs, frameMs) {
   if (!IS_TOUCH_DEVICE || appMode !== "playing") return;
   smoothFrameMs += (frameMs - smoothFrameMs) * 0.06;
-  if (nowMs - lastQualityAdjustAt < MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS) return;
+  if (nowMs - lastQualityAdjustAt < MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS)
+    return;
 
   const currentScale = getRenderScale?.() ?? MOBILE_RENDER_SCALE_MAX;
-  if (smoothFrameMs >= MOBILE_FRAME_MS_DEGRADE_THRESHOLD && currentScale > MOBILE_RENDER_SCALE_MIN) {
-    const next = Math.max(MOBILE_RENDER_SCALE_MIN, currentScale - MOBILE_RENDER_SCALE_STEP_DOWN);
+  if (
+    smoothFrameMs >= MOBILE_FRAME_MS_DEGRADE_THRESHOLD &&
+    currentScale > MOBILE_RENDER_SCALE_MIN
+  ) {
+    const next = Math.max(
+      MOBILE_RENDER_SCALE_MIN,
+      currentScale - MOBILE_RENDER_SCALE_STEP_DOWN,
+    );
     if (setRenderScale?.(next)) lastQualityAdjustAt = nowMs;
     return;
   }
-  if (smoothFrameMs <= MOBILE_FRAME_MS_UPGRADE_THRESHOLD && currentScale < MOBILE_RENDER_SCALE_MAX) {
-    const next = Math.min(MOBILE_RENDER_SCALE_MAX, currentScale + MOBILE_RENDER_SCALE_STEP_UP);
+  if (
+    smoothFrameMs <= MOBILE_FRAME_MS_UPGRADE_THRESHOLD &&
+    currentScale < MOBILE_RENDER_SCALE_MAX
+  ) {
+    const next = Math.min(
+      MOBILE_RENDER_SCALE_MAX,
+      currentScale + MOBILE_RENDER_SCALE_STEP_UP,
+    );
     if (setRenderScale?.(next)) lastQualityAdjustAt = nowMs;
   }
 }
@@ -284,13 +406,20 @@ async function setRoomInfo() {
   const code = activeRoomCodeFromPath();
   roomInfoEl.textContent = roomInfoText({ roomCode: code });
   try {
-    const response = await fetch(`/api/room-info?t=${Date.now()}`, { cache: "no-store" });
+    const response = await fetch(`/api/room-info?t=${Date.now()}`, {
+      cache: "no-store",
+    });
     if (!response.ok) throw new Error(`http_${response.status}`);
     const payload = await response.json();
     const maxPlayers = Math.max(1, Number(payload?.maxPlayers || 0));
     const totalCharacters = Math.max(1, Number(payload?.totalCharacters || 0));
-    if (!Number.isFinite(maxPlayers) || !Number.isFinite(totalCharacters)) return;
-    roomInfoEl.textContent = roomInfoText({ roomCode: code, maxPlayers, totalCharacters });
+    if (!Number.isFinite(maxPlayers) || !Number.isFinite(totalCharacters))
+      return;
+    roomInfoEl.textContent = roomInfoText({
+      roomCode: code,
+      maxPlayers,
+      totalCharacters,
+    });
   } catch {
     // Keep fallback text when endpoint is unavailable.
   }
@@ -302,7 +431,8 @@ function setPrivateRoomButtonVisible(visible) {
 }
 
 async function setNewsCard() {
-  if (!newsCardEl || !newsVersionEl || !newsPublishedAtEl || !newsNotesEl) return;
+  if (!newsCardEl || !newsVersionEl || !newsPublishedAtEl || !newsNotesEl)
+    return;
   const formatTimestamp = (value) => {
     const raw = typeof value === "string" ? value.trim() : "";
     if (!raw) return "";
@@ -311,19 +441,25 @@ async function setNewsCard() {
     return new Intl.DateTimeFormat("sv-SE", {
       year: "numeric",
       month: "long",
-      day: "numeric"
+      day: "numeric",
     }).format(asDate);
   };
 
   try {
-    const response = await fetch(`/news.json?t=${Date.now()}`, { cache: "no-store" });
+    const response = await fetch(`/news.json?t=${Date.now()}`, {
+      cache: "no-store",
+    });
     if (!response.ok) throw new Error(`http_${response.status}`);
     const payload = await response.json();
-    const version = typeof payload?.version === "string" ? payload.version.trim() : "";
+    const version =
+      typeof payload?.version === "string" ? payload.version.trim() : "";
     const publishedAt = formatTimestamp(payload?.publishedAt);
-    const notes = typeof payload?.notes === "string" ? payload.notes.trim() : "";
+    const notes =
+      typeof payload?.notes === "string" ? payload.notes.trim() : "";
 
-    newsVersionEl.textContent = version ? `Nyheter version ${version}` : "Nyheter version -";
+    newsVersionEl.textContent = version
+      ? `Nyheter version ${version}`
+      : "Nyheter version -";
     if (publishedAt) {
       newsPublishedAtEl.textContent = publishedAt;
       newsPublishedAtEl.classList.remove("hidden");
@@ -359,7 +495,9 @@ function mobileControlsEnabledByPreference() {
 
 function controlsTextForCurrentMode() {
   return `${GAMEPLAY_SUMMARY_TEXT}\n${
-    mobileControlsEnabledByPreference() ? MOBILE_CONTROLS_TEXT : DESKTOP_CONTROLS_TEXT
+    mobileControlsEnabledByPreference()
+      ? MOBILE_CONTROLS_TEXT
+      : DESKTOP_CONTROLS_TEXT
   }`;
 }
 
@@ -372,7 +510,7 @@ function isFullscreenSupported() {
     document.fullscreenEnabled ||
     document.webkitFullscreenEnabled ||
     typeof document.documentElement?.requestFullscreen === "function" ||
-    typeof document.documentElement?.webkitRequestFullscreen === "function"
+    typeof document.documentElement?.webkitRequestFullscreen === "function",
   );
 }
 
@@ -423,14 +561,18 @@ async function setFullscreenEnabled(enabled) {
   } catch {
     // ignore fullscreen API failures; UI will resync from actual fullscreen state
   }
-  const applied = wantsFullscreen ? isFullscreenActive() : !isFullscreenActive();
+  const applied = wantsFullscreen
+    ? isFullscreenActive()
+    : !isFullscreenActive();
   refreshAudioSettingsUi();
   return applied;
 }
 
 function refreshAudioSettingsUi() {
   if (mobileControlsModeBtnEl) {
-    mobileControlsModeBtnEl.textContent = mobileControlsLabel(mobileControlsPreference);
+    mobileControlsModeBtnEl.textContent = mobileControlsLabel(
+      mobileControlsPreference,
+    );
   }
   if (fullscreenModeCheckboxEl) {
     const supported = isFullscreenSupported();
@@ -438,22 +580,35 @@ function refreshAudioSettingsUi() {
     fullscreenModeCheckboxEl.checked = supported && isFullscreenActive();
   }
   setFullscreenHelpText();
-  if (lookSensitivityInputEl) lookSensitivityInputEl.value = String(lookSettings.sensitivity);
-  if (lookSensitivityValueEl) lookSensitivityValueEl.textContent = `${lookSettings.sensitivity}%`;
+  if (lookSensitivityInputEl)
+    lookSensitivityInputEl.value = String(lookSettings.sensitivity);
+  if (lookSensitivityValueEl)
+    lookSensitivityValueEl.textContent = `${lookSettings.sensitivity}%`;
   if (lookSmoothingToggleBtnEl) {
-    lookSmoothingToggleBtnEl.textContent = lookSettings.smoothingEnabled ? "På" : "Av";
+    lookSmoothingToggleBtnEl.textContent = lookSettings.smoothingEnabled
+      ? "På"
+      : "Av";
   }
-  if (musicVolumeInputEl) musicVolumeInputEl.value = String(audioSettings.musicVolume);
-  if (sfxVolumeInputEl) sfxVolumeInputEl.value = String(audioSettings.sfxVolume);
-  if (musicMuteBtnEl) musicMuteBtnEl.textContent = audioSettings.musicMuted ? "Avmuta" : "Muta";
-  if (sfxMuteBtnEl) sfxMuteBtnEl.textContent = audioSettings.sfxMuted ? "Avmuta" : "Muta";
+  if (musicVolumeInputEl)
+    musicVolumeInputEl.value = String(audioSettings.musicVolume);
+  if (sfxVolumeInputEl)
+    sfxVolumeInputEl.value = String(audioSettings.sfxVolume);
+  if (musicMuteBtnEl)
+    musicMuteBtnEl.textContent = audioSettings.musicMuted ? "Avmuta" : "Muta";
+  if (sfxMuteBtnEl)
+    sfxMuteBtnEl.textContent = audioSettings.sfxMuted ? "Avmuta" : "Muta";
   syncMusicLoop();
 }
 
 function syncMusicLoop() {
-  musicLoopEl.volume = Math.max(0, Math.min(1, audioSettings.musicVolume / 100));
+  musicLoopEl.volume = Math.max(
+    0,
+    Math.min(1, audioSettings.musicVolume / 100),
+  );
   const shouldPlay =
-    appMode === "playing" && !audioSettings.musicMuted && musicLoopEl.volume > 0;
+    appMode === "playing" &&
+    !audioSettings.musicMuted &&
+    musicLoopEl.volume > 0;
   if (shouldPlay) {
     const playPromise = musicLoopEl.play();
     if (playPromise && typeof playPromise.catch === "function") {
@@ -484,12 +639,6 @@ function playSfx(templateEl, gain = 1) {
   }
 }
 
-function clearPendingWinSfx() {
-  if (winSfxTimeout == null) return;
-  clearTimeout(winSfxTimeout);
-  winSfxTimeout = null;
-}
-
 function playUiBlipSfx() {
   playSfx(uiBlipSfxTemplateEl, 0.92);
 }
@@ -498,7 +647,9 @@ function hitSfxGainByDistance(distanceMeters) {
   const distance = Math.max(0, Number(distanceMeters) || 0);
   if (distance <= HIT_SFX_MIN_DISTANCE) return HIT_SFX_BASE_GAIN;
   if (distance >= HIT_SFX_MAX_DISTANCE) return 0;
-  const t = (distance - HIT_SFX_MIN_DISTANCE) / (HIT_SFX_MAX_DISTANCE - HIT_SFX_MIN_DISTANCE);
+  const t =
+    (distance - HIT_SFX_MIN_DISTANCE) /
+    (HIT_SFX_MAX_DISTANCE - HIT_SFX_MIN_DISTANCE);
   return HIT_SFX_BASE_GAIN * Math.pow(1 - t, 1.3);
 }
 
@@ -513,14 +664,6 @@ function playHitHurtAtPosition(position) {
   const dz = z - camera.position.z;
   const distance = Math.hypot(dx, dy, dz);
   playSfx(hitHurtSfxTemplateEl, hitSfxGainByDistance(distance));
-}
-
-function queueWinSfx() {
-  clearPendingWinSfx();
-  winSfxTimeout = setTimeout(() => {
-    winSfxTimeout = null;
-    playSfx(winSfxTemplateEl, 1);
-  }, WIN_SFX_DELAY_MS);
 }
 
 function requestPointerLockSafe(targetEl = canvas) {
@@ -542,7 +685,10 @@ function updateConnectButton() {
 }
 
 function updateDocumentTitle() {
-  const othersPlaying = Math.max(0, activePlayersInGame - (sessionState === "alive" ? 1 : 0));
+  const othersPlaying = Math.max(
+    0,
+    activePlayersInGame - (sessionState === "alive" ? 1 : 0),
+  );
   if (othersPlaying <= 0) {
     document.title = "Hidden";
     return;
@@ -551,12 +697,19 @@ function updateDocumentTitle() {
 }
 
 function openLobbyDialog(title, text, { showSettings = false } = {}) {
-  if (!lobbyDialogBackdropEl || !lobbyDialogTitleEl || !lobbyDialogTextEl || !lobbyDialogCloseBtnEl) return;
+  if (
+    !lobbyDialogBackdropEl ||
+    !lobbyDialogTitleEl ||
+    !lobbyDialogTextEl ||
+    !lobbyDialogCloseBtnEl
+  )
+    return;
   setLobbyMenuOpen(false);
   lobbyDialogTitleEl.textContent = title;
   lobbyDialogTextEl.textContent = text;
   lobbyDialogTextEl.classList.toggle("hidden", showSettings);
-  if (settingsPanelEl) settingsPanelEl.classList.toggle("hidden", !showSettings);
+  if (settingsPanelEl)
+    settingsPanelEl.classList.toggle("hidden", !showSettings);
   if (showSettings) refreshAudioSettingsUi();
   lobbyDialogBackdropEl.classList.remove("hidden");
   const dialogCardEl = document.getElementById("lobbyDialogCard");
@@ -577,7 +730,10 @@ function closeLobbyDialog() {
   lobbyDialogTextEl?.classList.remove("hidden");
   updateScreenRootPointerEvents();
   updateMobileControlsVisibility();
-  if (appMode === "playing" && (sessionState === "alive" || sessionState === "won")) {
+  if (
+    appMode === "playing" &&
+    (sessionState === "alive" || sessionState === "won")
+  ) {
     requestPointerLockSafe(canvas);
   }
 }
@@ -588,18 +744,27 @@ function isGameChatFocused() {
 
 function canOpenInGameChat() {
   if (appMode !== "playing") return false;
-  return sessionState === "downed" || sessionState === "spectating" || sessionState === "won";
+  if (winReturnToLobbyMsRemaining > 0) return false;
+  return (
+    sessionState === "downed" ||
+    sessionState === "spectating" ||
+    sessionState === "won"
+  );
 }
 
 function updateMobileControlsVisibility() {
   if (!mobileControlsEl) return;
   const isPortrait =
-    (window.matchMedia && window.matchMedia("(orientation: portrait)").matches) ||
+    (window.matchMedia &&
+      window.matchMedia("(orientation: portrait)").matches) ||
     window.innerHeight > window.innerWidth;
-  const showLandscapePrompt = IS_TOUCH_DEVICE && appMode === "playing" && isPortrait;
+  const showLandscapePrompt =
+    IS_TOUCH_DEVICE && appMode === "playing" && isPortrait;
   const wasShown = !mobileControlsEl.classList.contains("hidden");
   const lobbyDialogOpen =
-    appMode === "playing" && lobbyDialogBackdropEl && !lobbyDialogBackdropEl.classList.contains("hidden");
+    appMode === "playing" &&
+    lobbyDialogBackdropEl &&
+    !lobbyDialogBackdropEl.classList.contains("hidden");
   const show =
     mobileControlsEnabledByPreference() &&
     appMode === "playing" &&
@@ -611,17 +776,35 @@ function updateMobileControlsVisibility() {
   mobileControlsEl.classList.toggle("hidden", !show);
   document.body.classList.toggle("mobile-controls-enabled", show);
   mobileLandscapePromptEl?.classList.toggle("hidden", !showLandscapePrompt);
-  if (mobileLandscapePromptEl) mobileLandscapePromptEl.setAttribute("aria-hidden", showLandscapePrompt ? "false" : "true");
-  if (wasShown && !show) resetJoystickState();
+  if (mobileLandscapePromptEl)
+    mobileLandscapePromptEl.setAttribute(
+      "aria-hidden",
+      showLandscapePrompt ? "false" : "true",
+    );
+  if (wasShown && !show) inputController.resetJoystickState?.();
+}
+
+function updateGameChatAvailability() {
+  const available = appMode === "playing" && canOpenInGameChat();
+  gameChatBoxEl?.classList.toggle("hidden", !available);
+  gameChatNoticeEl?.classList.toggle("hidden", !available);
+  if (available) return;
+  gameChatOpen = false;
+  gameChatBoxEl?.classList.remove("open");
+  gameChatInputRowEl?.classList.add("hidden");
+  gameChatInputEl?.blur();
+  chatUi.setGameLineLimit(GAME_CHAT_MAX_LINES);
 }
 
 function setGameChatOpen(open, { restorePointerLock = false } = {}) {
   if (!gameChatInputRowEl || !gameChatBoxEl || !gameChatNoticeEl) return;
+  updateGameChatAvailability();
   const canOpen = Boolean(open) && canOpenInGameChat();
   gameChatOpen = canOpen;
   gameChatBoxEl.classList.toggle("open", canOpen);
   gameChatInputRowEl.classList.toggle("hidden", !canOpen);
-  gameChatNoticeEl.textContent = canOpen || sessionState === "won" ? "Chatt" : "Systemhändelser";
+  gameChatNoticeEl.textContent =
+    canOpen || sessionState === "won" ? "Chatt" : "Systemhändelser";
   chatUi.setGameLineLimit(canOpen ? null : GAME_CHAT_MAX_LINES);
   if (canOpen) {
     if (document.pointerLockElement) document.exitPointerLock?.();
@@ -630,7 +813,11 @@ function setGameChatOpen(open, { restorePointerLock = false } = {}) {
     gameChatInputEl?.blur();
   }
   if (!canOpenInGameChat()) gameChatOpen = false;
-  if (restorePointerLock && appMode === "playing" && (sessionState === "alive" || sessionState === "won")) {
+  if (
+    restorePointerLock &&
+    appMode === "playing" &&
+    (sessionState === "alive" || sessionState === "won")
+  ) {
     requestPointerLockSafe(canvas);
   }
   updateMobileControlsVisibility();
@@ -650,7 +837,11 @@ function setGameMenuOpen(open, { restorePointerLock = false } = {}) {
     updateMobileControlsVisibility();
     return;
   }
-  if (restorePointerLock && appMode === "playing" && (sessionState === "alive" || sessionState === "won")) {
+  if (
+    restorePointerLock &&
+    appMode === "playing" &&
+    (sessionState === "alive" || sessionState === "won")
+  ) {
     requestPointerLockSafe(canvas);
   }
   updateMobileControlsVisibility();
@@ -668,7 +859,14 @@ function setLobbyMenuOpen(open) {
 }
 
 function updateLobbyMatchStatus() {
-  if (!lobbyMatchStatusEl || !lobbyMatchStatusTitleEl || !lobbyStatusRowEl || !lobbyStatusTextEl || !lobbyPlayersMetaEl) return;
+  if (
+    !lobbyMatchStatusEl ||
+    !lobbyMatchStatusTitleEl ||
+    !lobbyStatusRowEl ||
+    !lobbyStatusTextEl ||
+    !lobbyPlayersMetaEl
+  )
+    return;
   const show = appMode === "lobby";
   lobbyMatchStatusEl.classList.toggle("hidden", !show);
   lobbyStatusRowEl.classList.toggle("hidden", !show);
@@ -682,22 +880,27 @@ function updateLobbyMatchStatus() {
   lobbyPlayersMetaEl.textContent = `${playerCount}/${maxPlayers} spelare`;
 
   if (currentMatch.inProgress) {
-    const elapsedMinutes = Math.floor(Math.max(0, Number(currentMatch.elapsedMs || 0)) / 60000);
+    const elapsedMinutes = Math.floor(
+      Math.max(0, Number(currentMatch.elapsedMs || 0)) / 60000,
+    );
     lobbyStatusTextEl.textContent = `Match pågår (${elapsedMinutes} min)`;
     return;
   }
 
   const minPlayers = Math.max(1, Number(lobbyMinPlayersToStart || 2));
-  const readyCount = players.reduce((acc, player) => acc + (player?.ready ? 1 : 0), 0);
+  const readyCount = players.reduce(
+    (acc, player) => acc + (player?.ready ? 1 : 0),
+    0,
+  );
   const readyEligibleCount = players.reduce((acc, player) => {
     const status = String(player?.status || "").toLowerCase();
-    const canReady = status === "i lobby" || status === "lobbyn" || status === "lobby";
+    const canReady =
+      status === "i lobby" || status === "lobbyn" || status === "lobby";
     return acc + (canReady ? 1 : 0);
   }, 0);
   const readyText = `Redo ${readyCount}/${readyEligibleCount}`;
   const countdownRunning =
-    lobbyCountdownMsRemaining > 0 ||
-    sessionState === "countdown";
+    lobbyCountdownMsRemaining > 0 || sessionState === "countdown";
 
   if (countdownRunning) {
     lobbyStatusTextEl.textContent = "Startar match";
@@ -746,15 +949,21 @@ function updateReadyButton() {
     buttonReadyState = "not-ready";
   }
   playBtnEl.dataset.readyState = buttonReadyState;
-  playBtnEl.setAttribute("aria-pressed", buttonReadyState === "ready" ? "true" : "false");
+  playBtnEl.setAttribute(
+    "aria-pressed",
+    buttonReadyState === "ready" ? "true" : "false",
+  );
 }
 
 function resetDownedState() {
   downedByName = "";
+  downedMessageHideAtMs = 0;
+  downedMessageSuppressed = false;
 }
 
 function resetWinState() {
   winReturnToLobbyMsRemaining = 0;
+  winMessageHideAtMs = 0;
 }
 
 function resetKnockdownToast() {
@@ -762,8 +971,10 @@ function resetKnockdownToast() {
   knockdownToastMsRemaining = 0;
 }
 
-function resetSessionRuntimeState({ maxPlayers = 0, clearIdentity = false } = {}) {
-  clearPendingWinSfx();
+function resetSessionRuntimeState({
+  maxPlayers = 0,
+  clearIdentity = false,
+} = {}) {
   if (clearIdentity) {
     authenticated = false;
     myName = "";
@@ -798,32 +1009,48 @@ function resetSessionRuntimeState({ maxPlayers = 0, clearIdentity = false } = {}
 }
 
 function updateInGameHud() {
+  updateGameChatAvailability();
+  if (
+    !IS_TOUCH_DEVICE &&
+    appMode === "playing" &&
+    canOpenInGameChat() &&
+    !gameChatOpen
+  ) {
+    setGameChatOpen(true);
+  }
   updateInGameHudUi({
     aliveOthersTextEl,
     gameChatNoticeEl,
     activePlayersInGame,
-    sessionState
+    sessionState,
   });
   if (gameChatOpen && gameChatNoticeEl) gameChatNoticeEl.textContent = "Chatt";
 }
 
 function updateDebugOverlay() {
   if (!debugOverlayEl) return;
-  const visible = appMode === "playing" && debugOverlayAllowed && debugOverlayOpen;
+  const visible =
+    appMode === "playing" && debugOverlayAllowed && debugOverlayOpen;
   debugOverlayEl.classList.toggle("hidden", !visible);
   if (!visible) return;
 
   const fpsRounded = Math.max(0, Math.round(debugFps));
   const frameMs = debugFps > 0 ? 1000 / debugFps : null;
-  const pingRounded = Number.isFinite(debugPingMs) ? Math.max(0, Math.round(debugPingMs)) : null;
+  const pingRounded = Number.isFinite(debugPingMs)
+    ? Math.max(0, Math.round(debugPingMs))
+    : null;
 
-  if (debugFpsTextEl) debugFpsTextEl.textContent = `FPS: ${fpsRounded > 0 ? fpsRounded : "--"}`;
-  if (debugFrameTimeTextEl) debugFrameTimeTextEl.textContent = `Frame: ${frameMs != null ? frameMs.toFixed(1) : "--"} ms`;
-  if (debugPingTextEl) debugPingTextEl.textContent = `Ping: ${pingRounded != null ? pingRounded : "--"} ms`;
+  if (debugFpsTextEl)
+    debugFpsTextEl.textContent = `FPS: ${fpsRounded > 0 ? fpsRounded : "--"}`;
+  if (debugFrameTimeTextEl)
+    debugFrameTimeTextEl.textContent = `Frame: ${frameMs != null ? frameMs.toFixed(1) : "--"} ms`;
+  if (debugPingTextEl)
+    debugPingTextEl.textContent = `Ping: ${pingRounded != null ? pingRounded : "--"} ms`;
 }
 
 function setDebugOverlayOpen(open) {
-  debugOverlayOpen = Boolean(open) && appMode === "playing" && debugOverlayAllowed;
+  debugOverlayOpen =
+    Boolean(open) && appMode === "playing" && debugOverlayAllowed;
   updateDebugOverlay();
 }
 
@@ -857,7 +1084,8 @@ function handleDebugPong(msg) {
   if (!Number.isFinite(clientSentAt)) return;
   const rttMs = performance.now() - clientSentAt;
   if (!Number.isFinite(rttMs) || rttMs < 0) return;
-  debugPingMs = debugPingMs == null ? rttMs : debugPingMs + (rttMs - debugPingMs) * 0.35;
+  debugPingMs =
+    debugPingMs == null ? rttMs : debugPingMs + (rttMs - debugPingMs) * 0.35;
   if (debugOverlayOpen && appMode === "playing") updateDebugOverlay();
 }
 
@@ -866,15 +1094,16 @@ function updateDownedOverlay() {
     downedOverlayEl,
     downedByTextEl,
     downedCountdownTextEl,
-    downedSpectateBtnEl,
     gameMenuBtnEl,
     appMode,
     sessionState,
     downedByName,
-    canSpectate: currentMatch.inProgress && activePlayersInGame > 0,
-    returnToLobbyMsRemaining: winReturnToLobbyMsRemaining
+    showDownedMessage:
+      Boolean(downedByName) &&
+      !downedMessageSuppressed &&
+      performance.now() < downedMessageHideAtMs,
+    returnToLobbyMsRemaining: winReturnToLobbyMsRemaining,
   });
-  if (downedChatBtnEl) downedChatBtnEl.textContent = gameChatOpen ? "Stäng chatt" : "Chatt";
 }
 
 function updateWinOverlay() {
@@ -885,7 +1114,8 @@ function updateWinOverlay() {
     gameMenuBtnEl,
     appMode,
     sessionState,
-    winReturnToLobbyMsRemaining
+    winReturnToLobbyMsRemaining,
+    showWinTitle: performance.now() < winMessageHideAtMs,
   });
 }
 
@@ -894,12 +1124,15 @@ function updateSpectatorHud() {
   const spectating = appMode === "playing" && sessionState === "spectating";
   spectatorHudEl.classList.toggle("hidden", !spectating);
   if (!spectating) return;
-  const targetName = spectatorTargetName ? String(spectatorTargetName) : "ingen";
+  const targetName = spectatorTargetName
+    ? String(spectatorTargetName)
+    : "ingen";
   spectatorTargetTextEl.textContent = `Åskådar ${targetName}`;
-  const canCycle = Array.isArray(spectatorCandidates) && spectatorCandidates.length > 1;
+  const canCycle =
+    Array.isArray(spectatorCandidates) && spectatorCandidates.length > 1;
   if (spectatorPrevBtnEl) spectatorPrevBtnEl.disabled = !canCycle;
   if (spectatorNextBtnEl) spectatorNextBtnEl.disabled = !canCycle;
-  if (spectatorChatBtnEl) spectatorChatBtnEl.textContent = gameChatOpen ? "Stäng chatt" : "Chatt";
+  spectatorActionRowEl?.classList.toggle("hidden", Boolean(downedByName));
 }
 
 function updateKnockdownToast() {
@@ -908,7 +1141,7 @@ function updateKnockdownToast() {
     appMode,
     sessionState,
     knockdownToastMsRemaining,
-    knockdownToastText
+    knockdownToastText,
   });
 }
 
@@ -922,6 +1155,8 @@ function requestSpectatorCycle(direction) {
   const activeSocket = socketConnection?.getSocket();
   if (!activeSocket || sessionState !== "spectating") return;
   const step = Number(direction) < 0 ? -1 : 1;
+  downedMessageSuppressed = true;
+  updateDownedOverlay();
   activeSocket.sendJson({ type: "spectate_cycle", direction: step });
 }
 
@@ -932,11 +1167,14 @@ function updateCrosshairHud(deltaSec, nowMs) {
     myCharacterId != null &&
     attackCooldownMsRemaining <= CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS;
 
-  if (canProbeAim && nowMs - lastCrosshairAimCheckAt >= CROSSHAIR_AIM_CHECK_MS) {
+  if (
+    canProbeAim &&
+    nowMs - lastCrosshairAimCheckAt >= CROSSHAIR_AIM_CHECK_MS
+  ) {
     camera.updateMatrixWorld(true);
     cachedCrosshairAimingAtCharacter = avatarSystem.isAimingAtCharacter({
       myCharacterId,
-      maxDistance: CROSSHAIR_HIT_DISTANCE_METERS
+      maxDistance: CROSSHAIR_HIT_DISTANCE_METERS,
     });
     lastCrosshairAimCheckAt = nowMs;
   }
@@ -960,7 +1198,7 @@ function updateCrosshairHud(deltaSec, nowMs) {
     crosshairHitDistanceMeters: CROSSHAIR_HIT_DISTANCE_METERS,
     camera,
     avatarSystem,
-    aimingAtCharacter: cachedCrosshairAimingAtCharacter
+    aimingAtCharacter: cachedCrosshairAimingAtCharacter,
   });
   attackCooldownMsRemaining = next.attackCooldownMsRemaining;
   attackCooldownVisualMaxMs = next.attackCooldownVisualMaxMs;
@@ -981,12 +1219,15 @@ function setAppMode(mode) {
   document.body.classList.toggle("overlay-active", overlayActive);
   updateScreenRootPointerEvents();
 
-  if (previous === "playing" && mode !== "playing" && document.pointerLockElement) {
+  if (
+    previous === "playing" &&
+    mode !== "playing" &&
+    document.pointerLockElement
+  ) {
     document.exitPointerLock?.();
   }
 
   if (previous === "playing" && mode !== "playing") {
-    clearPendingWinSfx();
     myCharacterId = null;
     attackCooldownMsRemaining = 0;
     attackCooldownVisualMaxMs = CROSSHAIR_DEFAULT_COOLDOWN_MS;
@@ -998,8 +1239,10 @@ function setAppMode(mode) {
   if (mode !== "playing") setGameChatOpen(false);
   if (mode !== "playing") setGameMenuOpen(false);
   if (mode !== "lobby") setLobbyMenuOpen(false);
-  if (mode === "playing" && gameChatOpen && !canOpenInGameChat()) setGameChatOpen(false);
-  if (mode === "connect" || mode === "disconnected") setCountdownTextFromSession({ state: "lobby" });
+  if (mode === "playing" && gameChatOpen && !canOpenInGameChat())
+    setGameChatOpen(false);
+  if (mode === "connect" || mode === "disconnected")
+    setCountdownTextFromSession({ state: "lobby" });
   updateReadyButton();
   updateMobileControlsVisibility();
   updateLobbyMatchStatus();
@@ -1017,15 +1260,19 @@ function updateScreenRootPointerEvents() {
   if (!screenRootEl) return;
   const overlayActive = appMode !== "playing";
   const dialogOpenInGame =
-    appMode === "playing" && lobbyDialogBackdropEl && !lobbyDialogBackdropEl.classList.contains("hidden");
-  screenRootEl.style.pointerEvents = overlayActive || dialogOpenInGame ? "auto" : "none";
+    appMode === "playing" &&
+    lobbyDialogBackdropEl &&
+    !lobbyDialogBackdropEl.classList.contains("hidden");
+  screenRootEl.style.pointerEvents =
+    overlayActive || dialogOpenInGame ? "auto" : "none";
 }
 
 function setCountdownTextFromSession(state) {
   if (!countdownTextEl || !countdownOverlayEl) return;
   const ms = Number(state?.countdownMsRemaining || 0);
   lobbyCountdownMsRemaining = ms;
-  if (countdownControlsTextEl) countdownControlsTextEl.textContent = controlsTextForCurrentMode();
+  if (countdownControlsTextEl)
+    countdownControlsTextEl.textContent = controlsTextForCurrentMode();
   if (ms > 0) {
     const sec = Math.max(1, Math.ceil(ms / 1000));
     countdownTextEl.textContent = String(sec);
@@ -1074,41 +1321,144 @@ function resetInputState() {
 }
 
 const socketState = createSocketState({
-  authenticated: { get: () => authenticated, set: (value) => { authenticated = value; } },
-  myName: { get: () => myName, set: (value) => { myName = value; } },
-  sessionState: { get: () => sessionState, set: (value) => { sessionState = value; } },
-  sessionReady: { get: () => sessionReady, set: (value) => { sessionReady = value; } },
-  myCharacterId: { get: () => myCharacterId, set: (value) => { myCharacterId = value; } },
-  activePlayersInGame: { get: () => activePlayersInGame, set: (value) => { activePlayersInGame = value; } },
+  authenticated: {
+    get: () => authenticated,
+    set: (value) => {
+      authenticated = value;
+    },
+  },
+  myName: {
+    get: () => myName,
+    set: (value) => {
+      myName = value;
+    },
+  },
+  sessionState: {
+    get: () => sessionState,
+    set: (value) => {
+      sessionState = value;
+    },
+  },
+  sessionReady: {
+    get: () => sessionReady,
+    set: (value) => {
+      sessionReady = value;
+    },
+  },
+  myCharacterId: {
+    get: () => myCharacterId,
+    set: (value) => {
+      myCharacterId = value;
+    },
+  },
+  activePlayersInGame: {
+    get: () => activePlayersInGame,
+    set: (value) => {
+      activePlayersInGame = value;
+    },
+  },
   attackCooldownMsRemaining: {
     get: () => attackCooldownMsRemaining,
-    set: (value) => { attackCooldownMsRemaining = value; }
+    set: (value) => {
+      attackCooldownMsRemaining = value;
+    },
   },
   attackCooldownVisualMaxMs: {
     get: () => attackCooldownVisualMaxMs,
-    set: (value) => { attackCooldownVisualMaxMs = value; }
+    set: (value) => {
+      attackCooldownVisualMaxMs = value;
+    },
   },
-  forceYawSyncOnNextWorld: { get: () => forceYawSyncOnNextWorld, set: (value) => { forceYawSyncOnNextWorld = value; } },
-  currentMatch: { get: () => currentMatch, set: (value) => { currentMatch = value; } },
-  lobbyMinPlayersToStart: { get: () => lobbyMinPlayersToStart, set: (value) => { lobbyMinPlayersToStart = value; } },
-  lobbyMaxPlayers: { get: () => lobbyMaxPlayers, set: (value) => { lobbyMaxPlayers = value; } },
+  forceYawSyncOnNextWorld: {
+    get: () => forceYawSyncOnNextWorld,
+    set: (value) => {
+      forceYawSyncOnNextWorld = value;
+    },
+  },
+  currentMatch: {
+    get: () => currentMatch,
+    set: (value) => {
+      currentMatch = value;
+    },
+  },
+  lobbyMinPlayersToStart: {
+    get: () => lobbyMinPlayersToStart,
+    set: (value) => {
+      lobbyMinPlayersToStart = value;
+    },
+  },
+  lobbyMaxPlayers: {
+    get: () => lobbyMaxPlayers,
+    set: (value) => {
+      lobbyMaxPlayers = value;
+    },
+  },
   winReturnToLobbyMsRemaining: {
     get: () => winReturnToLobbyMsRemaining,
-    set: (value) => { winReturnToLobbyMsRemaining = value; }
+    set: (value) => {
+      winReturnToLobbyMsRemaining = value;
+    },
   },
-  downedByName: { get: () => downedByName, set: (value) => { downedByName = value; } },
-  knockdownToastText: { get: () => knockdownToastText, set: (value) => { knockdownToastText = value; } },
+  winMessageHideAtMs: {
+    get: () => winMessageHideAtMs,
+    set: (value) => {
+      winMessageHideAtMs = value;
+    },
+  },
+  downedByName: {
+    get: () => downedByName,
+    set: (value) => {
+      downedByName = value;
+    },
+  },
+  downedMessageHideAtMs: {
+    get: () => downedMessageHideAtMs,
+    set: (value) => {
+      downedMessageHideAtMs = value;
+    },
+  },
+  downedMessageSuppressed: {
+    get: () => downedMessageSuppressed,
+    set: (value) => {
+      downedMessageSuppressed = Boolean(value);
+    },
+  },
+  knockdownToastText: {
+    get: () => knockdownToastText,
+    set: (value) => {
+      knockdownToastText = value;
+    },
+  },
   knockdownToastMsRemaining: {
     get: () => knockdownToastMsRemaining,
-    set: (value) => { knockdownToastMsRemaining = value; }
+    set: (value) => {
+      knockdownToastMsRemaining = value;
+    },
   },
-  pendingLoginName: { get: () => pendingLoginName, set: (value) => { pendingLoginName = value; } },
+  pendingLoginName: {
+    get: () => pendingLoginName,
+    set: (value) => {
+      pendingLoginName = value;
+    },
+  },
   spectatorTargetCharacterId: {
     get: () => spectatorTargetCharacterId,
-    set: (value) => { spectatorTargetCharacterId = value; }
+    set: (value) => {
+      spectatorTargetCharacterId = value;
+    },
   },
-  spectatorTargetName: { get: () => spectatorTargetName, set: (value) => { spectatorTargetName = value; } },
-  spectatorCandidates: { get: () => spectatorCandidates, set: (value) => { spectatorCandidates = value; } }
+  spectatorTargetName: {
+    get: () => spectatorTargetName,
+    set: (value) => {
+      spectatorTargetName = value;
+    },
+  },
+  spectatorCandidates: {
+    get: () => spectatorCandidates,
+    set: (value) => {
+      spectatorCandidates = value;
+    },
+  },
 });
 
 const socketMessageContext = createSocketMessageContext({
@@ -1117,7 +1467,9 @@ const socketMessageContext = createSocketMessageContext({
     DEFAULT_MATCH_STATE,
     CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS,
     CROSSHAIR_DEFAULT_COOLDOWN_MS,
-    KNOCKDOWN_TOAST_MS
+    DOWNED_MESSAGE_VISIBLE_MS,
+    WIN_MESSAGE_VISIBLE_MS,
+    KNOCKDOWN_TOAST_MS,
   },
   roomSystem,
   avatarSystem,
@@ -1146,11 +1498,10 @@ const socketMessageContext = createSocketMessageContext({
     requestPointerLockSafe,
     renderScoreboard,
     playHitHurtAtPosition,
-    queueWinSfx,
     setViewYaw: (value) => {
       viewYaw = value;
-    }
-  }
+    },
+  },
 });
 
 socketConnection = createSocketConnectionController({
@@ -1168,7 +1519,7 @@ socketConnection = createSocketConnectionController({
   resetInputState,
   onConnectingChanged: () => {
     updateConnectButton();
-  }
+  },
 });
 
 function connectAndLogin() {
@@ -1183,7 +1534,7 @@ function connectAndLogin() {
     minNameLength: 2,
     onValidationError: () => {
       setConnectError("Namn måste vara minst 2 tecken.");
-    }
+    },
   });
   if (started) localStorage.setItem(PLAYER_NAME_KEY, trimmedName);
 }
@@ -1215,8 +1566,19 @@ function requestReturnToLobby() {
 
 function updateSpectatorCamera(deltaSec) {
   if (sessionState !== "spectating") return;
-  const target = avatarSystem.getCharacterCameraState(spectatorTargetCharacterId);
+  const target = avatarSystem.getCharacterCameraState(
+    spectatorTargetCharacterId,
+  );
   if (!target) return;
+
+  if (downedByName && spectatorTargetName && spectatorTargetName === myName) {
+    const posSmooth = 1 - Math.exp(-deltaSec * DOWNED_CAMERA_POS_SMOOTH_RATE);
+    camera.position.x += (target.x - camera.position.x) * posSmooth;
+    camera.position.z += (target.z - camera.position.z) * posSmooth;
+    camera.position.y += (DOWNED_CAMERA_HEIGHT - camera.position.y) * posSmooth;
+    camera.rotation.set(-Math.PI / 2 + 0.0001, 0, 0);
+    return;
+  }
 
   const desiredX = target.x - Math.sin(target.yaw) * SPECTATOR_CAMERA_DISTANCE;
   const desiredZ = target.z - Math.cos(target.yaw) * SPECTATOR_CAMERA_DISTANCE;
@@ -1226,7 +1588,11 @@ function updateSpectatorCamera(deltaSec) {
   camera.position.z += (desiredZ - camera.position.z) * posSmooth;
   camera.position.y += (desiredY - camera.position.y) * posSmooth;
 
-  camera.lookAt(target.x, target.eyeHeight + SPECTATOR_CAMERA_TARGET_HEIGHT_OFFSET, target.z);
+  camera.lookAt(
+    target.x,
+    target.eyeHeight + SPECTATOR_CAMERA_TARGET_HEIGHT_OFFSET,
+    target.z,
+  );
 }
 
 const savedName = localStorage.getItem(PLAYER_NAME_KEY);
@@ -1250,6 +1616,7 @@ bindAppEventHandlers({
     lobbyMenuCloseBtnEl,
     chatSendBtnEl,
     chatInputEl,
+    gameChatSendBtnEl,
     gameChatInputEl,
     gameMenuBtnEl,
     gameMenuBackdropEl,
@@ -1258,13 +1625,10 @@ bindAppEventHandlers({
     gameMenuCloseBtnEl,
     gameMenuLobbyBtnEl,
     downedLobbyBtnEl,
-    downedChatBtnEl,
-    downedSpectateBtnEl,
     winLobbyBtnEl,
     spectatorPrevBtnEl,
     spectatorNextBtnEl,
     spectatorLobbyBtnEl,
-    spectatorChatBtnEl,
     lobbyDialogBackdropEl,
     lobbyDialogCloseBtnEl,
     lookSensitivityInputEl,
@@ -1276,7 +1640,7 @@ bindAppEventHandlers({
     sfxMuteBtnEl,
     mobileControlsModeBtnEl,
     fullscreenModeCheckboxEl,
-    countdownControlsTextEl
+    countdownControlsTextEl,
   },
   constants: {
     GAME_CREDITS_TEXT,
@@ -1285,13 +1649,13 @@ bindAppEventHandlers({
     DEBUG_OVERLAY_TOGGLE_SHORTCUT,
     DEBUG_OVERLAY_TOUCH_HOLD_MS,
     DEBUG_OVERLAY_UNLOCK_TOUCH_HOLD_MS,
-    IS_TOUCH_DEVICE
+    IS_TOUCH_DEVICE,
   },
   deps: {
     randomPrivateRoomCode,
     clampVolume,
     persistAudioSettings,
-    persistLookSettings
+    persistLookSettings,
   },
   actions: {
     connectAndLogin,
@@ -1320,7 +1684,7 @@ bindAppEventHandlers({
     updateReadyButton,
     resize,
     playUiBlipSfx,
-    getActiveSocket: () => socketConnection?.getSocket() || null
+    getActiveSocket: () => socketConnection?.getSocket() || null,
   },
   state: {
     getAuthenticated: () => authenticated,
@@ -1337,8 +1701,8 @@ bindAppEventHandlers({
     canOpenInGameChat,
     getAudioSettings: () => audioSettings,
     getLookSettings: () => lookSettings,
-    getMobileControlsPreference: () => mobileControlsPreference
-  }
+    getMobileControlsPreference: () => mobileControlsPreference,
+  },
 });
 
 function animate() {
@@ -1354,7 +1718,10 @@ function animate() {
   debugFpsSampleFrames += 1;
   debugFpsSampleMs += frameMs;
   if (debugFpsSampleMs >= DEBUG_FPS_SAMPLE_WINDOW_MS) {
-    debugFps = debugFpsSampleMs > 0 ? (debugFpsSampleFrames * 1000) / debugFpsSampleMs : 0;
+    debugFps =
+      debugFpsSampleMs > 0
+        ? (debugFpsSampleFrames * 1000) / debugFpsSampleMs
+        : 0;
     debugFpsSampleFrames = 0;
     debugFpsSampleMs = 0;
   }
@@ -1365,7 +1732,8 @@ function animate() {
   const pitch = inputController.getPitch();
 
   const smoothingRate = lookSmoothingRate(lookSettings);
-  const viewSmooth = smoothingRate > 0 ? 1 - Math.exp(-deltaSec * smoothingRate) : 1;
+  const viewSmooth =
+    smoothingRate > 0 ? 1 - Math.exp(-deltaSec * smoothingRate) : 1;
   const yawDelta = normalizeAngle(yaw - viewYaw);
   viewYaw = normalizeAngle(viewYaw + yawDelta * viewSmooth);
   viewPitch += (pitch - viewPitch) * viewSmooth;
@@ -1374,7 +1742,10 @@ function animate() {
   camera.rotation.x = viewPitch;
   roomSystem.update?.(deltaSec);
   const controlledCharacterId =
-    appMode === "playing" && (sessionState === "alive" || sessionState === "won") ? myCharacterId : null;
+    appMode === "playing" &&
+    (sessionState === "alive" || sessionState === "won")
+      ? myCharacterId
+      : null;
   avatarSystem.animate(deltaSec, controlledCharacterId);
   if (appMode === "playing" && sessionState === "spectating") {
     updateSpectatorCamera(deltaSec);
@@ -1385,14 +1756,26 @@ function animate() {
       const posSmooth = 1 - Math.exp(-deltaSec * DOWNED_CAMERA_POS_SMOOTH_RATE);
       camera.position.x += (corpsePos.x - camera.position.x) * posSmooth;
       camera.position.z += (corpsePos.z - camera.position.z) * posSmooth;
-      camera.position.y += (DOWNED_CAMERA_HEIGHT - camera.position.y) * posSmooth;
+      camera.position.y +=
+        (DOWNED_CAMERA_HEIGHT - camera.position.y) * posSmooth;
     }
     camera.rotation.set(-Math.PI / 2 + 0.0001, 0, 0);
   }
-  if (appMode === "playing" && (sessionState === "won" || sessionState === "downed" || sessionState === "spectating")) {
-    winReturnToLobbyMsRemaining = Math.max(0, winReturnToLobbyMsRemaining - deltaSec * 1000);
+  if (
+    appMode === "playing" &&
+    (sessionState === "won" ||
+      sessionState === "downed" ||
+      sessionState === "spectating")
+  ) {
+    winReturnToLobbyMsRemaining = Math.max(
+      0,
+      winReturnToLobbyMsRemaining - deltaSec * 1000,
+    );
   }
-  knockdownToastMsRemaining = Math.max(0, knockdownToastMsRemaining - deltaSec * 1000);
+  knockdownToastMsRemaining = Math.max(
+    0,
+    knockdownToastMsRemaining - deltaSec * 1000,
+  );
   if (now - lastOverlayUiUpdateAt >= HUD_OVERLAY_REFRESH_MS) {
     lastOverlayUiUpdateAt = now;
     updateDownedOverlay();
@@ -1400,7 +1783,11 @@ function animate() {
     updateKnockdownToast();
   }
   updateCrosshairHud(deltaSec, now);
-  if (debugOverlayOpen && appMode === "playing" && now - lastDebugOverlayUpdateAt >= DEBUG_OVERLAY_REFRESH_MS) {
+  if (
+    debugOverlayOpen &&
+    appMode === "playing" &&
+    now - lastDebugOverlayUpdateAt >= DEBUG_OVERLAY_REFRESH_MS
+  ) {
     lastDebugOverlayUpdateAt = now;
     updateDebugOverlay();
   }

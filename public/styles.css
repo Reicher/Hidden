@@ -948,13 +948,13 @@ button:disabled {
 
 #spectatorHud {
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
   top: max(12px, env(safe-area-inset-top));
-  transform: translateX(-50%);
   display: grid;
   justify-items: center;
   gap: 6px;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 #spectatorTargetText {
@@ -970,6 +970,7 @@ button:disabled {
 }
 
 #spectatorCycleButtons button {
+  pointer-events: auto;
   min-width: 42px;
   min-height: 30px;
   padding: 4px 10px;
@@ -980,12 +981,16 @@ button:disabled {
 }
 
 #spectatorActionRow {
+  position: fixed;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
   display: flex;
   gap: 8px;
+  pointer-events: auto;
 }
 
-#spectatorLobbyBtn,
-#spectatorChatBtn {
+#spectatorLobbyBtn {
   min-height: 30px;
   padding: 6px 10px;
   border-radius: 8px;
@@ -999,48 +1004,70 @@ button:disabled {
 #knockdownToast {
   position: absolute;
   left: 50%;
-  top: 18%;
+  top: 15%;
   transform: translateX(-50%);
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--line-soft);
-  background: var(--surface-glass);
+  max-width: min(86vw, 560px);
+  padding: 12px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(141, 225, 111, 0.46);
+  background: rgba(14, 24, 20, 0.9);
   color: var(--fg-strong);
-  font-size: 20px;
-  font-weight: 700;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.72);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.42);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.78);
 }
 
 #winOverlay {
   position: absolute;
-  left: 50%;
-  top: 18%;
-  transform: translateX(-50%);
+  inset: 0;
   display: grid;
+  grid-template-rows: 1fr auto auto;
   justify-items: center;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
+  padding: max(18px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
   pointer-events: none;
+  background: radial-gradient(circle at 50% 36%, rgba(75, 211, 107, 0.17), rgba(4, 6, 10, 0) 42%);
 }
 
 #winTitle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   margin: 0;
-  font-size: 24px;
+  max-width: min(90vw, 760px);
+  padding: 14px 22px;
+  border-radius: 8px;
+  border: 1px solid rgba(141, 225, 111, 0.42);
+  background: rgba(8, 14, 13, 0.72);
+  box-shadow: 0 18px 56px rgba(0, 0, 0, 0.38);
+  font-size: 64px;
+  line-height: 0.98;
   font-weight: 800;
   color: var(--fg-strong);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.82);
+  text-align: center;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.88);
 }
 
 #winCountdownText {
   margin: 0;
-  font-size: 12px;
+  align-self: end;
+  font-size: 13px;
+  font-weight: 700;
   color: rgba(220, 228, 242, 0.84);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.74);
 }
 
 #winLobbyBtn {
+  align-self: end;
   pointer-events: auto;
-  min-height: 30px;
-  padding: 6px 10px;
+  min-height: 34px;
+  padding: 7px 12px;
   border-radius: 8px;
   border: 1px solid var(--line-soft);
   background: var(--surface-glass);
@@ -1051,26 +1078,43 @@ button:disabled {
 
 #downedOverlay {
   position: absolute;
-  left: 50%;
-  bottom: max(12px, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
+  inset: 0;
   display: grid;
+  grid-template-rows: 1fr auto auto;
   justify-items: center;
-  gap: 6px;
-  pointer-events: auto;
+  align-items: center;
+  gap: 8px;
+  padding: max(18px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 38%, rgba(255, 106, 112, 0.15), rgba(4, 6, 10, 0) 44%);
 }
 
 #downedByText {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   margin: 0;
-  font-size: 19px;
-  font-weight: 700;
+  max-width: min(90vw, 720px);
+  padding: 13px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 106, 112, 0.4);
+  background: rgba(18, 12, 15, 0.74);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.38);
+  font-size: 52px;
+  line-height: 1;
+  font-weight: 800;
   color: var(--fg-strong);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.78);
+  text-align: center;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.88);
 }
 
 #downedCountdownText {
   margin: 0;
-  font-size: 12px;
+  align-self: end;
+  font-size: 13px;
+  font-weight: 700;
   color: rgba(220, 228, 242, 0.84);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.74);
 }
@@ -1078,15 +1122,15 @@ button:disabled {
 #downedActionRow {
   display: flex;
   gap: 8px;
+  align-self: end;
   pointer-events: auto;
 }
 
 #downedLobbyBtn,
-#downedChatBtn,
-#downedSpectateBtn {
+#downedLobbyBtn {
   pointer-events: auto;
-  min-height: 30px;
-  padding: 6px 10px;
+  min-height: 34px;
+  padding: 7px 12px;
   border-radius: 8px;
   border: 1px solid var(--line-soft);
   background: var(--surface-glass);
@@ -1098,7 +1142,7 @@ button:disabled {
 #gameChatNotice {
   position: absolute;
   right: 14px;
-  bottom: 128px;
+  bottom: 188px;
   font-size: 11px;
   color: rgba(231, 235, 245, 0.78);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
@@ -1169,7 +1213,7 @@ button:disabled {
 #gameChatBox {
   position: absolute;
   right: 12px;
-  bottom: max(12px, env(safe-area-inset-bottom));
+  bottom: max(72px, calc(env(safe-area-inset-bottom) + 72px));
   width: min(420px, calc(100vw - 24px));
   max-height: min(70vh, 520px);
   border: 1px solid var(--line-faint);
@@ -1201,6 +1245,9 @@ button:disabled {
 #gameChatInputRow {
   border-top: 1px solid var(--line-soft);
   padding: 7px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
 }
 
 #gameChatInput {
@@ -1210,6 +1257,17 @@ button:disabled {
   background: rgba(10, 12, 18, 0.9);
   color: var(--fg);
   padding: 7px 8px;
+}
+
+#gameChatSendBtn {
+  min-height: 32px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface-glass);
+  color: var(--fg-strong);
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 #gameChatBox.open #gameChatMessages {
@@ -1350,11 +1408,6 @@ body.mobile-controls-enabled #gameChatNotice {
   display: none;
 }
 
-body.touch-device #gameChatBox,
-body.touch-device #gameChatNotice {
-  display: none;
-}
-
 @media (max-width: 900px) {
   .connect-layout {
     width: min(520px, calc(100vw - 20px));
@@ -1455,7 +1508,7 @@ body.touch-device #gameChatNotice {
   }
 
   #gameChatNotice {
-    bottom: 104px;
+    bottom: 164px;
   }
 }
 
@@ -1579,4 +1632,31 @@ body.touch-device #gameChatNotice {
     font-size: 10px;
   }
 
+}
+
+@media (max-width: 720px), (max-height: 560px) {
+  #winTitle {
+    font-size: 38px;
+    padding: 11px 14px;
+  }
+
+  #downedByText {
+    top: 34%;
+    font-size: 32px;
+    padding: 11px 14px;
+  }
+
+  #knockdownToast {
+    font-size: 20px;
+    padding: 10px 14px;
+  }
+
+  #gameChatBox {
+    width: min(360px, calc(100vw - 24px));
+    bottom: max(82px, calc(env(safe-area-inset-bottom) + 82px));
+  }
+
+  #gameChatBox.open #gameChatMessages {
+    max-height: 28vh;
+  }
 }

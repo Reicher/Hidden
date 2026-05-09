@@ -93,6 +93,10 @@ export function createSpectatorSystem({
 
   function maintainSpectatorTarget(session, now) {
     if (!session || session.state !== "spectating") return;
+    const isOwnDownedTarget = (targetedSession, targetedCharacter) =>
+      targetedSession?.id === session.id &&
+      Boolean(targetedCharacter) &&
+      isCharacterDowned(targetedCharacter, now);
     const candidates = aliveSpectatorCandidates(now);
     if (candidates.length === 0) {
       const targetedSession = session.spectatingSessionId
@@ -103,7 +107,9 @@ export function createSpectatorSystem({
       if (
         targetedSession &&
         targetedCharacter &&
-        (targetedSession.state === "downed" || targetedSession.state === "won")
+        (targetedSession.state === "downed" ||
+          targetedSession.state === "won" ||
+          isOwnDownedTarget(targetedSession, targetedCharacter))
       ) {
         return;
       }
@@ -123,7 +129,9 @@ export function createSpectatorSystem({
     const targetedStillVisible =
       targetedSession &&
       targetedCharacter &&
-      (targetedSession.state === "downed" || targetedSession.state === "won");
+      (targetedSession.state === "downed" ||
+        targetedSession.state === "won" ||
+        isOwnDownedTarget(targetedSession, targetedCharacter));
     if (targetedStillVisible) return;
 
     setSpectatorTarget(session, candidates[0]);

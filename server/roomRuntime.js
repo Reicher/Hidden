@@ -416,6 +416,17 @@ function sanitizeSystemTextSegment(raw) {
     for (const ws of sockets.values()) send(ws, type, payload);
   }
 
+  function broadcastToSessions(type, payload = {}, shouldSend = () => true) {
+    for (const [sessionId, ws] of sockets.entries()) {
+      const session = sessions.get(sessionId);
+      if (shouldSend(session, sessionId)) send(ws, type, payload);
+    }
+  }
+
+  function broadcastChatToNonActivePlayers(entry) {
+    broadcastToSessions("chat", { entry }, (session) => session?.state !== "alive");
+  }
+
   function appendChat({ name, text, system = false, segments = null }) {
     const entry = {
       id: randomUUID(),
@@ -529,14 +540,16 @@ function sanitizeSystemTextSegment(raw) {
           name: ownerSession.name,
           characterId: charId
         });
-        ownerSession.state = "downed";
+        ownerSession.state = "spectating";
         ownerSession.ready = false;
         ownerSession.readyAt = 0;
-        ownerSession.characterId = charId;
+        ownerSession.characterId = null;
         ownerSession.input.attackRequested = false;
         ownerSession.eliminatedAt = now;
         ownerSession.returnToLobbyAt = 0;
         ownerSession.eliminatedByName = attackerSession?.name || null;
+        ownerSession.spectatingCharacterId = charId;
+        ownerSession.spectatingSessionId = ownerSession.id;
       }
     }
     c.controllerType = "AI";
@@ -649,7 +662,8 @@ function sanitizeSystemTextSegment(raw) {
       SPAM_MAX_DROPS_PER_WINDOW,
       chatHistory,
       appendChat,
-      broadcast
+      broadcast,
+      broadcastChatToNonActivePlayers
     },
     normalizePlayerName,
     normalizeChatText,

@@ -6,7 +6,7 @@ export function handleSocketMessage(msg, ctx) {
     avatarSystem,
     actions,
     inputController,
-    getNowMs
+    getNowMs,
   } = ctx;
 
   if (msg.type === "login_ok") {
@@ -42,7 +42,7 @@ export function handleSocketMessage(msg, ctx) {
   if (msg.type === "knockdown_confirm") {
     const victimName = String(msg.victimName || "").trim();
     if (victimName) {
-      state.knockdownToastText = `Du slog ner ${victimName}`;
+      state.knockdownToastText = `Du slog ned ${victimName}!`;
       state.knockdownToastMsRemaining = constants.KNOCKDOWN_TOAST_MS;
       actions.updateKnockdownToast();
     }
@@ -50,7 +50,9 @@ export function handleSocketMessage(msg, ctx) {
   }
 
   if (msg.type === "countdown") {
-    actions.setCountdownTextFromSession({ countdownMsRemaining: Number(msg.seconds || 1) * 1000 });
+    actions.setCountdownTextFromSession({
+      countdownMsRemaining: Number(msg.seconds || 1) * 1000,
+    });
     return;
   }
 
@@ -76,44 +78,92 @@ export function handleSocketMessage(msg, ctx) {
       inProgress: Boolean(msg.match.inProgress),
       alivePlayers: Number(msg.match.alivePlayers || 0),
       startedAt: msg.match.startedAt || null,
-      elapsedMs: Number(msg.match.elapsedMs || 0)
+      elapsedMs: Number(msg.match.elapsedMs || 0),
     };
   } else {
     state.currentMatch = { ...constants.DEFAULT_MATCH_STATE };
   }
 
   if (session) {
-    const previousAttackCooldownMsRemaining = Math.max(0, Number(state.attackCooldownMsRemaining || 0));
+    const previousAttackCooldownMsRemaining = Math.max(
+      0,
+      Number(state.attackCooldownMsRemaining || 0),
+    );
+    const previousSpectatorTargetCharacterId = state.spectatorTargetCharacterId;
+    const previousDownedByName = state.downedByName;
     state.sessionState = session.state;
     state.authenticated = Boolean(session.authenticated);
     state.myName = session.name || state.myName;
     state.sessionReady = Boolean(session.ready);
-    state.lobbyMinPlayersToStart = Math.max(1, Number(session.minPlayersToStart || state.lobbyMinPlayersToStart || 2));
-    state.lobbyMaxPlayers = Math.max(0, Number(session.maxPlayers || state.lobbyMaxPlayers || 0));
+    state.lobbyMinPlayersToStart = Math.max(
+      1,
+      Number(session.minPlayersToStart || state.lobbyMinPlayersToStart || 2),
+    );
+    state.lobbyMaxPlayers = Math.max(
+      0,
+      Number(session.maxPlayers || state.lobbyMaxPlayers || 0),
+    );
     state.myCharacterId = session.characterId ?? null;
     state.activePlayersInGame = Number(session.activePlayers || 0);
-    state.winReturnToLobbyMsRemaining = Math.max(0, Number(session.returnToLobbyMsRemaining || 0));
-    state.downedByName = session.eliminatedByName ? String(session.eliminatedByName) : "";
-    state.spectatorTargetCharacterId = session.spectatorTargetCharacterId ?? null;
-    state.spectatorTargetName = session.spectatorTargetName ? String(session.spectatorTargetName) : "";
-    state.spectatorCandidates = Array.isArray(session.spectatorCandidates) ? session.spectatorCandidates : [];
-    state.attackCooldownMsRemaining = Math.max(0, Number(session.attackCooldownMsRemaining || 0));
-    if (state.attackCooldownMsRemaining > constants.CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS) {
-      const newCooldownStarted = state.attackCooldownMsRemaining > previousAttackCooldownMsRemaining + 16;
-      if (newCooldownStarted || state.attackCooldownMsRemaining > state.attackCooldownVisualMaxMs) {
+    state.winReturnToLobbyMsRemaining = Math.max(
+      0,
+      Number(session.returnToLobbyMsRemaining || 0),
+    );
+    state.downedByName = session.eliminatedByName
+      ? String(session.eliminatedByName)
+      : "";
+    state.spectatorTargetCharacterId =
+      session.spectatorTargetCharacterId ?? null;
+    state.spectatorTargetName = session.spectatorTargetName
+      ? String(session.spectatorTargetName)
+      : "";
+    state.spectatorCandidates = Array.isArray(session.spectatorCandidates)
+      ? session.spectatorCandidates
+      : [];
+    if (state.sessionState === "won" && previousSessionState !== "won") {
+      state.winMessageHideAtMs = getNowMs() + constants.WIN_MESSAGE_VISIBLE_MS;
+    }
+    if (state.downedByName && !previousDownedByName) {
+      state.downedMessageSuppressed = false;
+      state.downedMessageHideAtMs =
+        getNowMs() + constants.DOWNED_MESSAGE_VISIBLE_MS;
+    } else if (
+      state.downedByName &&
+      previousSpectatorTargetCharacterId != null &&
+      state.spectatorTargetCharacterId != null &&
+      previousSpectatorTargetCharacterId !== state.spectatorTargetCharacterId
+    ) {
+      state.downedMessageSuppressed = true;
+    } else if (!state.downedByName) {
+      state.downedMessageSuppressed = false;
+      state.downedMessageHideAtMs = 0;
+    }
+    state.attackCooldownMsRemaining = Math.max(
+      0,
+      Number(session.attackCooldownMsRemaining || 0),
+    );
+    if (
+      state.attackCooldownMsRemaining >
+      constants.CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS
+    ) {
+      const newCooldownStarted =
+        state.attackCooldownMsRemaining >
+        previousAttackCooldownMsRemaining + 16;
+      if (
+        newCooldownStarted ||
+        state.attackCooldownMsRemaining > state.attackCooldownVisualMaxMs
+      ) {
         state.attackCooldownVisualMaxMs = Math.max(
           state.attackCooldownMsRemaining,
-          constants.CROSSHAIR_DEFAULT_COOLDOWN_MS
+          constants.CROSSHAIR_DEFAULT_COOLDOWN_MS,
         );
       }
     }
     actions.updateInGameHud();
     actions.updateSpectatorHud();
     actions.updateDocumentTitle();
-    if (previousSessionState !== state.sessionState) actions.refreshGameChat?.();
-    if (previousSessionState !== "won" && state.sessionState === "won") {
-      actions.queueWinSfx?.();
-    }
+    if (previousSessionState !== state.sessionState)
+      actions.refreshGameChat?.();
   } else {
     actions.resetDownedState();
     actions.resetWinState();
@@ -124,7 +174,9 @@ export function handleSocketMessage(msg, ctx) {
 
   if (
     previousSessionState === "alive" &&
-    (state.sessionState === "downed" || state.sessionState === "won" || state.sessionState === "spectating")
+    (state.sessionState === "downed" ||
+      state.sessionState === "won" ||
+      state.sessionState === "spectating")
   ) {
     if (document.pointerLockElement) document.exitPointerLock?.();
     actions.resetInputState();
@@ -156,7 +208,7 @@ export function handleSocketMessage(msg, ctx) {
       worldHeightMeters: msg.worldHeightMeters,
       shelves: msg.shelves,
       coolers: msg.coolers,
-      freezers: msg.freezers
+      freezers: msg.freezers,
     });
 
     actions.renderScoreboard(msg.scoreboard || []);
@@ -165,19 +217,30 @@ export function handleSocketMessage(msg, ctx) {
       characters: msg.characters || [],
       myCharacterId: state.myCharacterId,
       nowMs: getNowMs(),
-      hideMyCharacter: state.sessionState === "alive" || state.sessionState === "won"
+      hideMyCharacter:
+        state.sessionState === "alive" || state.sessionState === "won",
     });
     const controlledYaw = worldResult?.myYaw ?? null;
-    const downedHitEvents = Array.isArray(worldResult?.downedHitEvents) ? worldResult.downedHitEvents : [];
+    const downedHitEvents = Array.isArray(worldResult?.downedHitEvents)
+      ? worldResult.downedHitEvents
+      : [];
     for (const hitEvent of downedHitEvents) {
       actions.playHitHurtAtPosition?.(hitEvent);
     }
 
     if (controlledYaw != null) {
-      const gainedNewCharacter = state.myCharacterId != null && state.myCharacterId !== previousCharacterId;
+      const gainedNewCharacter =
+        state.myCharacterId != null &&
+        state.myCharacterId !== previousCharacterId;
       const enteredAliveWithCharacter =
-        previousSessionState !== "alive" && state.sessionState === "alive" && state.myCharacterId != null;
-      if (gainedNewCharacter || enteredAliveWithCharacter || state.forceYawSyncOnNextWorld) {
+        previousSessionState !== "alive" &&
+        state.sessionState === "alive" &&
+        state.myCharacterId != null;
+      if (
+        gainedNewCharacter ||
+        enteredAliveWithCharacter ||
+        state.forceYawSyncOnNextWorld
+      ) {
         inputController.setYaw(controlledYaw);
         actions.setViewYaw(controlledYaw);
         state.forceYawSyncOnNextWorld = false;

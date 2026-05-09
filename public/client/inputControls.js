@@ -374,6 +374,7 @@ export function createInputController({
   return {
     bind,
     resetInputState,
+    resetJoystickState,
     sendInput,
     setYaw,
     getYaw,
