@@ -36,7 +36,7 @@ export function handleSocketMessage(msg, ctx) {
   }
 
   if (msg.type === "chat") {
-    actions.appendChat(msg.entry);
+    actions.deferAppendChat?.(msg.entry) || actions.appendChat(msg.entry);
     return;
   }
 
@@ -45,7 +45,7 @@ export function handleSocketMessage(msg, ctx) {
     if (victimName) {
       state.knockdownToastText = `Du slog ned ${victimName}!`;
       state.knockdownToastMsRemaining = constants.KNOCKDOWN_TOAST_MS;
-      actions.updateKnockdownToast();
+      actions.deferKnockdownToastUpdate?.() || actions.updateKnockdownToast();
     }
     return;
   }
@@ -175,8 +175,18 @@ export function handleSocketMessage(msg, ctx) {
     actions.updateInGameHud();
     actions.updateSpectatorHud();
     actions.updateDocumentTitle();
-    if (previousSessionState !== state.sessionState)
-      actions.refreshGameChat?.();
+    if (previousSessionState !== state.sessionState) {
+      if (
+        previousSessionState === "alive" &&
+        (state.sessionState === "downed" ||
+          state.sessionState === "won" ||
+          state.sessionState === "spectating")
+      ) {
+        actions.deferRefreshGameChat?.() || actions.refreshGameChat?.();
+      } else {
+        actions.refreshGameChat?.();
+      }
+    }
   } else {
     actions.resetDownedState();
     actions.resetWinState();

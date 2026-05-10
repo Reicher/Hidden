@@ -814,7 +814,6 @@ export function createRoomRuntime({
     aliveSpectatorCandidates,
     scoreboardSnapshot,
     countdownMsRemaining,
-    send,
     sendRaw,
     onTick: ({ durationMs }) => {
       recordTickDuration(durationMs);

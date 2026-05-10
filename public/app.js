@@ -787,8 +787,32 @@ function appendChat(entry) {
   chatUi.appendChat(entry);
 }
 
+const deferredChatEntries = [];
+let deferredChatFlushScheduled = false;
+
 function replaceChat(history) {
+  deferredChatEntries.length = 0;
   chatUi.replaceChat(history);
+}
+
+function deferUiWork(callback) {
+  if (typeof callback !== "function") return false;
+  if (typeof requestAnimationFrame !== "function") return false;
+  requestAnimationFrame(callback);
+  return true;
+}
+
+function deferAppendChat(entry) {
+  if (typeof requestAnimationFrame !== "function") return false;
+  deferredChatEntries.push(entry);
+  if (deferredChatFlushScheduled) return true;
+  deferredChatFlushScheduled = true;
+  requestAnimationFrame(() => {
+    deferredChatFlushScheduled = false;
+    const entries = deferredChatEntries.splice(0, deferredChatEntries.length);
+    for (const queuedEntry of entries) appendChat(queuedEntry);
+  });
+  return true;
 }
 
 function resetInputState() {
@@ -813,7 +837,9 @@ const socketMessageContext = createSocketMessageContext({
     resetSessionRuntimeState,
     replaceChat,
     appendChat,
+    deferAppendChat,
     refreshGameChat: () => chatUi.refreshGameChat(),
+    deferRefreshGameChat: () => deferUiWork(() => chatUi.refreshGameChat()),
     setConnectError,
     setPrivateRoomButtonVisible,
     setAppMode,
@@ -822,6 +848,7 @@ const socketMessageContext = createSocketMessageContext({
     updateInGameHud,
     updateDocumentTitle,
     updateKnockdownToast,
+    deferKnockdownToastUpdate: () => deferUiWork(updateKnockdownToast),
     updateSpectatorHud,
     handleDebugPong,
     resetDownedState,

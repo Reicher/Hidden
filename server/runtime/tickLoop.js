@@ -29,7 +29,6 @@ export function createRoomTickLoop({
   aliveSpectatorCandidates,
   scoreboardSnapshot,
   countdownMsRemaining,
-  send,
   sendRaw,
   onTick = null,
 }) {
