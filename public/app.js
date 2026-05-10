@@ -308,6 +308,7 @@ const {
   getAudioSettings,
   getLookSettings,
   playHitHurtAtPosition,
+  playHitMissSfx,
   playUiBlipSfx,
   refreshSettingsUi: refreshAudioSettingsUi,
   setFullscreenEnabled,
@@ -514,6 +515,7 @@ function updateInGameHud() {
     aliveOthersTextEl,
     gameChatNoticeEl,
     activePlayersInGame: clientState.activePlayersInGame,
+    spectatorCount: clientState.spectatorCount,
     sessionState: clientState.sessionState,
   });
   if (clientState.gameChatOpen && gameChatNoticeEl)
@@ -879,6 +881,7 @@ const socketMessageContext = createSocketMessageContext({
     requestPointerLockSafe,
     renderScoreboard,
     playHitHurtAtPosition,
+    playHitMissSfx,
     cancelAutoReconnect: () =>
       socketConnection?.cancelAutoReconnectOnLoginError?.(),
     setViewYaw: (value) => {

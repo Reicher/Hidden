@@ -98,6 +98,9 @@ export function createRoomTickLoop({
       ready: Boolean(session.ready || session.state === "countdown"),
       countdownMsRemaining: countdownMsRemaining(now),
       activePlayers: alivePlayers,
+      spectatorCount: [...sessions.values()].filter(
+        (s) => s.authenticated && s.state === "spectating",
+      ).length,
       minPlayersToStart: constants.MIN_PLAYERS_TO_START,
       maxPlayers: constants.MAX_PLAYERS,
       returnToLobbyMsRemaining: isEndMatchState(session)

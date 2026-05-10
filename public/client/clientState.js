@@ -14,6 +14,7 @@ export function createClientState() {
     myName: "",
     sessionReady: false,
     activePlayersInGame: 0,
+    spectatorCount: 0,
     attackCooldownMsRemaining: 0,
     attackCooldownVisualMaxMs: 1000,
     gameChatOpen: false,

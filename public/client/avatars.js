@@ -1150,7 +1150,10 @@ export function createAvatarSystem({ scene, camera }) {
     avatar.inspectDownedActive =
       Boolean(character.inspectDownedActive) &&
       avatar.inspectDownedTargetId >= 0;
+    const prevAttackFlashMs = avatar.attackFlashMsRemaining;
     avatar.attackFlashMsRemaining = character.attackFlashMsRemaining || 0;
+    const attackFlashStarted =
+      avatar.attackFlashMsRemaining > prevAttackFlashMs + 50;
     avatar.controllerType = character.controllerType || "AI";
     const downedMsRemaining = Math.max(
       0,
@@ -1246,7 +1249,7 @@ export function createAvatarSystem({ scene, camera }) {
     avatar.lastServerX = character.x;
     avatar.lastServerZ = character.z;
     avatar.lastServerAt = nowMs;
-    return { downedStarted: !wasDowned && avatar.isDowned };
+    return { downedStarted: !wasDowned && avatar.isDowned, attackFlashStarted };
   }
 
   function setAvatarEyeTarget(avatar, x, y) {
@@ -1558,6 +1561,7 @@ export function createAvatarSystem({ scene, camera }) {
     hideMyCharacter = true,
   }) {
     let myYaw = null;
+    let myAttackFired = false;
     const downedHitEvents = [];
     for (const avatar of avatars.values()) avatar.seenAtTick = false;
 
@@ -1584,6 +1588,7 @@ export function createAvatarSystem({ scene, camera }) {
 
       if (character.id === myCharacterId) {
         myYaw = character.yaw;
+        if (transition?.attackFlashStarted) myAttackFired = true;
       }
     }
 
@@ -1593,7 +1598,7 @@ export function createAvatarSystem({ scene, camera }) {
       avatars.delete(id);
     }
 
-    return { myYaw, downedHitEvents };
+    return { myYaw, downedHitEvents, myAttackFired };
   }
 
   function animate(deltaSec, myCharacterId) {

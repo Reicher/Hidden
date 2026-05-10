@@ -141,6 +141,7 @@ export function handleSocketMessage(msg, ctx) {
     );
     state.myCharacterId = session.characterId ?? null;
     state.activePlayersInGame = Number(session.activePlayers || 0);
+    state.spectatorCount = Number(session.spectatorCount || 0);
     state.winReturnToLobbyMsRemaining = Math.max(
       0,
       Number(session.returnToLobbyMsRemaining || 0),
@@ -287,6 +288,9 @@ export function handleSocketMessage(msg, ctx) {
       : [];
     for (const hitEvent of downedHitEvents) {
       actions.playHitHurtAtPosition?.(hitEvent);
+    }
+    if (worldResult?.myAttackFired && downedHitEvents.length === 0) {
+      actions.playHitMissSfx?.();
     }
 
     if (controlledYaw != null) {

@@ -2,15 +2,19 @@ export function updateInGameHud({
   aliveOthersTextEl,
   gameChatNoticeEl,
   activePlayersInGame,
+  spectatorCount,
   sessionState,
 }) {
   if (!aliveOthersTextEl) return;
-  const others = Math.max(
-    0,
-    activePlayersInGame - (sessionState === "alive" ? 1 : 0),
-  );
-  const noun = others === 1 ? "annan" : "andra";
-  aliveOthersTextEl.textContent = `${others} ${noun} spelar just nu`;
+  const total = Math.max(0, Number(activePlayersInGame || 0));
+  const specs = Math.max(0, Number(spectatorCount || 0));
+  const playerNoun = total === 1 ? "spelare" : "spelare";
+  let text = `${total} ${playerNoun} i matchen`;
+  if (specs > 0) {
+    const specNoun = specs === 1 ? "åskådar" : "åskådar";
+    text += ` · ${specs} ${specNoun}`;
+  }
+  aliveOthersTextEl.textContent = text;
   if (gameChatNoticeEl) {
     gameChatNoticeEl.textContent =
       sessionState === "won" ? "Chatt" : "Systemhändelser";

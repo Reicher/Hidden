@@ -2,7 +2,7 @@ import { loadAudioSettings } from "./audioSettings.js";
 import {
   loadLookSettings,
   lookSensitivityMultiplier,
-  lookSmoothingRate
+  lookSmoothingRate,
 } from "./lookSettings.js";
 
 const HIT_SFX_MIN_DISTANCE = 0.8;
@@ -15,7 +15,7 @@ export function createSettingsController({
   getAppMode,
   getMobileControlsPreference,
   isTouchDevice,
-  mobileControlsLabel
+  mobileControlsLabel,
 }) {
   const {
     fullscreenModeCheckboxEl,
@@ -27,7 +27,7 @@ export function createSettingsController({
     settingsFullscreenHelpEl,
     sfxMuteBtnEl,
     sfxVolumeInputEl,
-    startFullscreenCheckboxEl
+    startFullscreenCheckboxEl,
   } = elements;
 
   let audioSettings = loadAudioSettings();
@@ -36,21 +36,25 @@ export function createSettingsController({
   const musicLoopEl = new Audio("/assets/sounds/music.wav");
   const uiBlipSfxTemplateEl = new Audio("/assets/sounds/blipSelect.wav");
   const hitHurtSfxTemplateEl = new Audio("/assets/sounds/hitHurt.wav");
+  const hitMissSfxTemplateEl = new Audio("/assets/sounds/hitMiss.wav");
   uiBlipSfxTemplateEl.preload = "auto";
   hitHurtSfxTemplateEl.preload = "auto";
+  hitMissSfxTemplateEl.preload = "auto";
   musicLoopEl.loop = true;
   musicLoopEl.preload = "auto";
 
   function getFullscreenElement() {
-    return document.fullscreenElement || document.webkitFullscreenElement || null;
+    return (
+      document.fullscreenElement || document.webkitFullscreenElement || null
+    );
   }
 
   function isFullscreenSupported() {
     return Boolean(
       document.fullscreenEnabled ||
-        document.webkitFullscreenEnabled ||
-        typeof document.documentElement?.requestFullscreen === "function" ||
-        typeof document.documentElement?.webkitRequestFullscreen === "function"
+      document.webkitFullscreenEnabled ||
+      typeof document.documentElement?.requestFullscreen === "function" ||
+      typeof document.documentElement?.webkitRequestFullscreen === "function",
     );
   }
 
@@ -72,7 +76,10 @@ export function createSettingsController({
   }
 
   function syncMusicLoop() {
-    musicLoopEl.volume = Math.max(0, Math.min(1, audioSettings.musicVolume / 100));
+    musicLoopEl.volume = Math.max(
+      0,
+      Math.min(1, audioSettings.musicVolume / 100),
+    );
     const shouldPlay =
       getAppMode() === "playing" &&
       !audioSettings.musicMuted &&
@@ -99,7 +106,7 @@ export function createSettingsController({
     }
     if (elements.mobileControlsModeBtnEl) {
       elements.mobileControlsModeBtnEl.textContent = mobileControlsLabel(
-        getMobileControlsPreference()
+        getMobileControlsPreference(),
       );
     }
     if (fullscreenModeCheckboxEl) {
@@ -114,12 +121,18 @@ export function createSettingsController({
       lookSensitivityValueEl.textContent = `${lookSettings.sensitivity}%`;
     }
     if (lookSmoothingToggleBtnEl) {
-      lookSmoothingToggleBtnEl.textContent = lookSettings.smoothingEnabled ? "På" : "Av";
+      lookSmoothingToggleBtnEl.textContent = lookSettings.smoothingEnabled
+        ? "På"
+        : "Av";
     }
-    if (musicVolumeInputEl) musicVolumeInputEl.value = String(audioSettings.musicVolume);
-    if (sfxVolumeInputEl) sfxVolumeInputEl.value = String(audioSettings.sfxVolume);
-    if (musicMuteBtnEl) musicMuteBtnEl.textContent = audioSettings.musicMuted ? "Avmuta" : "Muta";
-    if (sfxMuteBtnEl) sfxMuteBtnEl.textContent = audioSettings.sfxMuted ? "Avmuta" : "Muta";
+    if (musicVolumeInputEl)
+      musicVolumeInputEl.value = String(audioSettings.musicVolume);
+    if (sfxVolumeInputEl)
+      sfxVolumeInputEl.value = String(audioSettings.sfxVolume);
+    if (musicMuteBtnEl)
+      musicMuteBtnEl.textContent = audioSettings.musicMuted ? "Avmuta" : "Muta";
+    if (sfxMuteBtnEl)
+      sfxMuteBtnEl.textContent = audioSettings.sfxMuted ? "Avmuta" : "Muta";
     syncMusicLoop();
   }
 
@@ -153,7 +166,9 @@ export function createSettingsController({
     } catch {
       // Settings UI is resynced from the actual fullscreen state below.
     }
-    const applied = wantsFullscreen ? isFullscreenActive() : !isFullscreenActive();
+    const applied = wantsFullscreen
+      ? isFullscreenActive()
+      : !isFullscreenActive();
     refreshSettingsUi();
     return applied;
   }
@@ -181,11 +196,18 @@ export function createSettingsController({
     playSfx(uiBlipSfxTemplateEl, 0.92);
   }
 
+  function playHitMissSfx() {
+    if (getAppMode() !== "playing") return;
+    playSfx(hitMissSfxTemplateEl, 0.75);
+  }
+
   function hitSfxGainByDistance(distanceMeters) {
     const distance = Math.max(0, Number(distanceMeters) || 0);
     if (distance <= HIT_SFX_MIN_DISTANCE) return HIT_SFX_BASE_GAIN;
     if (distance >= HIT_SFX_MAX_DISTANCE) return 0;
-    const t = (distance - HIT_SFX_MIN_DISTANCE) / (HIT_SFX_MAX_DISTANCE - HIT_SFX_MIN_DISTANCE);
+    const t =
+      (distance - HIT_SFX_MIN_DISTANCE) /
+      (HIT_SFX_MAX_DISTANCE - HIT_SFX_MIN_DISTANCE);
     return HIT_SFX_BASE_GAIN * Math.pow(1 - t, 1.3);
   }
 
@@ -214,12 +236,13 @@ export function createSettingsController({
     getLookSmoothingRate: () => lookSmoothingRate(lookSettings),
     getLookSettings: () => lookSettings,
     playHitHurtAtPosition,
+    playHitMissSfx,
     playUiBlipSfx,
     refreshSettingsUi,
     setFullscreenEnabled,
     setLookSettings: (next) => {
       lookSettings = next;
     },
-    syncMusicLoop
+    syncMusicLoop,
   };
 }
