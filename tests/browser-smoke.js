@@ -16,7 +16,7 @@ async function launchBrowser() {
     const message = err?.message || String(err);
     if (message.includes("Executable doesn't exist")) {
       throw new Error(
-        `${message}\nInstall browser once with: npx playwright install chromium`
+        `${message}\nInstall browser once with: npx playwright install chromium`,
       );
     }
     throw err;
@@ -24,7 +24,12 @@ async function launchBrowser() {
 }
 
 async function run() {
-  const server = await startServer({ cwd: process.cwd(), host: HOST, port: PORT, timeoutMs: SERVER_START_TIMEOUT_MS });
+  const server = await startServer({
+    cwd: process.cwd(),
+    host: HOST,
+    port: PORT,
+    timeoutMs: SERVER_START_TIMEOUT_MS,
+  });
   let browser = null;
 
   try {
@@ -38,12 +43,30 @@ async function run() {
       page.on("console", (msg) => {
         const text = msg.text();
         const type = msg.type();
+        // Ignore GPU driver-level messages emitted by headless Chromium's
+        // internal GPU process – these are not caused by application code
+        // and do not appear in real browser sessions.
+        if (text.includes("GL Driver Message") || text.includes("GPU stall"))
+          return;
         if (type === "error" || text.includes("[client:world-render]")) {
+          clientErrors.push(`[${label}:console:${type}] ${text}`);
+        }
+        // Catch layout-force and autoplay warnings that browsers emit as
+        // "warning" or "info" messages (not "error").
+        if (
+          type === "warning" ||
+          (type !== "error" &&
+            (text.includes("Layout was forced") ||
+              text.includes("Autoplay is only allowed") ||
+              text.includes("WebGL warning")))
+        ) {
           clientErrors.push(`[${label}:console:${type}] ${text}`);
         }
       });
       page.on("pageerror", (err) => {
-        clientErrors.push(`[${label}:pageerror] ${err?.message || String(err)}`);
+        clientErrors.push(
+          `[${label}:pageerror] ${err?.message || String(err)}`,
+        );
       });
     };
     attachErrorCapture(pageA, "A");
@@ -59,35 +82,57 @@ async function run() {
     await pageB.click("#connectBtn");
 
     await Promise.all([
-      pageA.waitForFunction(() => !document.getElementById("lobbyView")?.classList.contains("hidden"), null, {
-        timeout: 8000
-      }),
-      pageB.waitForFunction(() => !document.getElementById("lobbyView")?.classList.contains("hidden"), null, {
-        timeout: 8000
-      })
+      pageA.waitForFunction(
+        () =>
+          !document.getElementById("lobbyView")?.classList.contains("hidden"),
+        null,
+        {
+          timeout: 8000,
+        },
+      ),
+      pageB.waitForFunction(
+        () =>
+          !document.getElementById("lobbyView")?.classList.contains("hidden"),
+        null,
+        {
+          timeout: 8000,
+        },
+      ),
     ]);
 
     const waitUntilPlayReady = (page) =>
-      page.waitForFunction(() => {
-        const btn = document.getElementById("playBtn");
-        if (!btn) return false;
-        if (!(btn instanceof HTMLButtonElement)) return false;
-        if (btn.disabled) return false;
-        const style = window.getComputedStyle(btn);
-        if (style.display === "none" || style.visibility === "hidden") return false;
-        const rect = btn.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-      }, null, { timeout: 12000 });
+      page.waitForFunction(
+        () => {
+          const btn = document.getElementById("playBtn");
+          if (!btn) return false;
+          if (!(btn instanceof HTMLButtonElement)) return false;
+          if (btn.disabled) return false;
+          const style = window.getComputedStyle(btn);
+          if (style.display === "none" || style.visibility === "hidden")
+            return false;
+          const rect = btn.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        },
+        null,
+        { timeout: 12000 },
+      );
 
     const clickReadyWithRetry = async (page) => {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         await waitUntilPlayReady(page);
         await page.click("#playBtn");
-        const toggled = await page.waitForFunction(() => {
-          const btn = document.getElementById("playBtn");
-          if (!(btn instanceof HTMLButtonElement)) return false;
-          return btn.textContent !== "Redo" || btn.disabled;
-        }, null, { timeout: 2500 }).then(() => true).catch(() => false);
+        const toggled = await page
+          .waitForFunction(
+            () => {
+              const btn = document.getElementById("playBtn");
+              if (!(btn instanceof HTMLButtonElement)) return false;
+              return btn.textContent !== "Redo" || btn.disabled;
+            },
+            null,
+            { timeout: 2500 },
+          )
+          .then(() => true)
+          .catch(() => false);
         if (toggled) return;
       }
       throw new Error("Failed to toggle ready state after clicking #playBtn");
@@ -96,14 +141,28 @@ async function run() {
     await Promise.all([clickReadyWithRetry(pageA), clickReadyWithRetry(pageB)]);
 
     await Promise.all([
-      pageA.waitForFunction(() => !document.body.classList.contains("overlay-active"), null, { timeout: 25000 }),
-      pageB.waitForFunction(() => !document.body.classList.contains("overlay-active"), null, { timeout: 25000 })
+      pageA.waitForFunction(
+        () => !document.body.classList.contains("overlay-active"),
+        null,
+        { timeout: 25000 },
+      ),
+      pageB.waitForFunction(
+        () => !document.body.classList.contains("overlay-active"),
+        null,
+        { timeout: 25000 },
+      ),
     ]);
 
     await sleep(1200);
 
-    assert.equal(clientErrors.length, 0, `Client runtime errors found:\n${clientErrors.join("\n")}`);
-    console.log("Browser smoke test passed: ready flow starts match and client renders without runtime errors.");
+    assert.equal(
+      clientErrors.length,
+      0,
+      `Client runtime errors found:\n${clientErrors.join("\n")}`,
+    );
+    console.log(
+      "Browser smoke test passed: ready flow starts match and client renders without runtime errors.",
+    );
   } finally {
     try {
       await browser?.close();

@@ -14,6 +14,7 @@
     "test:reconnect-countdown-edge": "node tests/reconnect-countdown-edge.js",
     "test:supermajority-ready": "node tests/supermajority-ready.js",
     "test:browser": "node tests/browser-smoke.js",
+    "test:firefox-warnings": "node tests/firefox-warnings.js",
     "test:combat": "node tests/combat.unit.js",
     "test:physics": "node tests/physics.unit.js",
     "test:debug-stats": "node tests/debug-stats-persistence.unit.js",

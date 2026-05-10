@@ -57,6 +57,7 @@ import { createClientMessageProcessor } from "./runtime/clientMessages.js";
 import { createRoomTickLoop } from "./runtime/tickLoop.js";
 import { createRoomWsLifecycle } from "./runtime/wsLifecycle.js";
 import { createMatchFlow } from "./runtime/matchFlow.js";
+import { percentile, avg, round } from "./runtime/perfUtils.js";
 
 const NAME_MIN_LEN = 2;
 const NAME_MAX_LEN = 20;
@@ -136,30 +137,6 @@ export function createRoomRuntime({
 
   function shortSessionId(sessionId) {
     return sessionId ? String(sessionId).slice(0, 8) : "-";
-  }
-
-  function sortedNumeric(values) {
-    return values.slice().sort((a, b) => a - b);
-  }
-
-  function percentile(values, ratio) {
-    if (!Array.isArray(values) || values.length === 0) return 0;
-    const sorted = sortedNumeric(values);
-    const index = Math.min(
-      sorted.length - 1,
-      Math.max(0, Math.floor(ratio * (sorted.length - 1))),
-    );
-    return sorted[index];
-  }
-
-  function avg(values) {
-    if (!Array.isArray(values) || values.length === 0) return 0;
-    return values.reduce((sum, value) => sum + value, 0) / values.length;
-  }
-
-  function round(value, digits = 2) {
-    const factor = 10 ** digits;
-    return Math.round(value * factor) / factor;
   }
 
   function recordInboundBytes(bytes) {

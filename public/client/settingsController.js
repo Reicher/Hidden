@@ -33,6 +33,22 @@ export function createSettingsController({
   let audioSettings = loadAudioSettings();
   let lookSettings = loadLookSettings();
 
+  // Browsers block Audio.play() until the user has interacted with the page.
+  // Track this so we never call play() prematurely and trigger a console warning.
+  let userHasInteracted = false;
+  function onFirstInteraction() {
+    if (userHasInteracted) return;
+    userHasInteracted = true;
+    document.removeEventListener("pointerdown", onFirstInteraction, true);
+    document.removeEventListener("keydown", onFirstInteraction, true);
+    document.removeEventListener("touchstart", onFirstInteraction, true);
+    // Now that interaction is confirmed, try to start the music loop if needed.
+    syncMusicLoop();
+  }
+  document.addEventListener("pointerdown", onFirstInteraction, true);
+  document.addEventListener("keydown", onFirstInteraction, true);
+  document.addEventListener("touchstart", onFirstInteraction, true);
+
   const musicLoopEl = new Audio("/assets/sounds/music.wav");
   const uiBlipSfxTemplateEl = new Audio("/assets/sounds/blipSelect.wav");
   const hitHurtSfxTemplateEl = new Audio("/assets/sounds/hitHurt.wav");
@@ -85,6 +101,7 @@ export function createSettingsController({
       !audioSettings.musicMuted &&
       musicLoopEl.volume > 0;
     if (shouldPlay) {
+      if (!userHasInteracted) return;
       const playPromise = musicLoopEl.play();
       if (playPromise && typeof playPromise.catch === "function") {
         playPromise.catch(() => {});
@@ -184,6 +201,7 @@ export function createSettingsController({
     const safeGain = Math.max(0, Math.min(1, Number(gain) || 0));
     const volume = Math.max(0, Math.min(1, master * safeGain));
     if (volume <= 0.001) return;
+    if (!userHasInteracted) return;
     const instance = templateEl.cloneNode();
     instance.volume = volume;
     const playPromise = instance.play();

@@ -3,6 +3,7 @@ import path from "node:path";
 import { createRoomRuntime } from "./roomRuntime.js";
 import { createDebugStatsStore } from "./debugStats.js";
 import { createSystemMetricsCollector } from "./systemMetrics.js";
+import { createDebugApiHandler } from "./debugApi.js";
 import {
   DEBUG_VIEW_TOKEN,
   getActiveLayoutInfo,
@@ -24,7 +25,6 @@ const RESERVED_ROOM_CODES = new Set(["debug"]);
 const SETTINGS_DIR_NAME = "logs";
 const SETTINGS_FILE_NAME = "server-settings.json";
 const SETTINGS_TMP_FILE_NAME = "server-settings.json.tmp";
-const MAX_DEBUG_SETTINGS_BODY_BYTES = 16 * 1024;
 
 function parseRoomFromRequestUrl(rawUrl) {
   const parsed = new URL(rawUrl || "/", "http://localhost");
@@ -117,13 +117,6 @@ export function attachGameRuntime({ server, rootDir }) {
     }
   }
 
-  function writeJson(res, statusCode, payload) {
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache");
-    res.writeHead(statusCode);
-    res.end(JSON.stringify(payload));
-  }
-
   function ensureRoom({ roomId, roomCode, isPrivate }) {
     const existing = rooms.get(roomId);
     if (existing) return existing;
@@ -156,186 +149,31 @@ export function attachGameRuntime({ server, rootDir }) {
     ensureRoom({ roomId: PUBLIC_ROOM_ID, roomCode: null, isPrivate: false });
   }
 
-  function getProvidedToken(req, requestUrl) {
-    const tokenFromQuery = requestUrl.searchParams.get("token");
-    const tokenFromHeader = req.headers["x-debug-token"];
-    return typeof tokenFromQuery === "string" && tokenFromQuery.trim()
-      ? tokenFromQuery.trim()
-      : typeof tokenFromHeader === "string"
-        ? tokenFromHeader.trim()
-        : "";
-  }
-
-  function isDebugAuthorized(req, requestUrl, res) {
-    const configuredToken = String(DEBUG_VIEW_TOKEN || "").trim();
-    if (!configuredToken) {
-      writeJson(res, 503, {
-        error: "debug_token_not_configured",
-        authRequired: true,
-      });
-      return false;
-    }
-    if (getProvidedToken(req, requestUrl) !== configuredToken) {
-      writeJson(res, 401, { error: "unauthorized", authRequired: true });
-      return false;
-    }
-    return true;
-  }
-
   loadPersistedServerSettings();
   ensureRoom({ roomId: PUBLIC_ROOM_ID, roomCode: null, isPrivate: false });
 
+  const debugApi = createDebugApiHandler({
+    DEBUG_VIEW_TOKEN,
+    debugStats,
+    systemMetrics,
+    getRooms: () => rooms.values(),
+    getActiveLayoutInfo,
+    getAvailableLayouts,
+    getGameplaySettings,
+    getAiBehaviorSettings,
+    setActiveLayout,
+    setGameplaySettings,
+    setAiBehaviorSettings,
+    hasGameplaySettingsPatch,
+    hasAiBehaviorSettingsPatch,
+    mergeGameplaySettingsPatch,
+    mergeAiBehaviorSettingsPatch,
+    writePersistedSettings: writePersistedServerSettings,
+    restartRoomsForSettingsChange,
+  });
+
   async function handleHttpRequest({ req, res, requestUrl }) {
-    if (requestUrl.pathname === "/api/room-info") {
-      if (req.method !== "GET") {
-        writeJson(res, 405, { error: "method_not_allowed" });
-        return true;
-      }
-      const gameplay = getGameplaySettings();
-      writeJson(res, 200, {
-        maxPlayers: gameplay.maxPlayers,
-        totalCharacters: gameplay.totalCharacters,
-      });
-      return true;
-    }
-
-    if (requestUrl.pathname === "/api/debug/stats") {
-      if (req.method !== "GET") {
-        writeJson(res, 405, { error: "method_not_allowed" });
-        return true;
-      }
-      if (!isDebugAuthorized(req, requestUrl, res)) return true;
-
-      const payload = debugStats.getSnapshot();
-      payload.systemMetrics = await systemMetrics.collect();
-      payload.liveRooms = [...rooms.values()]
-        .map((room) => room.getDebugSnapshot())
-        .sort((a, b) => {
-          if (b.current.connected !== a.current.connected)
-            return b.current.connected - a.current.connected;
-          return String(a.roomId).localeCompare(String(b.roomId), "sv");
-        });
-      payload.authRequired = true;
-      payload.logFiles = debugStats.logs;
-      payload.layout = getActiveLayoutInfo();
-      payload.gameplaySettings = getGameplaySettings();
-      payload.aiBehaviorSettings = getAiBehaviorSettings();
-      writeJson(res, 200, payload);
-      return true;
-    }
-
-    if (requestUrl.pathname === "/api/debug/settings") {
-      if (!isDebugAuthorized(req, requestUrl, res)) return true;
-      if (req.method === "GET") {
-        writeJson(res, 200, {
-          authRequired: true,
-          layout: getActiveLayoutInfo(),
-          availableLayouts: getAvailableLayouts(),
-          gameplaySettings: getGameplaySettings(),
-          aiBehaviorSettings: getAiBehaviorSettings(),
-        });
-        return true;
-      }
-      if (req.method !== "POST") {
-        writeJson(res, 405, { error: "method_not_allowed" });
-        return true;
-      }
-
-      let bodyText = "";
-      let bodyBytes = 0;
-      for await (const chunk of req) {
-        const chunkText = typeof chunk === "string" ? chunk : chunk.toString();
-        bodyBytes += Buffer.byteLength(chunkText, "utf8");
-        if (bodyBytes > MAX_DEBUG_SETTINGS_BODY_BYTES) {
-          writeJson(res, 413, {
-            error: "payload_too_large",
-            maxBytes: MAX_DEBUG_SETTINGS_BODY_BYTES,
-          });
-          req.destroy();
-          return true;
-        }
-        bodyText += chunkText;
-      }
-
-      let parsedBody = null;
-      try {
-        parsedBody = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        writeJson(res, 400, { error: "invalid_json" });
-        return true;
-      }
-
-      const requestedLayoutIdRaw = parsedBody?.layoutId;
-      const hasLayoutPatch =
-        typeof requestedLayoutIdRaw === "string" &&
-        requestedLayoutIdRaw.trim() !== "";
-      const requestedLayoutId = hasLayoutPatch
-        ? String(requestedLayoutIdRaw).trim().toLowerCase()
-        : null;
-      const hasGameplayPatch = hasGameplaySettingsPatch(parsedBody);
-      const hasAiBehaviorPatch = hasAiBehaviorSettingsPatch(parsedBody);
-      if (!hasLayoutPatch && !hasGameplayPatch && !hasAiBehaviorPatch) {
-        writeJson(res, 400, { error: "no_settings_provided" });
-        return true;
-      }
-
-      let changed = false;
-      const previousLayoutId = getActiveLayoutInfo().id;
-      const previousGameplay = getGameplaySettings();
-      const previousAiBehavior = getAiBehaviorSettings();
-      try {
-        if (hasLayoutPatch && requestedLayoutId) {
-          changed = setActiveLayout(requestedLayoutId) || changed;
-        }
-        if (hasGameplayPatch) {
-          changed =
-            setGameplaySettings(mergeGameplaySettingsPatch(parsedBody)) ||
-            changed;
-        }
-        if (hasAiBehaviorPatch) {
-          changed =
-            setAiBehaviorSettings(mergeAiBehaviorSettingsPatch(parsedBody)) ||
-            changed;
-        }
-        if (changed) {
-          try {
-            writePersistedServerSettings();
-          } catch (persistError) {
-            try {
-              setActiveLayout(previousLayoutId);
-              setGameplaySettings(previousGameplay);
-              setAiBehaviorSettings(previousAiBehavior);
-            } catch {
-              // If rollback fails, keep throwing the persistence error below.
-            }
-            writeJson(res, 500, {
-              error: "persist_failed",
-              message: persistError?.message || String(persistError),
-            });
-            return true;
-          }
-          restartRoomsForSettingsChange();
-        }
-      } catch (error) {
-        writeJson(res, 400, {
-          error: "invalid_settings",
-          message: error?.message || String(error),
-        });
-        return true;
-      }
-
-      writeJson(res, 200, {
-        ok: true,
-        authRequired: true,
-        layout: getActiveLayoutInfo(),
-        availableLayouts: getAvailableLayouts(),
-        gameplaySettings: getGameplaySettings(),
-        aiBehaviorSettings: getAiBehaviorSettings(),
-      });
-      return true;
-    }
-
-    return false;
+    return debugApi.handleRequest(req, res, requestUrl);
   }
 
   server.on("upgrade", (req, socket, head) => {

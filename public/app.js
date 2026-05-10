@@ -52,6 +52,46 @@ import { clampVolume, persistAudioSettings } from "./client/audioSettings.js";
 import { persistLookSettings } from "./client/lookSettings.js";
 import { createMobileControls } from "./client/mobileControls.js";
 import {
+  PLAYER_NAME_KEY,
+  MOBILE_CONTROLS_PREF_KEY,
+  INPUT_SEND_INTERVAL_MS,
+  INPUT_HEARTBEAT_MS,
+  LOOK_TOUCH_SENSITIVITY_X,
+  LOOK_TOUCH_SENSITIVITY_Y,
+  JOYSTICK_DEADZONE,
+  CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS,
+  CROSSHAIR_DEFAULT_COOLDOWN_MS,
+  CROSSHAIR_RING_CIRCUMFERENCE,
+  CROSSHAIR_HIT_DISTANCE_METERS,
+  CROSSHAIR_AIM_CHECK_MS,
+  HUD_OVERLAY_REFRESH_MS,
+  GAME_CHAT_MAX_LINES,
+  GAME_CHAT_OPEN_SHORTCUT,
+  DEBUG_OVERLAY_TOGGLE_SHORTCUT,
+  DEBUG_OVERLAY_TOUCH_HOLD_MS,
+  DEBUG_OVERLAY_UNLOCK_TOUCH_HOLD_MS,
+  DOWNED_MESSAGE_VISIBLE_MS,
+  WIN_MESSAGE_VISIBLE_MS,
+  KNOCKDOWN_TOAST_MS,
+  DOWNED_CAMERA_HEIGHT,
+  DOWNED_CAMERA_POS_SMOOTH_RATE,
+  SPECTATOR_CAMERA_DISTANCE,
+  SPECTATOR_CAMERA_HEIGHT_OFFSET,
+  SPECTATOR_CAMERA_TARGET_HEIGHT_OFFSET,
+  SPECTATOR_CAMERA_POS_SMOOTH_RATE,
+  MOBILE_FRAME_MS_DEGRADE_THRESHOLD,
+  MOBILE_FRAME_MS_UPGRADE_THRESHOLD,
+  MOBILE_RENDER_SCALE_MIN,
+  MOBILE_RENDER_SCALE_MAX,
+  MOBILE_RENDER_SCALE_STEP_DOWN,
+  MOBILE_RENDER_SCALE_STEP_UP,
+  MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS,
+  GAMEPLAY_SUMMARY_TEXT,
+  DESKTOP_CONTROLS_TEXT,
+  MOBILE_CONTROLS_TEXT,
+  IS_TOUCH_DEVICE,
+} from "./client/appConstants.js";
+import {
   canvas,
   screenRootEl,
   connectViewEl,
@@ -145,9 +185,6 @@ import {
   spectatorLobbyBtnEl,
 } from "./client/domRefs.js";
 
-const PLAYER_NAME_KEY = "hidden_player_name";
-const MOBILE_CONTROLS_PREF_KEY = "hidden_mobile_controls_pref";
-
 const sceneSystem = createSceneSystem(canvas);
 const {
   renderer,
@@ -161,60 +198,6 @@ const avatarSystem = createAvatarSystem({ scene, camera });
 
 const { state: clientState } = createClientState();
 let socketConnection = null;
-
-const INPUT_SEND_INTERVAL_MS = 33;
-const INPUT_HEARTBEAT_MS = 120;
-const CROSSHAIR_COOLDOWN_MIN_VISIBLE_MS = 8;
-const CROSSHAIR_DEFAULT_COOLDOWN_MS = 1000;
-const CROSSHAIR_RING_CIRCUMFERENCE = Math.PI * 26;
-const CROSSHAIR_HIT_DISTANCE_METERS = 2.8;
-const GAME_CHAT_MAX_LINES = 5;
-const GAME_CHAT_OPEN_SHORTCUT = "KeyC";
-const DEBUG_OVERLAY_TOGGLE_SHORTCUT = "KeyP";
-const DEBUG_OVERLAY_TOUCH_HOLD_MS = 900;
-const DEBUG_OVERLAY_UNLOCK_TOUCH_HOLD_MS = 2600;
-const HUD_OVERLAY_REFRESH_MS = 120;
-const CROSSHAIR_AIM_CHECK_MS = 66;
-const LOOK_TOUCH_SENSITIVITY_X = 0.0052;
-const LOOK_TOUCH_SENSITIVITY_Y = 0.0045;
-const JOYSTICK_DEADZONE = 0.16;
-const DOWNED_CAMERA_HEIGHT = 4.6;
-const DOWNED_CAMERA_POS_SMOOTH_RATE = 9;
-const DOWNED_MESSAGE_VISIBLE_MS = 2800;
-const WIN_MESSAGE_VISIBLE_MS = 2000;
-const KNOCKDOWN_TOAST_MS = 5000;
-const SPECTATOR_CAMERA_DISTANCE = 1.42;
-const SPECTATOR_CAMERA_HEIGHT_OFFSET = 0.28;
-const SPECTATOR_CAMERA_TARGET_HEIGHT_OFFSET = 0.12;
-const SPECTATOR_CAMERA_POS_SMOOTH_RATE = 12;
-const MOBILE_FRAME_MS_DEGRADE_THRESHOLD = 24;
-const MOBILE_FRAME_MS_UPGRADE_THRESHOLD = 19;
-const MOBILE_RENDER_SCALE_MIN = 0.72;
-const MOBILE_RENDER_SCALE_MAX = 1;
-const MOBILE_RENDER_SCALE_STEP_DOWN = 0.07;
-const MOBILE_RENDER_SCALE_STEP_UP = 0.04;
-const MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS = 1500;
-const FORCE_MOBILE_UI =
-  new URLSearchParams(location.search).get("mobileUi") === "1";
-const IS_TOUCH_DEVICE = (() => {
-  const coarsePointer =
-    window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
-  const hoverNone =
-    window.matchMedia && window.matchMedia("(hover: none)").matches;
-  const touchApi = "ontouchstart" in window;
-  const touchPoints = (navigator.maxTouchPoints || 0) > 0;
-  const mobileUa = /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(
-    navigator.userAgent || "",
-  );
-  return (
-    coarsePointer ||
-    hoverNone ||
-    touchApi ||
-    touchPoints ||
-    mobileUa ||
-    FORCE_MOBILE_UI
-  );
-})();
 
 let lastFrameAt = performance.now();
 let lastOverlayUiUpdateAt = 0;
@@ -235,12 +218,6 @@ const { updateSpectatorCamera, updateDownedCamera } = createCameraController({
   },
 });
 let lastCountdownPreviewCharacterId = null;
-
-const GAMEPLAY_SUMMARY_TEXT = "Håll dig gömd, hitta spelare och slå ner dem.";
-const DESKTOP_CONTROLS_TEXT =
-  "Desktop: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack.";
-const MOBILE_CONTROLS_TEXT =
-  "Mobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta.";
 
 const mobileControls = createMobileControls(
   { mobileControlsEl, mobileLandscapePromptEl, lobbyDialogBackdropEl },

@@ -46,26 +46,18 @@ export function createSceneSystem(canvas) {
   let renderScale = 1;
   let lastAppliedPixelRatio = -1;
 
-  function resolveCanvasSize(preferWindow = false) {
-    if (preferWindow) {
-      return {
-        width: Math.max(1, Math.floor(window.innerWidth || 1)),
-        height: Math.max(1, Math.floor(window.innerHeight || 1)),
-      };
-    }
-    const width = Math.max(
-      1,
-      Math.floor(canvas.clientWidth || window.innerWidth || 1),
-    );
-    const height = Math.max(
-      1,
-      Math.floor(canvas.clientHeight || window.innerHeight || 1),
-    );
-    return { width, height };
+  // The game canvas always fills the full viewport (width/height: 100% in CSS).
+  // Reading window.innerWidth/innerHeight avoids touching CSS-computed geometry
+  // (canvas.clientWidth etc.) which would force a synchronous layout.
+  function resolveCanvasSize() {
+    return {
+      width: Math.max(1, Math.floor(window.innerWidth || 1)),
+      height: Math.max(1, Math.floor(window.innerHeight || 1)),
+    };
   }
 
-  function resize(opts = {}) {
-    const { width, height } = resolveCanvasSize(opts.preferWindow);
+  function resize() {
+    const { width, height } = resolveCanvasSize();
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     const cappedDpr = isLikelyTouchDevice
       ? Math.min(dpr, 1.25)
@@ -76,9 +68,6 @@ export function createSceneSystem(canvas) {
       lastAppliedPixelRatio = targetPixelRatio;
     }
     renderer.setSize(width, height, false);
-    renderer.setViewport(0, 0, width, height);
-    renderer.setScissor(0, 0, width, height);
-    renderer.setScissorTest(false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
   }
@@ -95,10 +84,7 @@ export function createSceneSystem(canvas) {
     return renderScale;
   }
 
-  // Initial sizing: use window dimensions to avoid forcing a layout reflow
-  // during module evaluation (before stylesheets are guaranteed to be applied).
-  // A proper CSS-based resize is scheduled for the next animation frame.
-  resize({ preferWindow: true });
+  resize();
   requestAnimationFrame(() => resize());
 
   let _smoothFrameMs = 16.7;
