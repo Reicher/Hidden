@@ -411,6 +411,16 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* ─── Game-start fade-in ───────────────────────────────────────────────────── */
+#gameStartFade {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+  z-index: 11;
+  opacity: 0;
+}
+
 #countdownOverlay {
   position: fixed;
   inset: 0;

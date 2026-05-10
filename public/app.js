@@ -721,6 +721,25 @@ function setAppMode(mode) {
     resetInputState();
   }
 
+  if (previous !== "playing" && mode === "playing") {
+    // Reset avatar position tracking so all characters snap to their
+    // current server positions on the first rendered frame.
+    avatarSystem.resetAllAvatarTracking();
+    // Reliable fade-in: set black instantly via inline style, then
+    // transition to transparent in the next frame.
+    const fadeEl = document.getElementById("gameStartFade");
+    if (fadeEl) {
+      fadeEl.style.transition = "none";
+      fadeEl.style.opacity = "1";
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          fadeEl.style.transition = "opacity 1s ease-out";
+          fadeEl.style.opacity = "0";
+        });
+      });
+    }
+  }
+
   if (mode !== "playing") setGameChatOpen(false);
   if (mode !== "playing") setGameMenuOpen(false);
   if (mode !== "lobby") setLobbyMenuOpen(false);

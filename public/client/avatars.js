@@ -287,9 +287,19 @@ export function drawCountdownCharacterPreview(canvas, characterId) {
     ctx.lineCap = "round";
     ctx.beginPath();
     ctx.moveTo(width * 0.34, height * 0.59);
-    ctx.quadraticCurveTo(width * 0.4, height * 0.72, width * 0.42, height * 0.86);
+    ctx.quadraticCurveTo(
+      width * 0.4,
+      height * 0.72,
+      width * 0.42,
+      height * 0.86,
+    );
     ctx.moveTo(width * 0.66, height * 0.59);
-    ctx.quadraticCurveTo(width * 0.6, height * 0.72, width * 0.58, height * 0.86);
+    ctx.quadraticCurveTo(
+      width * 0.6,
+      height * 0.72,
+      width * 0.58,
+      height * 0.86,
+    );
     ctx.stroke();
   }
 
@@ -942,7 +952,11 @@ export function createAvatarSystem({ scene, camera }) {
         ),
         pantsMaterial,
       );
-      skirt.scale.set(profile.torsoWidthScale, 1, profile.torsoDepthScale * 0.92);
+      skirt.scale.set(
+        profile.torsoWidthScale,
+        1,
+        profile.torsoDepthScale * 0.92,
+      );
       skirt.position.set(0, hipY - skirtHeight * 0.12, 0);
       poseRoot.add(skirt);
     }
@@ -1695,11 +1709,29 @@ export function createAvatarSystem({ scene, camera }) {
     };
   }
 
+  /**
+   * Reset server-position tracking for all avatars so the next
+   * applyWorldCharacters call snaps every character to their current
+   * server position (no lerp artefacts). Large jumps trigger the
+   * existing respawn-hide so characters don't visually teleport.
+   */
+  function resetAllAvatarTracking() {
+    for (const avatar of avatars.values()) {
+      avatar.lastServerAt = 0;
+      avatar.lastServerX = null;
+      avatar.lastServerZ = null;
+      // Force a position snap on the next applyWorldCharacters call
+      // (same path as a newly created avatar — group.position.set() is called)
+      avatar.initialized = false;
+    }
+  }
+
   return {
     applyWorldCharacters,
     animate,
     isAimingAtCharacter,
     getCharacterPosition,
     getCharacterCameraState,
+    resetAllAvatarTracking,
   };
 }
