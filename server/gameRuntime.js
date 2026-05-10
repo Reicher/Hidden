@@ -89,17 +89,29 @@ export function attachGameRuntime({ server, rootDir }) {
 
   function loadPersistedServerSettings() {
     if (!fs.existsSync(settingsPath)) return;
-    const raw = fs.readFileSync(settingsPath, "utf8");
+    let raw;
+    try {
+      raw = fs.readFileSync(settingsPath, "utf8");
+    } catch (readError) {
+      console.warn(
+        `[server-settings] Kunde inte läsa ${settingsPath}: ${readError?.message || readError}. Fortsätter med standardinställningar.`,
+      );
+      return;
+    }
     let parsed = null;
     try {
       parsed = JSON.parse(raw);
     } catch (error) {
-      throw new Error(
-        `[server-settings] Ogiltig JSON i ${settingsPath}: ${error?.message || error}`,
+      console.warn(
+        `[server-settings] Ogiltig JSON i ${settingsPath}: ${error?.message || error}. Fortsätter med standardinställningar.`,
       );
+      return;
     }
     if (!parsed || typeof parsed !== "object") {
-      throw new Error(`[server-settings] Ogiltigt innehåll i ${settingsPath}.`);
+      console.warn(
+        `[server-settings] Ogiltigt innehåll i ${settingsPath}. Fortsätter med standardinställningar.`,
+      );
+      return;
     }
 
     const hasLayout =
@@ -127,7 +139,11 @@ export function attachGameRuntime({ server, rootDir }) {
       isPrivate,
       onStatsEvent: (event) => {
         if (event.type === "chat") {
-          debugStats.recordChatMessage({ name: event.name, text: event.text, at: event.at });
+          debugStats.recordChatMessage({
+            name: event.name,
+            text: event.text,
+            at: event.at,
+          });
         } else {
           debugStats.recordRoomEvent(event);
         }
@@ -197,7 +213,13 @@ export function attachGameRuntime({ server, rootDir }) {
     debugStats.close().catch(() => {});
   });
 
+  async function shutdown() {
+    closeAllRooms();
+    await debugStats.close().catch(() => {});
+  }
+
   return {
     handleHttpRequest,
+    shutdown,
   };
 }

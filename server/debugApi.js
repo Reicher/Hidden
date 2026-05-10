@@ -10,6 +10,25 @@
  */
 
 const MAX_DEBUG_SETTINGS_BODY_BYTES = 16 * 1024;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 10;
+
+/** Simple in-memory sliding-window rate limiter keyed by IP. */
+function createRateLimiter(windowMs, maxRequests) {
+  const hits = new Map();
+  return function isAllowed(ip) {
+    const now = Date.now();
+    const cutoff = now - windowMs;
+    const prev = (hits.get(ip) || []).filter((t) => t > cutoff);
+    if (prev.length >= maxRequests) {
+      hits.set(ip, prev);
+      return false;
+    }
+    prev.push(now);
+    hits.set(ip, prev);
+    return true;
+  };
+}
 
 export function createDebugApiHandler({
   DEBUG_VIEW_TOKEN,
@@ -37,14 +56,9 @@ export function createDebugApiHandler({
     res.end(JSON.stringify(payload));
   }
 
-  function getProvidedToken(req, requestUrl) {
-    const tokenFromQuery = requestUrl.searchParams.get("token");
+  function getProvidedToken(req) {
     const tokenFromHeader = req.headers["x-debug-token"];
-    return typeof tokenFromQuery === "string" && tokenFromQuery.trim()
-      ? tokenFromQuery.trim()
-      : typeof tokenFromHeader === "string"
-        ? tokenFromHeader.trim()
-        : "";
+    return typeof tokenFromHeader === "string" ? tokenFromHeader.trim() : "";
   }
 
   function isAuthorized(req, requestUrl, res) {
@@ -56,14 +70,32 @@ export function createDebugApiHandler({
       });
       return false;
     }
-    if (getProvidedToken(req, requestUrl) !== configuredToken) {
+    if (getProvidedToken(req) !== configuredToken) {
       writeJson(res, 401, { error: "unauthorized", authRequired: true });
       return false;
     }
     return true;
   }
 
+  const settingsPostRateLimit = createRateLimiter(
+    RATE_LIMIT_WINDOW_MS,
+    RATE_LIMIT_MAX_REQUESTS,
+  );
+
   async function handleRequest(req, res, requestUrl) {
+    if (
+      requestUrl.pathname === "/health" ||
+      requestUrl.pathname === "/healthz"
+    ) {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache");
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({ ok: true, uptime: Math.floor(process.uptime()) }),
+      );
+      return true;
+    }
+
     if (requestUrl.pathname === "/api/room-info") {
       if (req.method !== "GET") {
         writeJson(res, 405, { error: "method_not_allowed" });
@@ -118,6 +150,15 @@ export function createDebugApiHandler({
 
       if (req.method !== "POST") {
         writeJson(res, 405, { error: "method_not_allowed" });
+        return true;
+      }
+
+      const clientIp =
+        req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+        req.socket?.remoteAddress ||
+        "unknown";
+      if (!settingsPostRateLimit(clientIp)) {
+        writeJson(res, 429, { error: "too_many_requests" });
         return true;
       }
 

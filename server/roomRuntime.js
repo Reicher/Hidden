@@ -869,7 +869,10 @@ export function createRoomRuntime({
     if (!isOriginAllowed(origin)) {
       socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
       socket.destroy();
-      logWarn("säkerhet", `Anslutning blockerad – otillåtet origin: ${origin || "(saknas)"}.`);
+      logWarn(
+        "säkerhet",
+        `Anslutning blockerad – otillåtet origin: ${origin || "(saknas)"}.`,
+      );
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {

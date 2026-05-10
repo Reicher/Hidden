@@ -7,7 +7,11 @@
  */
 export function createRoomLogger(roomTag, getStateSummary) {
   function nowTime() {
-    return new Date().toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    return new Date().toLocaleTimeString("sv-SE", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
   }
 
   function prefix(warn = false) {
@@ -25,10 +29,11 @@ export function createRoomLogger(roomTag, getStateSummary) {
   function logEvent(event, details = {}) {
     if (event === "runtime_started") {
       const width = details.worldWidthMeters ?? details.worldSizeMeters ?? "?";
-      const height = details.worldHeightMeters ?? details.worldSizeMeters ?? "?";
+      const height =
+        details.worldHeightMeters ?? details.worldSizeMeters ?? "?";
       logInfo(
         "runtime",
-        `Rum startat – karta ${width}×${height} m, max ${details.maxPlayers} spelare, ${details.totalCharacters} karaktärer.`
+        `Rum startat – karta ${width}×${height} m, max ${details.maxPlayers} spelare, ${details.totalCharacters} karaktärer.`,
       );
       return;
     }
@@ -48,19 +53,31 @@ export function createRoomLogger(roomTag, getStateSummary) {
       return;
     }
     if (event === "countdown_start") {
-      logInfo("spel", `Nedräkning startad – ${details.seconds ?? "?"} sekunder kvar.`);
+      logInfo(
+        "spel",
+        `Nedräkning startad – ${details.seconds ?? "?"} sekunder kvar.`,
+      );
       return;
     }
     if (event === "session_possess") {
-      logInfo("spel", `${details.name || "Okänd"} tog kontroll över karaktär #${details.characterId}.`);
+      logInfo(
+        "spel",
+        `${details.name || "Okänd"} tog kontroll över karaktär #${details.characterId}.`,
+      );
       return;
     }
     if (event === "attack") {
       const hits = details.victims ?? 0;
       if (hits === 0) {
-        logInfo("strid", `Karaktär #${details.attackerCharacterId} slog – missade.`);
+        logInfo(
+          "strid",
+          `Karaktär #${details.attackerCharacterId} slog – missade.`,
+        );
       } else {
-        logInfo("strid", `Karaktär #${details.attackerCharacterId} slog och träffade ${hits} karaktär${hits !== 1 ? "er" : ""}.`);
+        logInfo(
+          "strid",
+          `Karaktär #${details.attackerCharacterId} slog och träffade ${hits} karaktär${hits !== 1 ? "er" : ""}.`,
+        );
       }
       return;
     }
@@ -77,11 +94,17 @@ export function createRoomLogger(roomTag, getStateSummary) {
       return;
     }
     if (event === "heartbeat_timeout") {
-      logWarn("anslutning", `Spelare tappade uppkopplingen (heartbeat timeout).`);
+      logWarn(
+        "anslutning",
+        `Spelare tappade uppkopplingen (heartbeat timeout).`,
+      );
       return;
     }
     if (event === "message_drop") {
-      logWarn("ratelimit", `Meddelande ignorerat – för hög sändningsfrekvens (${details.droppedTotal ?? 0} totalt).`);
+      logWarn(
+        "ratelimit",
+        `Meddelande ignorerat – för hög sändningsfrekvens (${details.droppedTotal ?? 0} totalt).`,
+      );
       return;
     }
     logInfo("game", `${event}.`);
@@ -111,7 +134,7 @@ export function createInvariantChecker({
   logWarn,
   totalCharacters,
   maxPlayers,
-  cooldownMs
+  cooldownMs,
 }) {
   const lastLogAt = new Map();
 
@@ -127,7 +150,7 @@ export function createInvariantChecker({
       warnInvariant(
         "character_count",
         now,
-        `Fel antal karaktärer – förväntade ${totalCharacters}, hittade ${characters.length}.`
+        `Fel antal karaktärer – förväntade ${totalCharacters}, hittade ${characters.length}.`,
       );
     }
 
@@ -136,7 +159,7 @@ export function createInvariantChecker({
       warnInvariant(
         "max_players",
         now,
-        `För många aktiva spelare – max är ${maxPlayers}, men ${alivePlayers} är aktiva.`
+        `För många aktiva spelare – max är ${maxPlayers}, men ${alivePlayers} är aktiva.`,
       );
     }
 
@@ -150,7 +173,7 @@ export function createInvariantChecker({
         warnInvariant(
           "owner_controller_mismatch",
           now,
-          `Karaktär #${c.id} har en ägare men är inte spelarstyrd (typ: ${c.controllerType}).`
+          `Karaktär #${c.id} har en ägare men är inte spelarstyrd (typ: ${c.controllerType}).`,
         );
       }
     }
@@ -160,7 +183,7 @@ export function createInvariantChecker({
         warnInvariant(
           "multi_char_owner",
           now,
-          `En spelare äger flera karaktärer samtidigt: #${ownedCharIds.join(", #")}.`
+          `En spelare äger flera karaktärer samtidigt: #${ownedCharIds.join(", #")}.`,
         );
       }
 
@@ -173,7 +196,7 @@ export function createInvariantChecker({
         warnInvariant(
           "owner_without_alive_session",
           now,
-          `Karaktär har en ägare men ingen aktiv spelsession kopplad.`
+          `Karaktär har en ägare men ingen aktiv spelsession kopplad.`,
         );
         continue;
       }
@@ -182,7 +205,7 @@ export function createInvariantChecker({
         warnInvariant(
           "session_character_mismatch",
           now,
-          `En spelsession pekar på karaktär #${session.characterId} men äger [#${ownedCharIds.join(", #")}].`
+          `En spelsession pekar på karaktär #${session.characterId} men äger [#${ownedCharIds.join(", #")}].`,
         );
       }
     }

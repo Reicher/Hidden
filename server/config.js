@@ -679,7 +679,9 @@ function readLayoutById(layoutId) {
     }),
   });
   if (layout.warnings.length > 0) {
-    console.warn(`⚠ Layout "${preset.fileName}" laddades med ${layout.warnings.length} varning${layout.warnings.length !== 1 ? "ar" : ""}:`);
+    console.warn(
+      `⚠ Layout "${preset.fileName}" laddades med ${layout.warnings.length} varning${layout.warnings.length !== 1 ? "ar" : ""}:`,
+    );
     for (const warning of layout.warnings) {
       const text = String(warning?.message || "okänd layoutvarning");
       console.warn(`  • ${text}`);

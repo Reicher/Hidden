@@ -1,5 +1,11 @@
 import path from "node:path";
-import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  rename,
+  writeFile,
+} from "node:fs/promises";
 
 const DEFAULT_SAMPLE_INTERVAL_MS = 15_000;
 const SAMPLE_RETENTION = 24 * 60 * 6; // 24h with 15-second sampling.
@@ -19,7 +25,7 @@ function isoAt(at) {
 
 function roomLabel(room) {
   if (!room) return "-";
-  return room.isPrivate ? (room.roomCode || room.roomId) : "publik";
+  return room.isPrivate ? room.roomCode || room.roomId : "publik";
 }
 
 function parseJsonLine(raw) {
@@ -32,7 +38,10 @@ function parseJsonLine(raw) {
   }
 }
 
-export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMPLE_INTERVAL_MS }) {
+export function createDebugStatsStore({
+  rootDir,
+  sampleIntervalMs = DEFAULT_SAMPLE_INTERVAL_MS,
+}) {
   const logsDir = path.resolve(path.join(rootDir, "logs"));
   const eventsLogPath = path.join(logsDir, "debug-events.log");
   const samplesLogPath = path.join(logsDir, "debug-samples.jsonl");
@@ -43,7 +52,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     startedAt: Date.now(),
     totals: {
       totalConnections: 0,
-      totalLogins: 0
+      totalLogins: 0,
     },
     current: {
       connected: 0,
@@ -51,18 +60,18 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
       active: 0,
       countdown: 0,
       lobby: 0,
-      roomCountWithSessions: 0
+      roomCountWithSessions: 0,
     },
     peaks: {
       connected: 0,
       authenticated: 0,
-      active: 0
+      active: 0,
     },
     rooms: new Map(),
     names: new Map(),
     recentEvents: [],
     recentChat: [],
-    samples: []
+    samples: [],
   };
 
   let closed = false;
@@ -95,7 +104,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
         lobby: safeInt(parsed.lobby, 0),
         roomCountWithSessions: safeInt(parsed.roomCountWithSessions, 0),
         totalLogins: safeInt(parsed.totalLogins, 0),
-        uniqueNames: safeInt(parsed.uniqueNames, 0)
+        uniqueNames: safeInt(parsed.uniqueNames, 0),
       });
     }
   }
@@ -106,12 +115,12 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
       persistedAt: Date.now(),
       totals: {
         totalConnections: safeInt(state.totals.totalConnections, 0),
-        totalLogins: safeInt(state.totals.totalLogins, 0)
+        totalLogins: safeInt(state.totals.totalLogins, 0),
       },
       peaks: {
         connected: safeInt(state.peaks.connected, 0),
         authenticated: safeInt(state.peaks.authenticated, 0),
-        active: safeInt(state.peaks.active, 0)
+        active: safeInt(state.peaks.active, 0),
       },
       rooms: [...state.rooms.values()].map((room) => ({
         roomId: room.roomId,
@@ -119,16 +128,18 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
         isPrivate: Boolean(room.isPrivate),
         totalConnections: safeInt(room.totalConnections, 0),
         totalLogins: safeInt(room.totalLogins, 0),
-        uniqueNames: [...room.uniqueNames].sort((a, b) => a.localeCompare(b, "sv")),
-        lastEventAt: safeInt(room.lastEventAt, 0)
+        uniqueNames: [...room.uniqueNames].sort((a, b) =>
+          a.localeCompare(b, "sv"),
+        ),
+        lastEventAt: safeInt(room.lastEventAt, 0),
       })),
       players: [...state.names.entries()].map(([name, value]) => ({
         name,
         logins: safeInt(value.logins, 0),
         lastSeenAt: safeInt(value.lastSeenAt, 0),
-        rooms: [...value.rooms].sort((a, b) => a.localeCompare(b, "sv"))
+        rooms: [...value.rooms].sort((a, b) => a.localeCompare(b, "sv")),
       })),
-      recentEvents: state.recentEvents.slice(-RECENT_EVENT_LIMIT)
+      recentEvents: state.recentEvents.slice(-RECENT_EVENT_LIMIT),
     };
   }
 
@@ -144,7 +155,10 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     const authenticated = Math.max(0, safeInt(snapshot.authenticated, 0));
     const active = Math.max(0, safeInt(snapshot.active, 0));
     const countdown = Math.max(0, safeInt(snapshot.countdown, 0));
-    const lobby = Math.max(0, safeInt(snapshot.lobby, authenticated - active - countdown));
+    const lobby = Math.max(
+      0,
+      safeInt(snapshot.lobby, authenticated - active - countdown),
+    );
     return { connected, authenticated, active, countdown, lobby };
   }
 
@@ -158,13 +172,19 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     }
 
     const parsed = parseJsonLine(text.trim());
-    if (!parsed || safeInt(parsed.version, 0) !== PERSISTED_STATE_VERSION) return;
+    if (!parsed || safeInt(parsed.version, 0) !== PERSISTED_STATE_VERSION)
+      return;
 
-    const totals = parsed.totals && typeof parsed.totals === "object" ? parsed.totals : {};
-    state.totals.totalConnections = Math.max(0, safeInt(totals.totalConnections, 0));
+    const totals =
+      parsed.totals && typeof parsed.totals === "object" ? parsed.totals : {};
+    state.totals.totalConnections = Math.max(
+      0,
+      safeInt(totals.totalConnections, 0),
+    );
     state.totals.totalLogins = Math.max(0, safeInt(totals.totalLogins, 0));
 
-    const peaks = parsed.peaks && typeof parsed.peaks === "object" ? parsed.peaks : {};
+    const peaks =
+      parsed.peaks && typeof parsed.peaks === "object" ? parsed.peaks : {};
     state.peaks.connected = Math.max(0, safeInt(peaks.connected, 0));
     state.peaks.authenticated = Math.max(0, safeInt(peaks.authenticated, 0));
     state.peaks.active = Math.max(0, safeInt(peaks.active, 0));
@@ -173,16 +193,31 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     const rooms = Array.isArray(parsed.rooms) ? parsed.rooms : [];
     for (const row of rooms) {
       if (!row || typeof row !== "object") continue;
-      const roomId = typeof row.roomId === "string" && row.roomId.trim() ? row.roomId.trim() : null;
+      const roomId =
+        typeof row.roomId === "string" && row.roomId.trim()
+          ? row.roomId.trim()
+          : null;
       if (!roomId) continue;
       const room = ensureRoom({
         roomId,
-        roomCode: typeof row.roomCode === "string" && row.roomCode.trim() ? row.roomCode.trim() : null,
-        isPrivate: Boolean(row.isPrivate)
+        roomCode:
+          typeof row.roomCode === "string" && row.roomCode.trim()
+            ? row.roomCode.trim()
+            : null,
+        isPrivate: Boolean(row.isPrivate),
       });
-      room.totalConnections = Math.max(0, safeInt(row.totalConnections, room.totalConnections));
-      room.totalLogins = Math.max(0, safeInt(row.totalLogins, room.totalLogins));
-      room.lastEventAt = Math.max(0, safeInt(row.lastEventAt, room.lastEventAt));
+      room.totalConnections = Math.max(
+        0,
+        safeInt(row.totalConnections, room.totalConnections),
+      );
+      room.totalLogins = Math.max(
+        0,
+        safeInt(row.totalLogins, room.totalLogins),
+      );
+      room.lastEventAt = Math.max(
+        0,
+        safeInt(row.lastEventAt, room.lastEventAt),
+      );
       const uniqueNames = Array.isArray(row.uniqueNames) ? row.uniqueNames : [];
       for (const name of uniqueNames) {
         if (typeof name !== "string" || !name.trim()) continue;
@@ -199,7 +234,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
       const player = {
         logins: Math.max(0, safeInt(row.logins, 0)),
         lastSeenAt: Math.max(0, safeInt(row.lastSeenAt, 0)),
-        rooms: new Set()
+        rooms: new Set(),
       };
       const roomsForPlayer = Array.isArray(row.rooms) ? row.rooms : [];
       for (const roomId of roomsForPlayer) {
@@ -210,11 +245,19 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     }
 
     state.recentEvents = [];
-    const recentEvents = Array.isArray(parsed.recentEvents) ? parsed.recentEvents : [];
+    const recentEvents = Array.isArray(parsed.recentEvents)
+      ? parsed.recentEvents
+      : [];
     for (const event of recentEvents.slice(-RECENT_EVENT_LIMIT)) {
       if (!event || typeof event !== "object") continue;
-      const type = typeof event.type === "string" && event.type.trim() ? event.type.trim() : null;
-      const roomId = typeof event.roomId === "string" && event.roomId.trim() ? event.roomId.trim() : null;
+      const type =
+        typeof event.type === "string" && event.type.trim()
+          ? event.type.trim()
+          : null;
+      const roomId =
+        typeof event.roomId === "string" && event.roomId.trim()
+          ? event.roomId.trim()
+          : null;
       if (!type || !roomId) continue;
       const snapshot = loadCurrentSnapshot(event.snapshot);
       if (!snapshot) continue;
@@ -222,11 +265,20 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
         at: Math.max(0, safeInt(event.at, Date.now())),
         type,
         roomId,
-        roomCode: typeof event.roomCode === "string" && event.roomCode.trim() ? event.roomCode.trim() : null,
+        roomCode:
+          typeof event.roomCode === "string" && event.roomCode.trim()
+            ? event.roomCode.trim()
+            : null,
         isPrivate: Boolean(event.isPrivate),
-        name: typeof event.name === "string" && event.name.trim() ? event.name.trim() : null,
-        sessionId: typeof event.sessionId === "string" && event.sessionId.trim() ? event.sessionId.trim() : null,
-        snapshot
+        name:
+          typeof event.name === "string" && event.name.trim()
+            ? event.name.trim()
+            : null,
+        sessionId:
+          typeof event.sessionId === "string" && event.sessionId.trim()
+            ? event.sessionId.trim()
+            : null,
+        snapshot,
       });
     }
   }
@@ -273,9 +325,9 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
         authenticated: 0,
         active: 0,
         countdown: 0,
-        lobby: 0
+        lobby: 0,
       },
-      lastEventAt: 0
+      lastEventAt: 0,
     };
     state.rooms.set(roomId, created);
     return created;
@@ -305,14 +357,20 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     state.current.lobby = lobby;
     state.current.roomCountWithSessions = roomCountWithSessions;
     state.peaks.connected = Math.max(state.peaks.connected, connected);
-    state.peaks.authenticated = Math.max(state.peaks.authenticated, authenticated);
+    state.peaks.authenticated = Math.max(
+      state.peaks.authenticated,
+      authenticated,
+    );
     state.peaks.active = Math.max(state.peaks.active, active);
   }
 
   function pushRecentEvent(eventRecord) {
     state.recentEvents.push(eventRecord);
     if (state.recentEvents.length > RECENT_EVENT_LIMIT) {
-      state.recentEvents.splice(0, state.recentEvents.length - RECENT_EVENT_LIMIT);
+      state.recentEvents.splice(
+        0,
+        state.recentEvents.length - RECENT_EVENT_LIMIT,
+      );
     }
   }
 
@@ -324,17 +382,27 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
       `name=${eventRecord.name ? JSON.stringify(eventRecord.name) : "-"}`,
       `connected=${eventRecord.snapshot.connected}`,
       `authenticated=${eventRecord.snapshot.authenticated}`,
-      `active=${eventRecord.snapshot.active}`
+      `active=${eventRecord.snapshot.active}`,
     ].join(" ");
     queueWrite(() => appendFile(eventsLogPath, `${line}\n`, "utf8"));
   }
 
   function pushSample(sample) {
+    const wasAtCapacity = state.samples.length >= SAMPLE_RETENTION;
     state.samples.push(sample);
     if (state.samples.length > SAMPLE_RETENTION) {
       state.samples.splice(0, state.samples.length - SAMPLE_RETENTION);
     }
-    queueWrite(() => appendFile(samplesLogPath, `${JSON.stringify(sample)}\n`, "utf8"));
+    if (wasAtCapacity) {
+      // Ring buffer wrapped — rewrite the whole file so it stays bounded.
+      const lines =
+        state.samples.map((s) => JSON.stringify(s)).join("\n") + "\n";
+      queueWrite(() => writeFile(samplesLogPath, lines, "utf8"));
+    } else {
+      queueWrite(() =>
+        appendFile(samplesLogPath, `${JSON.stringify(sample)}\n`, "utf8"),
+      );
+    }
   }
 
   function captureSample(reason = "interval", at = Date.now()) {
@@ -349,7 +417,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
       lobby: state.current.lobby,
       roomCountWithSessions: state.current.roomCountWithSessions,
       totalLogins: state.totals.totalLogins,
-      uniqueNames: state.names.size
+      uniqueNames: state.names.size,
     };
     pushSample(sample);
     return sample;
@@ -368,7 +436,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     name = null,
     sessionId = null,
     snapshot = null,
-    at = Date.now()
+    at = Date.now(),
   }) {
     if (closed) return;
     if (!roomId || !type) return;
@@ -389,7 +457,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
       const existingName = state.names.get(normalizedName) || {
         logins: 0,
         lastSeenAt: 0,
-        rooms: new Set()
+        rooms: new Set(),
       };
       existingName.logins += 1;
       existingName.lastSeenAt = eventAt;
@@ -398,11 +466,26 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     }
 
     if (snapshot && typeof snapshot === "object") {
-      room.current.connected = Math.max(0, safeInt(snapshot.connected, room.current.connected));
-      room.current.authenticated = Math.max(0, safeInt(snapshot.authenticated, room.current.authenticated));
-      room.current.active = Math.max(0, safeInt(snapshot.active, room.current.active));
-      room.current.countdown = Math.max(0, safeInt(snapshot.countdown, room.current.countdown));
-      room.current.lobby = Math.max(0, safeInt(snapshot.lobby, room.current.lobby));
+      room.current.connected = Math.max(
+        0,
+        safeInt(snapshot.connected, room.current.connected),
+      );
+      room.current.authenticated = Math.max(
+        0,
+        safeInt(snapshot.authenticated, room.current.authenticated),
+      );
+      room.current.active = Math.max(
+        0,
+        safeInt(snapshot.active, room.current.active),
+      );
+      room.current.countdown = Math.max(
+        0,
+        safeInt(snapshot.countdown, room.current.countdown),
+      );
+      room.current.lobby = Math.max(
+        0,
+        safeInt(snapshot.lobby, room.current.lobby),
+      );
     }
 
     recomputeCurrentTotals();
@@ -415,7 +498,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
       isPrivate: room.isPrivate,
       name: typeof name === "string" ? name : null,
       sessionId: sessionId || null,
-      snapshot: { ...room.current }
+      snapshot: { ...room.current },
     };
     pushRecentEvent(eventRecord);
     appendEventLog(eventRecord);
@@ -425,7 +508,11 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
   function recordChatMessage({ name, text, at = Date.now() }) {
     if (closed) return;
     if (!name || !text) return;
-    const entry = { at: safeInt(at, Date.now()), name: String(name), text: String(text) };
+    const entry = {
+      at: safeInt(at, Date.now()),
+      name: String(name),
+      text: String(text),
+    };
     state.recentChat.push(entry);
     if (state.recentChat.length > RECENT_CHAT_LIMIT) {
       state.recentChat.splice(0, state.recentChat.length - RECENT_CHAT_LIMIT);
@@ -442,12 +529,15 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
         totalConnections: room.totalConnections,
         totalLogins: room.totalLogins,
         uniqueNamesCount: room.uniqueNames.size,
-        uniqueNames: [...room.uniqueNames].sort((a, b) => a.localeCompare(b, "sv")),
+        uniqueNames: [...room.uniqueNames].sort((a, b) =>
+          a.localeCompare(b, "sv"),
+        ),
         current: { ...room.current },
-        lastEventAt: room.lastEventAt
+        lastEventAt: room.lastEventAt,
       }))
       .sort((a, b) => {
-        if (b.current.connected !== a.current.connected) return b.current.connected - a.current.connected;
+        if (b.current.connected !== a.current.connected)
+          return b.current.connected - a.current.connected;
         return String(a.roomId).localeCompare(String(b.roomId), "sv");
       });
 
@@ -456,7 +546,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
         name,
         logins: value.logins,
         lastSeenAt: value.lastSeenAt,
-        rooms: [...value.rooms].sort((a, b) => a.localeCompare(b, "sv"))
+        rooms: [...value.rooms].sort((a, b) => a.localeCompare(b, "sv")),
       }))
       .sort((a, b) => {
         if (b.lastSeenAt !== a.lastSeenAt) return b.lastSeenAt - a.lastSeenAt;
@@ -474,7 +564,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
       players,
       recentEvents: [...state.recentEvents],
       recentChat: [...state.recentChat],
-      samples: [...state.samples]
+      samples: [...state.samples],
     };
   }
 
@@ -496,7 +586,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
       logsDir,
       eventsLogPath,
       samplesLogPath,
-      statePath
-    }
+      statePath,
+    },
   };
 }

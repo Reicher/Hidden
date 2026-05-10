@@ -19,24 +19,56 @@ const settingsTabEl = document.getElementById("settingsTab");
 const layoutSelectEl = document.getElementById("layoutSelect");
 const totalCharactersInputEl = document.getElementById("totalCharactersInput");
 const maxPlayersInputEl = document.getElementById("maxPlayersInput");
-const minPlayersToStartInputEl = document.getElementById("minPlayersToStartInput");
-const npcDownedRespawnSecondsInputEl = document.getElementById("npcDownedRespawnSecondsInput");
-const playerAttackCooldownSecondsInputEl = document.getElementById("playerAttackCooldownSecondsInput");
-const attackHalfAngleDegreesInputEl = document.getElementById("attackHalfAngleDegreesInput");
-const moveSpeedMetersPerSecondInputEl = document.getElementById("moveSpeedMetersPerSecondInput");
-const playerSprintMultiplierInputEl = document.getElementById("playerSprintMultiplierInput");
-const npcInspectDownedChanceInputEl = document.getElementById("npcInspectDownedChanceInput");
-const npcInspectDownedChanceValueEl = document.getElementById("npcInspectDownedChanceValue");
-const npcInspectDownedRadiusInputEl = document.getElementById("npcInspectDownedRadiusInput");
-const npcInspectDownedRadiusValueEl = document.getElementById("npcInspectDownedRadiusValue");
-const npcSocialSeparationInputEl = document.getElementById("npcSocialSeparationInput");
-const npcSocialSeparationValueEl = document.getElementById("npcSocialSeparationValue");
+const minPlayersToStartInputEl = document.getElementById(
+  "minPlayersToStartInput",
+);
+const npcDownedRespawnSecondsInputEl = document.getElementById(
+  "npcDownedRespawnSecondsInput",
+);
+const playerAttackCooldownSecondsInputEl = document.getElementById(
+  "playerAttackCooldownSecondsInput",
+);
+const attackHalfAngleDegreesInputEl = document.getElementById(
+  "attackHalfAngleDegreesInput",
+);
+const moveSpeedMetersPerSecondInputEl = document.getElementById(
+  "moveSpeedMetersPerSecondInput",
+);
+const playerSprintMultiplierInputEl = document.getElementById(
+  "playerSprintMultiplierInput",
+);
+const npcInspectDownedChanceInputEl = document.getElementById(
+  "npcInspectDownedChanceInput",
+);
+const npcInspectDownedChanceValueEl = document.getElementById(
+  "npcInspectDownedChanceValue",
+);
+const npcInspectDownedRadiusInputEl = document.getElementById(
+  "npcInspectDownedRadiusInput",
+);
+const npcInspectDownedRadiusValueEl = document.getElementById(
+  "npcInspectDownedRadiusValue",
+);
+const npcSocialSeparationInputEl = document.getElementById(
+  "npcSocialSeparationInput",
+);
+const npcSocialSeparationValueEl = document.getElementById(
+  "npcSocialSeparationValue",
+);
 const npcStopChanceInputEl = document.getElementById("npcStopChanceInput");
 const npcStopChanceValueEl = document.getElementById("npcStopChanceValue");
-const npcMoveDecisionIntervalMinMsInputEl = document.getElementById("npcMoveDecisionIntervalMinMsInput");
-const npcMoveDecisionIntervalMaxMsInputEl = document.getElementById("npcMoveDecisionIntervalMaxMsInput");
-const npcStopDurationMinMsInputEl = document.getElementById("npcStopDurationMinMsInput");
-const npcStopDurationMaxMsInputEl = document.getElementById("npcStopDurationMaxMsInput");
+const npcMoveDecisionIntervalMinMsInputEl = document.getElementById(
+  "npcMoveDecisionIntervalMinMsInput",
+);
+const npcMoveDecisionIntervalMaxMsInputEl = document.getElementById(
+  "npcMoveDecisionIntervalMaxMsInput",
+);
+const npcStopDurationMinMsInputEl = document.getElementById(
+  "npcStopDurationMinMsInput",
+);
+const npcStopDurationMaxMsInputEl = document.getElementById(
+  "npcStopDurationMaxMsInput",
+);
 const saveSettingsBtnEl = document.getElementById("saveSettingsBtn");
 const settingsInfoEl = document.getElementById("settingsInfo");
 const settingsStatusEl = document.getElementById("settingsStatus");
@@ -56,7 +88,7 @@ const DEFAULT_GAMEPLAY_SETTINGS = Object.freeze({
   playerAttackCooldownSeconds: 2,
   attackHalfAngleDegrees: 18,
   moveSpeedMetersPerSecond: 2.9,
-  playerSprintMultiplier: 1.45
+  playerSprintMultiplier: 1.45,
 });
 const DEFAULT_AI_BEHAVIOR_SETTINGS = Object.freeze({
   npcInspectDownedChancePercent: 75,
@@ -66,16 +98,16 @@ const DEFAULT_AI_BEHAVIOR_SETTINGS = Object.freeze({
   npcMoveDecisionIntervalMinMs: 600,
   npcMoveDecisionIntervalMaxMs: 1800,
   npcStopDurationMinMs: 600,
-  npcStopDurationMaxMs: 1800
+  npcStopDurationMaxMs: 1800,
 });
 
 function getToken() {
-  return localStorage.getItem(TOKEN_KEY) || "";
+  return sessionStorage.getItem(TOKEN_KEY) || "";
 }
 
 function setToken(token) {
-  if (!token) localStorage.removeItem(TOKEN_KEY);
-  else localStorage.setItem(TOKEN_KEY, token);
+  if (!token) sessionStorage.removeItem(TOKEN_KEY);
+  else sessionStorage.setItem(TOKEN_KEY, token);
 }
 
 function resolveToken() {
@@ -86,10 +118,16 @@ function resolveToken() {
   return token;
 }
 
-function buildDebugUrl(path, token) {
-  const url = new URL(path, location.origin);
-  if (token) url.searchParams.set("token", token);
-  return url;
+function buildDebugUrl(path) {
+  return new URL(path, location.origin);
+}
+
+function debugHeaders(token, extra) {
+  return Object.assign(
+    { Accept: "application/json" },
+    token ? { "x-debug-token": token } : {},
+    extra || {},
+  );
 }
 
 function setError(text) {
@@ -120,7 +158,12 @@ function readOptionalPatchedIntField(inputEl, fieldName, currentValue) {
   return { changed: true, value: parsed };
 }
 
-function readOptionalPatchedNumberField(inputEl, fieldName, currentValue, { min, max, step = null } = {}) {
+function readOptionalPatchedNumberField(
+  inputEl,
+  fieldName,
+  currentValue,
+  { min, max, step = null } = {},
+) {
   const raw = inputEl?.value?.trim() || "";
   const hasCurrent = Number.isFinite(Number(currentValue));
   if (!raw) {
@@ -137,7 +180,10 @@ function readOptionalPatchedNumberField(inputEl, fieldName, currentValue, { min,
   if (Number.isFinite(max) && parsed > max) {
     throw new Error(`${fieldName} får vara max ${max}.`);
   }
-  const normalized = Number.isFinite(step) && step > 0 ? Number((Math.round(parsed / step) * step).toFixed(4)) : parsed;
+  const normalized =
+    Number.isFinite(step) && step > 0
+      ? Number((Math.round(parsed / step) * step).toFixed(4))
+      : parsed;
   if (hasCurrent && Math.abs(Number(currentValue) - normalized) < 0.0001) {
     return { changed: false, value: Number(currentValue) };
   }
@@ -163,7 +209,8 @@ function renderAiSliderLabels() {
 function resolvedGameplaySettings(input) {
   const src = input && typeof input === "object" ? input : {};
   const out = { ...DEFAULT_GAMEPLAY_SETTINGS };
-  const isFiniteInRange = (value, min, max) => Number.isFinite(value) && value >= min && value <= max;
+  const isFiniteInRange = (value, min, max) =>
+    Number.isFinite(value) && value >= min && value <= max;
   const setIntIfFinite = (key, value) => {
     const n = Number(value);
     if (Number.isFinite(n) && Number.isInteger(n)) out[key] = n;
@@ -176,9 +223,22 @@ function resolvedGameplaySettings(input) {
   setIntIfFinite("maxPlayers", src.maxPlayers);
   setIntIfFinite("minPlayersToStart", src.minPlayersToStart);
   setIntIfFinite("npcDownedRespawnSeconds", src.npcDownedRespawnSeconds);
-  setIntIfFinite("playerAttackCooldownSeconds", src.playerAttackCooldownSeconds);
-  setNumberIfFinite("attackHalfAngleDegrees", src.attackHalfAngleDegrees, 2, 60);
-  setNumberIfFinite("moveSpeedMetersPerSecond", src.moveSpeedMetersPerSecond, 0.5, 8);
+  setIntIfFinite(
+    "playerAttackCooldownSeconds",
+    src.playerAttackCooldownSeconds,
+  );
+  setNumberIfFinite(
+    "attackHalfAngleDegrees",
+    src.attackHalfAngleDegrees,
+    2,
+    60,
+  );
+  setNumberIfFinite(
+    "moveSpeedMetersPerSecond",
+    src.moveSpeedMetersPerSecond,
+    0.5,
+    8,
+  );
   setNumberIfFinite("playerSprintMultiplier", src.playerSprintMultiplier, 1, 3);
   return out;
 }
@@ -192,20 +252,34 @@ function resolvedAiBehaviorSettings(input) {
   const moveScale = useMoveLegacy ? Math.max(0.4, moveScaleLegacy / 100) : 1;
   const stopScale = useStopLegacy ? Math.max(0.4, stopScaleLegacy / 100) : 1;
 
-  const moveMinLegacy = Math.round(DEFAULT_AI_BEHAVIOR_SETTINGS.npcMoveDecisionIntervalMinMs / moveScale);
-  const moveMaxLegacy = Math.round(DEFAULT_AI_BEHAVIOR_SETTINGS.npcMoveDecisionIntervalMaxMs / moveScale);
-  const stopMinLegacy = Math.round(DEFAULT_AI_BEHAVIOR_SETTINGS.npcStopDurationMinMs * stopScale);
-  const stopMaxLegacy = Math.round(DEFAULT_AI_BEHAVIOR_SETTINGS.npcStopDurationMaxMs * stopScale);
+  const moveMinLegacy = Math.round(
+    DEFAULT_AI_BEHAVIOR_SETTINGS.npcMoveDecisionIntervalMinMs / moveScale,
+  );
+  const moveMaxLegacy = Math.round(
+    DEFAULT_AI_BEHAVIOR_SETTINGS.npcMoveDecisionIntervalMaxMs / moveScale,
+  );
+  const stopMinLegacy = Math.round(
+    DEFAULT_AI_BEHAVIOR_SETTINGS.npcStopDurationMinMs * stopScale,
+  );
+  const stopMaxLegacy = Math.round(
+    DEFAULT_AI_BEHAVIOR_SETTINGS.npcStopDurationMaxMs * stopScale,
+  );
 
   const out = {
-    ...DEFAULT_AI_BEHAVIOR_SETTINGS
+    ...DEFAULT_AI_BEHAVIOR_SETTINGS,
   };
   const setIfFinite = (key, value) => {
     const n = Number(value);
     if (Number.isFinite(n)) out[key] = n;
   };
-  setIfFinite("npcInspectDownedChancePercent", src.npcInspectDownedChancePercent);
-  setIfFinite("npcInspectDownedNearbyRadiusMeters", src.npcInspectDownedNearbyRadiusMeters);
+  setIfFinite(
+    "npcInspectDownedChancePercent",
+    src.npcInspectDownedChancePercent,
+  );
+  setIfFinite(
+    "npcInspectDownedNearbyRadiusMeters",
+    src.npcInspectDownedNearbyRadiusMeters,
+  );
   setIfFinite("npcSocialSeparationPercent", src.npcSocialSeparationPercent);
   setIfFinite("npcStopChancePercent", src.npcStopChancePercent);
   setIfFinite("npcMoveDecisionIntervalMinMs", src.npcMoveDecisionIntervalMinMs);
@@ -213,10 +287,16 @@ function resolvedAiBehaviorSettings(input) {
   setIfFinite("npcStopDurationMinMs", src.npcStopDurationMinMs);
   setIfFinite("npcStopDurationMaxMs", src.npcStopDurationMaxMs);
 
-  if (!Number.isFinite(Number(src.npcMoveDecisionIntervalMinMs)) && useMoveLegacy) {
+  if (
+    !Number.isFinite(Number(src.npcMoveDecisionIntervalMinMs)) &&
+    useMoveLegacy
+  ) {
     out.npcMoveDecisionIntervalMinMs = moveMinLegacy;
   }
-  if (!Number.isFinite(Number(src.npcMoveDecisionIntervalMaxMs)) && useMoveLegacy) {
+  if (
+    !Number.isFinite(Number(src.npcMoveDecisionIntervalMaxMs)) &&
+    useMoveLegacy
+  ) {
     out.npcMoveDecisionIntervalMaxMs = moveMaxLegacy;
   }
   if (!Number.isFinite(Number(src.npcStopDurationMinMs)) && useStopLegacy) {
@@ -263,8 +343,10 @@ function renderSummary(data) {
   const system = data?.systemMetrics || {};
   const host = system.host || {};
   const proc = system.process || {};
-  const cpuLoadHost = host.cpuLoadPercent == null ? "-" : `${host.cpuLoadPercent}%`;
-  const cpuTempHost = host.cpuTempCelsius == null ? "-" : `${host.cpuTempCelsius}\u00b0C`;
+  const cpuLoadHost =
+    host.cpuLoadPercent == null ? "-" : `${host.cpuLoadPercent}%`;
+  const cpuTempHost =
+    host.cpuTempCelsius == null ? "-" : `${host.cpuTempCelsius}\u00b0C`;
   const rows = [
     ["Anslutna nu", fmtN(data?.current?.connected)],
     ["Spelar nu", fmtN(data?.current?.active)],
@@ -276,10 +358,19 @@ function renderSummary(data) {
     ["Host CPU-last", cpuLoadHost],
     ["Host CPU-temp", cpuTempHost],
     ["Host loadavg (1m)", String(host.loadAverage1m ?? "-")],
-    ["Host RAM", `${fmtBytes(host.usedMemoryBytes)} / ${fmtBytes(host.totalMemoryBytes)} (${host.memoryUsagePercent ?? "-"}%)`],
-    ["Node CPU", `${proc.cpuPercentHostShare ?? "-"}% av host (${proc.cpuPercentSingleCore ?? "-"}% av 1 kärna)`],
+    [
+      "Host RAM",
+      `${fmtBytes(host.usedMemoryBytes)} / ${fmtBytes(host.totalMemoryBytes)} (${host.memoryUsagePercent ?? "-"}%)`,
+    ],
+    [
+      "Node CPU",
+      `${proc.cpuPercentHostShare ?? "-"}% av host (${proc.cpuPercentSingleCore ?? "-"}% av 1 kärna)`,
+    ],
     ["Node RSS", fmtBytes(proc.rssBytes)],
-    ["Node heap", `${fmtBytes(proc.heapUsedBytes)} / ${fmtBytes(proc.heapTotalBytes)}`]
+    [
+      "Node heap",
+      `${fmtBytes(proc.heapUsedBytes)} / ${fmtBytes(proc.heapTotalBytes)}`,
+    ],
   ];
   summaryEl.textContent = "";
   for (const [k, v] of rows) {
@@ -357,7 +448,7 @@ function drawChart(samples) {
 
 function roomLabel(room) {
   if (!room) return "-";
-  return room.isPrivate ? (room.roomCode || room.roomId) : "publik";
+  return room.isPrivate ? room.roomCode || room.roomId : "publik";
 }
 
 function buildRoomRows(data) {
@@ -375,7 +466,7 @@ function buildRoomRows(data) {
       lastEventAt: Number(room.lastEventAt || 0),
       uniqueNames: Array.isArray(room.uniqueNames) ? room.uniqueNames : [],
       hasLive: false,
-      names: []
+      names: [],
     });
   }
 
@@ -389,7 +480,7 @@ function buildRoomRows(data) {
       lastEventAt: 0,
       uniqueNames: [],
       hasLive: false,
-      names: []
+      names: [],
     };
     existing.roomCode = room.roomCode || existing.roomCode;
     existing.isPrivate = Boolean(room.isPrivate);
@@ -407,7 +498,9 @@ function buildRoomRows(data) {
 
 function renderText(data) {
   const roomRows = buildRoomRows(data);
-  const roomLabelById = new Map(roomRows.map((room) => [room.roomId, roomLabel(room)]));
+  const roomLabelById = new Map(
+    roomRows.map((room) => [room.roomId, roomLabel(room)]),
+  );
 
   if (roomsEl) {
     roomsEl.textContent = "";
@@ -421,7 +514,11 @@ function renderText(data) {
       const table = document.createElement("table");
       const thead = document.createElement("thead");
       const headerRow = document.createElement("tr");
-      for (const [label, width] of [["Status", "72px"], ["Rum", "90px"], ["Spelare", ""]]) {
+      for (const [label, width] of [
+        ["Status", "72px"],
+        ["Rum", "90px"],
+        ["Spelare", ""],
+      ]) {
         const th = document.createElement("th");
         th.textContent = label;
         if (width) th.style.width = width;
@@ -441,7 +538,9 @@ function renderText(data) {
         tdRoom.textContent = roomLabel(room);
         const tdNames = document.createElement("td");
         const nameList = room.hasLive
-          ? (room.names.length > 0 ? room.names : [])
+          ? room.names.length > 0
+            ? room.names
+            : []
           : [...room.uniqueNames];
         if (nameList.length === 0) {
           tdNames.style.color = "var(--muted)";
@@ -463,7 +562,9 @@ function renderText(data) {
   }
   if (playersEl) {
     playersEl.textContent = "";
-    const players = Array.isArray(data?.players) ? data.players.slice(0, LIST_LIMIT) : [];
+    const players = Array.isArray(data?.players)
+      ? data.players.slice(0, LIST_LIMIT)
+      : [];
     if (players.length === 0) {
       const empty = document.createElement("div");
       empty.className = "empty";
@@ -473,7 +574,11 @@ function renderText(data) {
       const table = document.createElement("table");
       const thead = document.createElement("thead");
       const headerRow = document.createElement("tr");
-      for (const [label, width] of [["Namn", "130px"], ["Senast sedd", "148px"], ["Rum", ""]]) {
+      for (const [label, width] of [
+        ["Namn", "130px"],
+        ["Senast sedd", "148px"],
+        ["Rum", ""],
+      ]) {
         const th = document.createElement("th");
         th.textContent = label;
         if (width) th.style.width = width;
@@ -491,7 +596,9 @@ function renderText(data) {
         tdSeen.textContent = fmtAt(p.lastSeenAt);
         tdSeen.style.color = "var(--muted)";
         const tdRooms = document.createElement("td");
-        const roomNames = (p.rooms || []).map((roomId) => roomLabelById.get(roomId) || roomId);
+        const roomNames = (p.rooms || []).map(
+          (roomId) => roomLabelById.get(roomId) || roomId,
+        );
         tdRooms.textContent = roomNames.join(", ") || "-";
         tr.appendChild(tdName);
         tr.appendChild(tdSeen);
@@ -503,7 +610,9 @@ function renderText(data) {
     }
   }
   if (eventsEl) {
-    const events = Array.isArray(data?.recentEvents) ? data.recentEvents.slice(-LIST_LIMIT).reverse() : [];
+    const events = Array.isArray(data?.recentEvents)
+      ? data.recentEvents.slice(-LIST_LIMIT).reverse()
+      : [];
     eventsEl.textContent =
       events.length > 0
         ? events
@@ -555,7 +664,9 @@ function renderText(data) {
   }
   if (chatEl) {
     chatEl.textContent = "";
-    const chats = Array.isArray(data?.recentChat) ? data.recentChat.slice(-LIST_LIMIT).reverse() : [];
+    const chats = Array.isArray(data?.recentChat)
+      ? data.recentChat.slice(-LIST_LIMIT).reverse()
+      : [];
     if (chats.length === 0) {
       const empty = document.createElement("div");
       empty.className = "empty";
@@ -565,7 +676,11 @@ function renderText(data) {
       const table = document.createElement("table");
       const thead = document.createElement("thead");
       const headerRow = document.createElement("tr");
-      for (const [label, width] of [["Tid", "148px"], ["Namn", "120px"], ["Meddelande", ""]]) {
+      for (const [label, width] of [
+        ["Tid", "148px"],
+        ["Namn", "120px"],
+        ["Meddelande", ""],
+      ]) {
         const th = document.createElement("th");
         th.textContent = label;
         if (width) th.style.width = width;
@@ -603,9 +718,13 @@ function renderText(data) {
 
 function renderSettings(settings) {
   if (!layoutSelectEl) return;
-  const available = Array.isArray(settings?.availableLayouts) ? settings.availableLayouts : [];
+  const available = Array.isArray(settings?.availableLayouts)
+    ? settings.availableLayouts
+    : [];
   const activeLayoutId = String(settings?.layout?.id || "");
-  const activeWarnings = Array.isArray(settings?.layout?.warnings) ? settings.layout.warnings : [];
+  const activeWarnings = Array.isArray(settings?.layout?.warnings)
+    ? settings.layout.warnings
+    : [];
 
   layoutSelectEl.textContent = "";
   for (const entry of available) {
@@ -613,8 +732,13 @@ function renderSettings(settings) {
     option.value = entry.id;
     const width = Number(entry.worldWidthMeters ?? entry.worldSizeMeters);
     const height = Number(entry.worldHeightMeters ?? entry.worldSizeMeters);
-    const sizeText = Number.isFinite(width) && Number.isFinite(height) ? `${width}x${height} m` : "-";
-    const warningCount = Array.isArray(entry?.warnings) ? entry.warnings.length : 0;
+    const sizeText =
+      Number.isFinite(width) && Number.isFinite(height)
+        ? `${width}x${height} m`
+        : "-";
+    const warningCount = Array.isArray(entry?.warnings)
+      ? entry.warnings.length
+      : 0;
     const warningTag = warningCount > 0 ? " [VARNING]" : "";
     option.textContent = `${entry.fileName || entry.label || entry.id} (${sizeText})${warningTag}`;
     layoutSelectEl.appendChild(option);
@@ -623,86 +747,177 @@ function renderSettings(settings) {
 
   const gameplay = resolvedGameplaySettings(settings?.gameplaySettings);
   const aiBehavior = resolvedAiBehaviorSettings(settings?.aiBehaviorSettings);
-  if (totalCharactersInputEl && Number.isFinite(Number(gameplay.totalCharacters))) {
+  if (
+    totalCharactersInputEl &&
+    Number.isFinite(Number(gameplay.totalCharacters))
+  ) {
     totalCharactersInputEl.value = String(gameplay.totalCharacters);
   }
   if (maxPlayersInputEl && Number.isFinite(Number(gameplay.maxPlayers))) {
     maxPlayersInputEl.value = String(gameplay.maxPlayers);
   }
-  if (minPlayersToStartInputEl && Number.isFinite(Number(gameplay.minPlayersToStart))) {
+  if (
+    minPlayersToStartInputEl &&
+    Number.isFinite(Number(gameplay.minPlayersToStart))
+  ) {
     minPlayersToStartInputEl.value = String(gameplay.minPlayersToStart);
   }
-  if (npcDownedRespawnSecondsInputEl && Number.isFinite(Number(gameplay.npcDownedRespawnSeconds))) {
-    npcDownedRespawnSecondsInputEl.value = String(gameplay.npcDownedRespawnSeconds);
+  if (
+    npcDownedRespawnSecondsInputEl &&
+    Number.isFinite(Number(gameplay.npcDownedRespawnSeconds))
+  ) {
+    npcDownedRespawnSecondsInputEl.value = String(
+      gameplay.npcDownedRespawnSeconds,
+    );
   }
-  if (playerAttackCooldownSecondsInputEl && Number.isFinite(Number(gameplay.playerAttackCooldownSeconds))) {
-    playerAttackCooldownSecondsInputEl.value = String(gameplay.playerAttackCooldownSeconds);
+  if (
+    playerAttackCooldownSecondsInputEl &&
+    Number.isFinite(Number(gameplay.playerAttackCooldownSeconds))
+  ) {
+    playerAttackCooldownSecondsInputEl.value = String(
+      gameplay.playerAttackCooldownSeconds,
+    );
   }
-  if (attackHalfAngleDegreesInputEl && Number.isFinite(Number(gameplay.attackHalfAngleDegrees))) {
-    attackHalfAngleDegreesInputEl.value = String(gameplay.attackHalfAngleDegrees);
+  if (
+    attackHalfAngleDegreesInputEl &&
+    Number.isFinite(Number(gameplay.attackHalfAngleDegrees))
+  ) {
+    attackHalfAngleDegreesInputEl.value = String(
+      gameplay.attackHalfAngleDegrees,
+    );
   }
-  if (moveSpeedMetersPerSecondInputEl && Number.isFinite(Number(gameplay.moveSpeedMetersPerSecond))) {
-    moveSpeedMetersPerSecondInputEl.value = String(gameplay.moveSpeedMetersPerSecond);
+  if (
+    moveSpeedMetersPerSecondInputEl &&
+    Number.isFinite(Number(gameplay.moveSpeedMetersPerSecond))
+  ) {
+    moveSpeedMetersPerSecondInputEl.value = String(
+      gameplay.moveSpeedMetersPerSecond,
+    );
   }
-  if (playerSprintMultiplierInputEl && Number.isFinite(Number(gameplay.playerSprintMultiplier))) {
-    playerSprintMultiplierInputEl.value = String(gameplay.playerSprintMultiplier);
+  if (
+    playerSprintMultiplierInputEl &&
+    Number.isFinite(Number(gameplay.playerSprintMultiplier))
+  ) {
+    playerSprintMultiplierInputEl.value = String(
+      gameplay.playerSprintMultiplier,
+    );
   }
-  if (npcInspectDownedChanceInputEl) npcInspectDownedChanceInputEl.value = String(aiBehavior.npcInspectDownedChancePercent);
-  if (npcInspectDownedRadiusInputEl) npcInspectDownedRadiusInputEl.value = String(aiBehavior.npcInspectDownedNearbyRadiusMeters);
-  if (npcSocialSeparationInputEl) npcSocialSeparationInputEl.value = String(aiBehavior.npcSocialSeparationPercent);
-  if (npcStopChanceInputEl) npcStopChanceInputEl.value = String(aiBehavior.npcStopChancePercent);
-  if (npcMoveDecisionIntervalMinMsInputEl) npcMoveDecisionIntervalMinMsInputEl.value = String(aiBehavior.npcMoveDecisionIntervalMinMs);
-  if (npcMoveDecisionIntervalMaxMsInputEl) npcMoveDecisionIntervalMaxMsInputEl.value = String(aiBehavior.npcMoveDecisionIntervalMaxMs);
-  if (npcStopDurationMinMsInputEl) npcStopDurationMinMsInputEl.value = String(aiBehavior.npcStopDurationMinMs);
-  if (npcStopDurationMaxMsInputEl) npcStopDurationMaxMsInputEl.value = String(aiBehavior.npcStopDurationMaxMs);
+  if (npcInspectDownedChanceInputEl)
+    npcInspectDownedChanceInputEl.value = String(
+      aiBehavior.npcInspectDownedChancePercent,
+    );
+  if (npcInspectDownedRadiusInputEl)
+    npcInspectDownedRadiusInputEl.value = String(
+      aiBehavior.npcInspectDownedNearbyRadiusMeters,
+    );
+  if (npcSocialSeparationInputEl)
+    npcSocialSeparationInputEl.value = String(
+      aiBehavior.npcSocialSeparationPercent,
+    );
+  if (npcStopChanceInputEl)
+    npcStopChanceInputEl.value = String(aiBehavior.npcStopChancePercent);
+  if (npcMoveDecisionIntervalMinMsInputEl)
+    npcMoveDecisionIntervalMinMsInputEl.value = String(
+      aiBehavior.npcMoveDecisionIntervalMinMs,
+    );
+  if (npcMoveDecisionIntervalMaxMsInputEl)
+    npcMoveDecisionIntervalMaxMsInputEl.value = String(
+      aiBehavior.npcMoveDecisionIntervalMaxMs,
+    );
+  if (npcStopDurationMinMsInputEl)
+    npcStopDurationMinMsInputEl.value = String(aiBehavior.npcStopDurationMinMs);
+  if (npcStopDurationMaxMsInputEl)
+    npcStopDurationMaxMsInputEl.value = String(aiBehavior.npcStopDurationMaxMs);
   renderAiSliderLabels();
 
   if (settingsInfoEl) {
-    const activeLabel = settings?.layout?.fileName || settings?.layout?.label || activeLayoutId || "-";
-    const activeWidth = Number(settings?.layout?.worldWidthMeters ?? settings?.layout?.worldSizeMeters);
-    const activeHeight = Number(settings?.layout?.worldHeightMeters ?? settings?.layout?.worldSizeMeters);
+    const activeLabel =
+      settings?.layout?.fileName ||
+      settings?.layout?.label ||
+      activeLayoutId ||
+      "-";
+    const activeWidth = Number(
+      settings?.layout?.worldWidthMeters ?? settings?.layout?.worldSizeMeters,
+    );
+    const activeHeight = Number(
+      settings?.layout?.worldHeightMeters ?? settings?.layout?.worldSizeMeters,
+    );
     const activeSize =
-      Number.isFinite(activeWidth) && Number.isFinite(activeHeight) ? `${activeWidth}x${activeHeight} meter` : null;
-    const infoMax = Number.isFinite(Number(gameplay.maxPlayers)) ? gameplay.maxPlayers : "-";
-    const infoChars = Number.isFinite(Number(gameplay.totalCharacters)) ? gameplay.totalCharacters : "-";
-    const infoMinStart = Number.isFinite(Number(gameplay.minPlayersToStart)) ? gameplay.minPlayersToStart : "-";
-    const infoNpcRespawn = Number.isFinite(Number(gameplay.npcDownedRespawnSeconds))
+      Number.isFinite(activeWidth) && Number.isFinite(activeHeight)
+        ? `${activeWidth}x${activeHeight} meter`
+        : null;
+    const infoMax = Number.isFinite(Number(gameplay.maxPlayers))
+      ? gameplay.maxPlayers
+      : "-";
+    const infoChars = Number.isFinite(Number(gameplay.totalCharacters))
+      ? gameplay.totalCharacters
+      : "-";
+    const infoMinStart = Number.isFinite(Number(gameplay.minPlayersToStart))
+      ? gameplay.minPlayersToStart
+      : "-";
+    const infoNpcRespawn = Number.isFinite(
+      Number(gameplay.npcDownedRespawnSeconds),
+    )
       ? gameplay.npcDownedRespawnSeconds
       : "-";
-    const infoAttackCooldown = Number.isFinite(Number(gameplay.playerAttackCooldownSeconds))
+    const infoAttackCooldown = Number.isFinite(
+      Number(gameplay.playerAttackCooldownSeconds),
+    )
       ? gameplay.playerAttackCooldownSeconds
       : "-";
-    const infoAttackHalfAngle = Number.isFinite(Number(gameplay.attackHalfAngleDegrees))
+    const infoAttackHalfAngle = Number.isFinite(
+      Number(gameplay.attackHalfAngleDegrees),
+    )
       ? gameplay.attackHalfAngleDegrees
       : "-";
-    const infoMoveSpeed = Number.isFinite(Number(gameplay.moveSpeedMetersPerSecond))
+    const infoMoveSpeed = Number.isFinite(
+      Number(gameplay.moveSpeedMetersPerSecond),
+    )
       ? gameplay.moveSpeedMetersPerSecond
       : "-";
-    const infoSprintMultiplier = Number.isFinite(Number(gameplay.playerSprintMultiplier))
+    const infoSprintMultiplier = Number.isFinite(
+      Number(gameplay.playerSprintMultiplier),
+    )
       ? gameplay.playerSprintMultiplier
       : "-";
-    const infoInspectChance = Number.isFinite(Number(aiBehavior.npcInspectDownedChancePercent))
+    const infoInspectChance = Number.isFinite(
+      Number(aiBehavior.npcInspectDownedChancePercent),
+    )
       ? aiBehavior.npcInspectDownedChancePercent
       : "-";
-    const infoInspectRadius = Number.isFinite(Number(aiBehavior.npcInspectDownedNearbyRadiusMeters))
+    const infoInspectRadius = Number.isFinite(
+      Number(aiBehavior.npcInspectDownedNearbyRadiusMeters),
+    )
       ? aiBehavior.npcInspectDownedNearbyRadiusMeters
       : "-";
-    const infoSpread = Number.isFinite(Number(aiBehavior.npcSocialSeparationPercent))
+    const infoSpread = Number.isFinite(
+      Number(aiBehavior.npcSocialSeparationPercent),
+    )
       ? aiBehavior.npcSocialSeparationPercent
       : "-";
-    const infoStopChance = Number.isFinite(Number(aiBehavior.npcStopChancePercent))
+    const infoStopChance = Number.isFinite(
+      Number(aiBehavior.npcStopChancePercent),
+    )
       ? aiBehavior.npcStopChancePercent
       : "-";
-    const infoMoveDecisionMin = Number.isFinite(Number(aiBehavior.npcMoveDecisionIntervalMinMs))
+    const infoMoveDecisionMin = Number.isFinite(
+      Number(aiBehavior.npcMoveDecisionIntervalMinMs),
+    )
       ? aiBehavior.npcMoveDecisionIntervalMinMs
       : "-";
-    const infoMoveDecisionMax = Number.isFinite(Number(aiBehavior.npcMoveDecisionIntervalMaxMs))
+    const infoMoveDecisionMax = Number.isFinite(
+      Number(aiBehavior.npcMoveDecisionIntervalMaxMs),
+    )
       ? aiBehavior.npcMoveDecisionIntervalMaxMs
       : "-";
-    const infoStopDurationMin = Number.isFinite(Number(aiBehavior.npcStopDurationMinMs))
+    const infoStopDurationMin = Number.isFinite(
+      Number(aiBehavior.npcStopDurationMinMs),
+    )
       ? aiBehavior.npcStopDurationMinMs
       : "-";
-    const infoStopDurationMax = Number.isFinite(Number(aiBehavior.npcStopDurationMaxMs))
+    const infoStopDurationMax = Number.isFinite(
+      Number(aiBehavior.npcStopDurationMaxMs),
+    )
       ? aiBehavior.npcStopDurationMaxMs
       : "-";
     const warningText =
@@ -719,7 +934,12 @@ function hasUnsavedSettingsFormChanges(referenceSettings) {
   const aiBehavior = resolvedAiBehaviorSettings(settings?.aiBehaviorSettings);
   const referenceLayoutId = String(settings?.layout?.id || "");
   const selectedLayoutId = String(layoutSelectEl?.value || "");
-  if (referenceLayoutId && selectedLayoutId && referenceLayoutId !== selectedLayoutId) return true;
+  if (
+    referenceLayoutId &&
+    selectedLayoutId &&
+    referenceLayoutId !== selectedLayoutId
+  )
+    return true;
 
   const pairs = [
     [totalCharactersInputEl, gameplay.totalCharacters],
@@ -729,27 +949,40 @@ function hasUnsavedSettingsFormChanges(referenceSettings) {
     [playerAttackCooldownSecondsInputEl, gameplay.playerAttackCooldownSeconds],
     [attackHalfAngleDegreesInputEl, gameplay.attackHalfAngleDegrees],
     [moveSpeedMetersPerSecondInputEl, gameplay.moveSpeedMetersPerSecond],
-    [playerSprintMultiplierInputEl, gameplay.playerSprintMultiplier]
+    [playerSprintMultiplierInputEl, gameplay.playerSprintMultiplier],
   ];
   for (const [inputEl, expectedValue] of pairs) {
     const currentRaw = inputEl?.value?.trim() || "";
-    const expectedRaw = Number.isFinite(Number(expectedValue)) ? String(Number(expectedValue)) : "";
+    const expectedRaw = Number.isFinite(Number(expectedValue))
+      ? String(Number(expectedValue))
+      : "";
     if (currentRaw && expectedRaw && currentRaw !== expectedRaw) return true;
   }
 
   const aiPairs = [
     [npcInspectDownedChanceInputEl, aiBehavior.npcInspectDownedChancePercent],
-    [npcInspectDownedRadiusInputEl, aiBehavior.npcInspectDownedNearbyRadiusMeters],
+    [
+      npcInspectDownedRadiusInputEl,
+      aiBehavior.npcInspectDownedNearbyRadiusMeters,
+    ],
     [npcSocialSeparationInputEl, aiBehavior.npcSocialSeparationPercent],
     [npcStopChanceInputEl, aiBehavior.npcStopChancePercent],
-    [npcMoveDecisionIntervalMinMsInputEl, aiBehavior.npcMoveDecisionIntervalMinMs],
-    [npcMoveDecisionIntervalMaxMsInputEl, aiBehavior.npcMoveDecisionIntervalMaxMs],
+    [
+      npcMoveDecisionIntervalMinMsInputEl,
+      aiBehavior.npcMoveDecisionIntervalMinMs,
+    ],
+    [
+      npcMoveDecisionIntervalMaxMsInputEl,
+      aiBehavior.npcMoveDecisionIntervalMaxMs,
+    ],
     [npcStopDurationMinMsInputEl, aiBehavior.npcStopDurationMinMs],
-    [npcStopDurationMaxMsInputEl, aiBehavior.npcStopDurationMaxMs]
+    [npcStopDurationMaxMsInputEl, aiBehavior.npcStopDurationMaxMs],
   ];
   for (const [inputEl, expectedValue] of aiPairs) {
     const currentRaw = inputEl?.value?.trim() || "";
-    const expectedRaw = Number.isFinite(Number(expectedValue)) ? String(Number(expectedValue)) : "";
+    const expectedRaw = Number.isFinite(Number(expectedValue))
+      ? String(Number(expectedValue))
+      : "";
     if (currentRaw && expectedRaw && currentRaw !== expectedRaw) return true;
   }
   return false;
@@ -762,16 +995,22 @@ function mergeSettingsFromStats(data) {
   const aiBehaviorSettings = data.aiBehaviorSettings;
   const hasLayout = layout && typeof layout === "object";
   const hasGameplay = gameplaySettings && typeof gameplaySettings === "object";
-  const hasAiBehavior = aiBehaviorSettings && typeof aiBehaviorSettings === "object";
+  const hasAiBehavior =
+    aiBehaviorSettings && typeof aiBehaviorSettings === "object";
   if (!hasLayout && !hasGameplay && !hasAiBehavior) return;
   const source = cachedSettings || {};
-  const hadUnsavedChanges = activeTab === "settings" && hasUnsavedSettingsFormChanges(source);
-  const availableLayouts = Array.isArray(source.availableLayouts) ? source.availableLayouts : [];
+  const hadUnsavedChanges =
+    activeTab === "settings" && hasUnsavedSettingsFormChanges(source);
+  const availableLayouts = Array.isArray(source.availableLayouts)
+    ? source.availableLayouts
+    : [];
   const nextSettings = {
     layout: hasLayout ? layout : source.layout,
     gameplaySettings: hasGameplay ? gameplaySettings : source.gameplaySettings,
-    aiBehaviorSettings: hasAiBehavior ? aiBehaviorSettings : source.aiBehaviorSettings,
-    availableLayouts
+    aiBehaviorSettings: hasAiBehavior
+      ? aiBehaviorSettings
+      : source.aiBehaviorSettings,
+    availableLayouts,
   };
   cachedSettings = nextSettings;
   if (hadUnsavedChanges) return;
@@ -800,10 +1039,15 @@ async function refresh() {
   loading = true;
   try {
     const token = resolveToken();
-    const url = buildDebugUrl("/api/debug/stats", token);
-    const res = await fetch(url, { cache: "no-store", headers: { Accept: "application/json" } });
+    const url = buildDebugUrl("/api/debug/stats");
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: debugHeaders(token),
+    });
     if (res.status === 503) {
-      setError("Servern saknar DEBUG_VIEW_TOKEN. Sätt den i miljön och starta om.");
+      setError(
+        "Servern saknar DEBUG_VIEW_TOKEN. Sätt den i miljön och starta om.",
+      );
       return;
     }
     if (res.status === 401) {
@@ -833,8 +1077,11 @@ async function loadSettings() {
       setSettingsStatus("Fyll i token för att läsa settings.", true);
       return;
     }
-    const url = buildDebugUrl("/api/debug/settings", token);
-    const res = await fetch(url, { cache: "no-store", headers: { Accept: "application/json" } });
+    const url = buildDebugUrl("/api/debug/settings");
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: debugHeaders(token),
+    });
     if (res.status === 401) {
       setSettingsStatus("Fel token för settings.", true);
       return;
@@ -872,94 +1119,98 @@ async function saveSettings() {
       setSettingsStatus("Välj en karta först.", true);
       return;
     }
-    const currentGameplay = resolvedGameplaySettings(cachedSettings?.gameplaySettings);
-    const currentAiBehavior = resolvedAiBehaviorSettings(cachedSettings?.aiBehaviorSettings);
+    const currentGameplay = resolvedGameplaySettings(
+      cachedSettings?.gameplaySettings,
+    );
+    const currentAiBehavior = resolvedAiBehaviorSettings(
+      cachedSettings?.aiBehaviorSettings,
+    );
     const totalCharactersPatch = readOptionalPatchedIntField(
       totalCharactersInputEl,
       "Antal karaktärer",
-      currentGameplay.totalCharacters
+      currentGameplay.totalCharacters,
     );
     const maxPlayersPatch = readOptionalPatchedIntField(
       maxPlayersInputEl,
       "Max antal spelare",
-      currentGameplay.maxPlayers
+      currentGameplay.maxPlayers,
     );
     const minPlayersToStartPatch = readOptionalPatchedIntField(
       minPlayersToStartInputEl,
       "Min spelare för spelstart",
-      currentGameplay.minPlayersToStart
+      currentGameplay.minPlayersToStart,
     );
     const npcDownedRespawnSecondsPatch = readOptionalPatchedIntField(
       npcDownedRespawnSecondsInputEl,
       "NPC återresning (sek)",
-      currentGameplay.npcDownedRespawnSeconds
+      currentGameplay.npcDownedRespawnSeconds,
     );
     const playerAttackCooldownSecondsPatch = readOptionalPatchedIntField(
       playerAttackCooldownSecondsInputEl,
       "Spelarslag cooldown (sek)",
-      currentGameplay.playerAttackCooldownSeconds
+      currentGameplay.playerAttackCooldownSeconds,
     );
     const attackHalfAngleDegreesPatch = readOptionalPatchedNumberField(
       attackHalfAngleDegreesInputEl,
       "Träffkon halvbredd (grader)",
       currentGameplay.attackHalfAngleDegrees,
-      { min: 2, max: 60, step: 0.5 }
+      { min: 2, max: 60, step: 0.5 },
     );
     const moveSpeedMetersPerSecondPatch = readOptionalPatchedNumberField(
       moveSpeedMetersPerSecondInputEl,
       "Gångfart spelare + NPC (m/s)",
       currentGameplay.moveSpeedMetersPerSecond,
-      { min: 0.5, max: 8, step: 0.05 }
+      { min: 0.5, max: 8, step: 0.05 },
     );
     const playerSprintMultiplierPatch = readOptionalPatchedNumberField(
       playerSprintMultiplierInputEl,
       "Spelare sprintfaktor (x)",
       currentGameplay.playerSprintMultiplier,
-      { min: 1, max: 3, step: 0.05 }
+      { min: 1, max: 3, step: 0.05 },
     );
     const npcInspectDownedChancePatch = readOptionalPatchedNumberField(
       npcInspectDownedChanceInputEl,
       "Kolla nedslagen NPC (chans)",
       currentAiBehavior.npcInspectDownedChancePercent,
-      { min: 0, max: 100, step: 1 }
+      { min: 0, max: 100, step: 1 },
     );
     const npcInspectDownedRadiusPatch = readOptionalPatchedNumberField(
       npcInspectDownedRadiusInputEl,
       "Sök-radie till nedslagen NPC",
       currentAiBehavior.npcInspectDownedNearbyRadiusMeters,
-      { min: 2, max: 20, step: 0.5 }
+      { min: 2, max: 20, step: 0.5 },
     );
     const npcSocialSeparationPatch = readOptionalPatchedNumberField(
       npcSocialSeparationInputEl,
       "Spridningstendens",
       currentAiBehavior.npcSocialSeparationPercent,
-      { min: 0, max: 100, step: 1 }
+      { min: 0, max: 100, step: 1 },
     );
     const npcStopChancePatch = readOptionalPatchedNumberField(
       npcStopChanceInputEl,
       "Stopfrekvens",
       currentAiBehavior.npcStopChancePercent,
-      { min: 0, max: 100, step: 1 }
+      { min: 0, max: 100, step: 1 },
     );
     const npcMoveDecisionIntervalMinMsPatch = readOptionalPatchedIntField(
       npcMoveDecisionIntervalMinMsInputEl,
       "Rörelsefrekvens min (ms)",
-      currentAiBehavior.npcMoveDecisionIntervalMinMs
+      currentAiBehavior.npcMoveDecisionIntervalMinMs,
     );
     const npcMoveDecisionIntervalMaxMsPatch = readOptionalPatchedIntField(
       npcMoveDecisionIntervalMaxMsInputEl,
       "Rörelsefrekvens max (ms)",
-      currentAiBehavior.npcMoveDecisionIntervalMaxMs
+      currentAiBehavior.npcMoveDecisionIntervalMaxMs,
     );
     const npcStopDurationMinMsPatch = readOptionalPatchedIntField(
       npcStopDurationMinMsInputEl,
       "Stopplängd min (ms)",
-      currentAiBehavior.npcStopDurationMinMs
+      currentAiBehavior.npcStopDurationMinMs,
     );
     const npcStopDurationMaxMsPatch = readOptionalPatchedIntField(
       npcStopDurationMaxMsInputEl,
       "Stopplängd max (ms)",
-      currentAiBehavior.npcStopDurationMaxMs
+      currentAiBehavior.npcStopDurationMaxMs,
     );
 
     const totalCharacters = totalCharactersPatch.value;
@@ -971,11 +1222,14 @@ async function saveSettings() {
     const moveSpeedMetersPerSecond = moveSpeedMetersPerSecondPatch.value;
     const playerSprintMultiplier = playerSprintMultiplierPatch.value;
     const npcInspectDownedChancePercent = npcInspectDownedChancePatch.value;
-    const npcInspectDownedNearbyRadiusMeters = npcInspectDownedRadiusPatch.value;
+    const npcInspectDownedNearbyRadiusMeters =
+      npcInspectDownedRadiusPatch.value;
     const npcSocialSeparationPercent = npcSocialSeparationPatch.value;
     const npcStopChancePercent = npcStopChancePatch.value;
-    const npcMoveDecisionIntervalMinMs = npcMoveDecisionIntervalMinMsPatch.value;
-    const npcMoveDecisionIntervalMaxMs = npcMoveDecisionIntervalMaxMsPatch.value;
+    const npcMoveDecisionIntervalMinMs =
+      npcMoveDecisionIntervalMinMsPatch.value;
+    const npcMoveDecisionIntervalMaxMs =
+      npcMoveDecisionIntervalMaxMsPatch.value;
     const npcStopDurationMinMs = npcStopDurationMinMsPatch.value;
     const npcStopDurationMaxMs = npcStopDurationMaxMsPatch.value;
 
@@ -999,7 +1253,10 @@ async function saveSettings() {
       npcStopDurationMaxMsPatch.changed;
 
     if (maxPlayers >= totalCharacters) {
-      setSettingsStatus("Max antal spelare måste vara mindre än antal karaktärer.", true);
+      setSettingsStatus(
+        "Max antal spelare måste vara mindre än antal karaktärer.",
+        true,
+      );
       return;
     }
     if (minPlayersToStart < 2) {
@@ -1007,15 +1264,24 @@ async function saveSettings() {
       return;
     }
     if (minPlayersToStart > maxPlayers) {
-      setSettingsStatus("Min spelare för spelstart kan inte vara större än max antal spelare.", true);
+      setSettingsStatus(
+        "Min spelare för spelstart kan inte vara större än max antal spelare.",
+        true,
+      );
       return;
     }
     if (npcMoveDecisionIntervalMinMs > npcMoveDecisionIntervalMaxMs) {
-      setSettingsStatus("Rörelsefrekvens min (ms) kan inte vara större än max.", true);
+      setSettingsStatus(
+        "Rörelsefrekvens min (ms) kan inte vara större än max.",
+        true,
+      );
       return;
     }
     if (npcStopDurationMinMs > npcStopDurationMaxMs) {
-      setSettingsStatus("Stopplängd min (ms) kan inte vara större än max.", true);
+      setSettingsStatus(
+        "Stopplängd min (ms) kan inte vara större än max.",
+        true,
+      );
       return;
     }
 
@@ -1033,7 +1299,8 @@ async function saveSettings() {
     }
     if (aiBehaviorChanged) {
       payload.npcInspectDownedChancePercent = npcInspectDownedChancePercent;
-      payload.npcInspectDownedNearbyRadiusMeters = npcInspectDownedNearbyRadiusMeters;
+      payload.npcInspectDownedNearbyRadiusMeters =
+        npcInspectDownedNearbyRadiusMeters;
       payload.npcSocialSeparationPercent = npcSocialSeparationPercent;
       payload.npcStopChancePercent = npcStopChancePercent;
       payload.npcMoveDecisionIntervalMinMs = npcMoveDecisionIntervalMinMs;
@@ -1042,14 +1309,11 @@ async function saveSettings() {
       payload.npcStopDurationMaxMs = npcStopDurationMaxMs;
     }
 
-    const url = buildDebugUrl("/api/debug/settings", token);
+    const url = buildDebugUrl("/api/debug/settings");
     const res = await fetch(url, {
       method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
+      headers: debugHeaders(token, { "Content-Type": "application/json" }),
+      body: JSON.stringify(payload),
     });
     if (res.status === 401) {
       setSettingsStatus("Fel token för settings.", true);
@@ -1069,8 +1333,11 @@ async function saveSettings() {
     const data = await res.json();
     cachedSettings = data;
     renderSettings(data);
-    const activeName = data?.layout?.fileName || data?.layout?.label || data?.layout?.id || "-";
-    setSettingsStatus(`Settings sparade. Aktiv karta: ${activeName}. Rum har startats om.`);
+    const activeName =
+      data?.layout?.fileName || data?.layout?.label || data?.layout?.id || "-";
+    setSettingsStatus(
+      `Settings sparade. Aktiv karta: ${activeName}. Rum har startats om.`,
+    );
     refresh();
   } catch (error) {
     const message = error?.message || "";
