@@ -24,24 +24,24 @@
 function buildDesktopControlsHtml() {
   return `
     <div class="ctrl-grid">
-      <div class="ctrl-row">
+      <div class="ctrl-item">
         <div class="ctrl-keys">
           <div class="ctrl-key-row"><kbd class="key">W</kbd></div>
           <div class="ctrl-key-row"><kbd class="key">A</kbd><kbd class="key">S</kbd><kbd class="key">D</kbd></div>
         </div>
         <span class="ctrl-label">Rörelse</span>
       </div>
-      <div class="ctrl-row">
+      <div class="ctrl-item">
         <kbd class="key key-wide">⇧ Shift</kbd>
         <span class="ctrl-label">Sprint</span>
       </div>
-      <div class="ctrl-row">
+      <div class="ctrl-item">
         <span class="ctrl-mouse"><svg viewBox="0 0 20 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1" y="1" width="18" height="26" rx="9" stroke="currentColor" stroke-width="1.6"/><line x1="10" y1="1" x2="10" y2="14" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="19" r="1.5" fill="currentColor"/><rect x="1" y="1" width="8.2" height="13" rx="4" fill="currentColor" fill-opacity="0.25"/></svg></span>
-        <span class="ctrl-label">Klick vänster – Attackera</span>
+        <span class="ctrl-label">Vänsterklick<br>Attackera</span>
       </div>
-      <div class="ctrl-row">
+      <div class="ctrl-item">
         <span class="ctrl-mouse ctrl-mouse-drag"><svg viewBox="0 0 20 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1" y="1" width="18" height="26" rx="9" stroke="currentColor" stroke-width="1.6"/><line x1="10" y1="1" x2="10" y2="14" stroke="currentColor" stroke-width="1.6"/><path d="M10 22 L7 25 M10 22 L13 25 M10 22 L10 26" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span>
-        <span class="ctrl-label">Dra – Titta runt</span>
+        <span class="ctrl-label">Dra<br>Titta runt</span>
       </div>
     </div>
   `;
@@ -50,21 +50,21 @@ function buildDesktopControlsHtml() {
 function buildMobileControlsHtml() {
   return `
     <div class="ctrl-grid ctrl-grid-mobile">
-      <div class="ctrl-row">
+      <div class="ctrl-item">
         <span class="ctrl-badge">◉</span>
-        <span class="ctrl-label">Joystick nere till vänster – Rörelse</span>
+        <span class="ctrl-label">Joystick<br>Rörelse</span>
       </div>
-      <div class="ctrl-row">
+      <div class="ctrl-item">
         <span class="ctrl-badge">⚡</span>
-        <span class="ctrl-label">Sprint-knapp – Spring</span>
+        <span class="ctrl-label">Sprint</span>
       </div>
-      <div class="ctrl-row">
+      <div class="ctrl-item">
         <span class="ctrl-badge">⚔</span>
-        <span class="ctrl-label">Attack-knapp – Attackera</span>
+        <span class="ctrl-label">Attack</span>
       </div>
-      <div class="ctrl-row">
+      <div class="ctrl-item">
         <span class="ctrl-badge">👆</span>
-        <span class="ctrl-label">Dra höger ruta – Titta runt</span>
+        <span class="ctrl-label">Dra<br>Titta runt</span>
       </div>
     </div>
   `;
