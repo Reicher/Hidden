@@ -143,6 +143,12 @@ export function createRoomSystem({ scene, renderer }) {
   let fluorescentAccumSec = 0;
   const shelfBackInstances = [];
   const shelfBoardInstances = [];
+  const coolerBodyInstances = [];
+  const coolerFrontBuckets = new Map(); // variantSeed → instance[]
+  const coolerHandleInstances = [];
+  const freezerBodyInstances = [];
+  const freezerLidBaseInstances = [];
+  const freezerLidTopBuckets = new Map(); // variantSeed → instance[]
   const productInstancesByVariant = new Map();
   const posterInstancesByVariant = new Map();
   const staticInstancedResources = [];
@@ -784,6 +790,12 @@ export function createRoomSystem({ scene, renderer }) {
     posterMaterials.length = 0;
     shelfBackInstances.length = 0;
     shelfBoardInstances.length = 0;
+    coolerBodyInstances.length = 0;
+    coolerFrontBuckets.clear();
+    coolerHandleInstances.length = 0;
+    freezerBodyInstances.length = 0;
+    freezerLidBaseInstances.length = 0;
+    freezerLidTopBuckets.clear();
     productInstancesByVariant.clear();
     posterInstancesByVariant.clear();
     staticInstancedResources.length = 0;
@@ -856,7 +868,7 @@ export function createRoomSystem({ scene, renderer }) {
     for (let i = 0; i < instances.length; i += 1) {
       const inst = instances[i];
       tempPos.set(inst.x, inst.y, inst.z);
-      tempEuler.set(0, inst.yaw || 0, 0);
+      tempEuler.set(inst.pitchX || 0, inst.yaw || 0, 0);
       tempQuat.setFromEuler(tempEuler);
       const scaleX = flipX ? -inst.sx : inst.sx;
       tempScale.set(scaleX, inst.sy, inst.sz || 1);
@@ -917,6 +929,80 @@ export function createRoomSystem({ scene, renderer }) {
         geometry,
         material,
         instances: bucket,
+      });
+    }
+  }
+
+  function buildCoolerFreezerInstancedMeshes() {
+    // Cooler bodies – shared material, one InstancedMesh
+    if (coolerBodyInstances.length > 0) {
+      buildInstancedMesh({
+        geometry: new THREE.BoxGeometry(1, 1, 1),
+        material: new THREE.MeshStandardMaterial({
+          color: 0xecf0f4,
+          roughness: 0.28,
+          metalness: 0.08,
+        }),
+        instances: coolerBodyInstances,
+      });
+    }
+
+    // Cooler front panels – one InstancedMesh per texture variant
+    for (const [variantSeed, instances] of coolerFrontBuckets.entries()) {
+      if (!instances || instances.length <= 0) continue;
+      buildInstancedMesh({
+        geometry: new THREE.PlaneGeometry(1, 1),
+        material: createCoolerFrontMaterial(variantSeed),
+        instances,
+      });
+    }
+
+    // Cooler handles – shared trim material, one InstancedMesh
+    if (coolerHandleInstances.length > 0) {
+      buildInstancedMesh({
+        geometry: new THREE.BoxGeometry(1, 1, 1),
+        material: new THREE.MeshStandardMaterial({
+          color: 0xd4dbe4,
+          roughness: 0.34,
+          metalness: 0.22,
+        }),
+        instances: coolerHandleInstances,
+      });
+    }
+
+    // Freezer bodies – shared material, one InstancedMesh
+    if (freezerBodyInstances.length > 0) {
+      buildInstancedMesh({
+        geometry: new THREE.BoxGeometry(1, 1, 1),
+        material: new THREE.MeshStandardMaterial({
+          color: 0xe9edf2,
+          roughness: 0.42,
+          metalness: 0.06,
+        }),
+        instances: freezerBodyInstances,
+      });
+    }
+
+    // Freezer lid bases – shared material, one InstancedMesh
+    if (freezerLidBaseInstances.length > 0) {
+      buildInstancedMesh({
+        geometry: new THREE.BoxGeometry(1, 1, 1),
+        material: new THREE.MeshStandardMaterial({
+          color: 0xf7f9fc,
+          roughness: 0.22,
+          metalness: 0.02,
+        }),
+        instances: freezerLidBaseInstances,
+      });
+    }
+
+    // Freezer lid tops – one InstancedMesh per texture variant
+    for (const [variantSeed, instances] of freezerLidTopBuckets.entries()) {
+      if (!instances || instances.length <= 0) continue;
+      buildInstancedMesh({
+        geometry: new THREE.PlaneGeometry(1, 1),
+        material: createFreezerLidMaterial(variantSeed),
+        instances,
       });
     }
   }
@@ -1027,53 +1113,55 @@ export function createRoomSystem({ scene, renderer }) {
     const height =
       typeof cooler.height === "number" ? cooler.height : COOLER_HEIGHT;
     const yaw = typeof cooler.yaw === "number" ? cooler.yaw : 0;
+    const cx = Number(cooler.x);
+    const cz = Number(cooler.z);
+    const cos = Math.cos(yaw);
+    const sin = Math.sin(yaw);
 
-    const group = new THREE.Group();
-    group.position.set(cooler.x, 0, cooler.z);
-    group.rotation.y = yaw;
-    group.userData.type = "cooler";
-    group.userData.frontLocalAxis = "+Z";
-    group.userData.frontFacingYaw = yaw;
-
-    const bodyMaterial = new THREE.MeshStandardMaterial({
-      color: 0xecf0f4,
-      roughness: 0.28,
-      metalness: 0.08,
-    });
-    const frontMaterial = createCoolerFrontMaterial(
-      chooseVariantSeed(coolerRng),
-    );
-    const trimMaterial = new THREE.MeshStandardMaterial({
-      color: 0xd4dbe4,
-      roughness: 0.34,
-      metalness: 0.22,
+    // Body – centered at world position, scaled to actual dimensions
+    coolerBodyInstances.push({
+      x: cx,
+      y: height * 0.5,
+      z: cz,
+      sx: width,
+      sy: height,
+      sz: depth,
+      yaw,
     });
 
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(width, height, depth),
-      bodyMaterial,
-    );
-    body.position.y = height * 0.5;
-    body.userData.frontLocalAxis = "+Z";
-    group.add(body);
+    // Front panel – local offset (0, height*0.5, depth*0.5+0.004) rotated into world
+    const fpLocalZ = depth * 0.5 + 0.004;
+    const fpWorldX = cx + fpLocalZ * sin;
+    const fpWorldZ = cz + fpLocalZ * cos;
+    const variantSeed = chooseVariantSeed(coolerRng);
+    const frontInstance = {
+      x: fpWorldX,
+      y: height * 0.5,
+      z: fpWorldZ,
+      sx: width * 0.86,
+      sy: height * 0.92,
+      sz: 1,
+      yaw,
+    };
+    const frontBucket = coolerFrontBuckets.get(variantSeed);
+    if (frontBucket) {
+      frontBucket.push(frontInstance);
+    } else {
+      coolerFrontBuckets.set(variantSeed, [frontInstance]);
+    }
 
-    const frontPanel = new THREE.Mesh(
-      new THREE.PlaneGeometry(width * 0.86, height * 0.92),
-      frontMaterial,
-    );
-    frontPanel.position.set(0, height * 0.5, depth * 0.5 + 0.004);
-    frontPanel.userData.frontLocalAxis = "+Z";
-    group.add(frontPanel);
-
-    const handle = new THREE.Mesh(
-      new THREE.BoxGeometry(width * 0.04, height * 0.54, 0.02),
-      trimMaterial,
-    );
-    handle.position.set(width * 0.34, height * 0.5, depth * 0.5 + 0.018);
-    handle.userData.frontLocalAxis = "+Z";
-    group.add(handle);
-
-    roomRoot.add(group);
+    // Handle – local offset (width*0.34, height*0.5, depth*0.5+0.018)
+    const hLocalX = width * 0.34;
+    const hLocalZ = depth * 0.5 + 0.018;
+    coolerHandleInstances.push({
+      x: cx + hLocalX * cos + hLocalZ * sin,
+      y: height * 0.5,
+      z: cz - hLocalX * sin + hLocalZ * cos,
+      sx: width * 0.04,
+      sy: height * 0.54,
+      sz: 0.02,
+      yaw,
+    });
   }
 
   function createFreezer(freezer) {
@@ -1081,53 +1169,51 @@ export function createRoomSystem({ scene, renderer }) {
     const depth = typeof freezer.depth === "number" ? freezer.depth : 1.0;
     const height = typeof freezer.height === "number" ? freezer.height : 1.0;
     const yaw = typeof freezer.yaw === "number" ? freezer.yaw : 0;
-
-    const group = new THREE.Group();
-    group.position.set(freezer.x, 0, freezer.z);
-    group.rotation.y = yaw;
-    group.userData.type = "freezer";
-    group.userData.opening = "top";
-
-    const bodyMaterial = new THREE.MeshStandardMaterial({
-      color: 0xe9edf2,
-      roughness: 0.42,
-      metalness: 0.06,
-    });
-    const lidMaterial = createFreezerLidMaterial(chooseVariantSeed(freezerRng));
-
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(width, height, depth),
-      bodyMaterial,
-    );
-    body.position.y = height * 0.5;
-    group.add(body);
-
+    const cx = Number(freezer.x);
+    const cz = Number(freezer.z);
     const lidThickness = 0.05;
     const lidInset = 0.02;
-    const lidBase = new THREE.Mesh(
-      new THREE.BoxGeometry(
-        width - lidInset * 2,
-        lidThickness,
-        depth - lidInset * 2,
-      ),
-      new THREE.MeshStandardMaterial({
-        color: 0xf7f9fc,
-        roughness: 0.22,
-        metalness: 0.02,
-      }),
-    );
-    lidBase.position.set(0, height + lidThickness * 0.5 + 0.002, 0);
-    group.add(lidBase);
 
-    const lidTop = new THREE.Mesh(
-      new THREE.PlaneGeometry(width - lidInset * 2, depth - lidInset * 2),
-      lidMaterial,
-    );
-    lidTop.rotation.x = -Math.PI / 2;
-    lidTop.position.set(0, height + lidThickness + 0.003, 0);
-    group.add(lidTop);
+    // Body
+    freezerBodyInstances.push({
+      x: cx,
+      y: height * 0.5,
+      z: cz,
+      sx: width,
+      sy: height,
+      sz: depth,
+      yaw,
+    });
 
-    roomRoot.add(group);
+    // Lid base (thin box on top of body)
+    freezerLidBaseInstances.push({
+      x: cx,
+      y: height + lidThickness * 0.5 + 0.002,
+      z: cz,
+      sx: width - lidInset * 2,
+      sy: lidThickness,
+      sz: depth - lidInset * 2,
+      yaw,
+    });
+
+    // Lid top (horizontal plane, pitchX = -PI/2 turns XY-plane face-down)
+    const variantSeed = chooseVariantSeed(freezerRng);
+    const lidTopInstance = {
+      x: cx,
+      y: height + lidThickness + 0.003,
+      z: cz,
+      sx: width - lidInset * 2,
+      sy: depth - lidInset * 2,
+      sz: 1,
+      yaw,
+      pitchX: -Math.PI / 2,
+    };
+    const lidBucket = freezerLidTopBuckets.get(variantSeed);
+    if (lidBucket) {
+      lidBucket.push(lidTopInstance);
+    } else {
+      freezerLidTopBuckets.set(variantSeed, [lidTopInstance]);
+    }
   }
 
   function fixtureAabb(fixture, fallbackWidth, fallbackDepth) {
@@ -1324,6 +1410,49 @@ export function createRoomSystem({ scene, renderer }) {
       3.2,
       Math.min(5.4, Math.min(halfWorldWidth, halfWorldHeight) * 0.28),
     );
+    const totalFixtures = FLUORESCENT_ROWS * FLUORESCENT_COLS;
+
+    // --- Shared geometries & materials ---
+    const housingGeo = new THREE.BoxGeometry(tubeLength, 0.14, 0.34);
+    const housingMat = new THREE.MeshStandardMaterial({
+      color: 0x9ca7b6,
+      roughness: 0.4,
+      metalness: 0.24,
+    });
+    const diffuserGeo = new THREE.BoxGeometry(tubeLength * 0.9, 0.06, 0.2);
+    const BASE_EMISSIVE = 1.35;
+    // Shared diffuser material for all non-blinker fixtures.
+    const sharedDiffuserMat = new THREE.MeshStandardMaterial({
+      color: 0xf2f8ff,
+      roughness: 0.2,
+      metalness: 0.02,
+      emissive: 0xdbeeff,
+      emissiveIntensity: BASE_EMISSIVE,
+    });
+
+    // --- InstancedMesh for housings (all fixtures) ---
+    const housingInstanced = new THREE.InstancedMesh(
+      housingGeo,
+      housingMat,
+      totalFixtures,
+    );
+    housingInstanced.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+
+    // --- InstancedMesh for non-blinker diffusers ---
+    const normalDiffuserCount = totalFixtures - 1; // one blinker
+    const normalDiffuserInstanced =
+      normalDiffuserCount > 0
+        ? new THREE.InstancedMesh(
+            diffuserGeo,
+            sharedDiffuserMat,
+            normalDiffuserCount,
+          )
+        : null;
+    if (normalDiffuserInstanced)
+      normalDiffuserInstanced.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+
+    let normalDiffuserIdx = 0;
+
     for (let row = 0; row < FLUORESCENT_ROWS; row += 1) {
       for (let col = 0; col < FLUORESCENT_COLS; col += 1) {
         const index = row * FLUORESCENT_COLS + col;
@@ -1331,43 +1460,59 @@ export function createRoomSystem({ scene, renderer }) {
         const z = minZ + row * zStep;
         const isBlinker = index === FLUORESCENT_BLINK_INDEX;
 
-        const fixture = new THREE.Group();
-        fixture.position.set(x, ceilingY, z);
-        fixture.userData.type = "fluorescent";
+        // Set housing instance matrix
+        tempPos.set(x, ceilingY, z);
+        tempQuat.identity();
+        tempScale.set(1, 1, 1);
+        tempMatrix.compose(tempPos, tempQuat, tempScale);
+        housingInstanced.setMatrixAt(index, tempMatrix);
 
-        const housing = new THREE.Mesh(
-          new THREE.BoxGeometry(tubeLength, 0.14, 0.34),
-          new THREE.MeshStandardMaterial({
-            color: 0x9ca7b6,
-            roughness: 0.4,
-            metalness: 0.24,
-          }),
-        );
-        fixture.add(housing);
-
-        const diffuserMaterial = new THREE.MeshStandardMaterial({
-          color: 0xf2f8ff,
-          roughness: 0.2,
-          metalness: 0.02,
-          emissive: 0xdbeeff,
-          emissiveIntensity: 1.35,
-        });
-        const diffuser = new THREE.Mesh(
-          new THREE.BoxGeometry(tubeLength * 0.9, 0.06, 0.2),
-          diffuserMaterial,
-        );
-        diffuser.position.y = -0.06;
-        fixture.add(diffuser);
-
-        roomRoot.add(fixture);
-        fluorescentUnits.push({
-          isBlinker,
-          diffuserMaterial,
-          baseEmissiveIntensity: 1.35,
-          blinkCooldownSec: 0.9 + blinkRng() * 1.8,
-          blinkRemainingSec: 0,
-        });
+        if (isBlinker) {
+          // Blinker gets its own separate Mesh so emissiveIntensity can be mutated
+          const blinkerMat = new THREE.MeshStandardMaterial({
+            color: 0xf2f8ff,
+            roughness: 0.2,
+            metalness: 0.02,
+            emissive: 0xdbeeff,
+            emissiveIntensity: BASE_EMISSIVE,
+          });
+          const blinkerMesh = new THREE.Mesh(diffuserGeo, blinkerMat);
+          blinkerMesh.position.set(x, ceilingY - 0.06, z);
+          roomRoot.add(blinkerMesh);
+          fluorescentUnits.push({
+            isBlinker: true,
+            diffuserMaterial: blinkerMat,
+            baseEmissiveIntensity: BASE_EMISSIVE,
+            blinkCooldownSec: 0.9 + blinkRng() * 1.8,
+            blinkRemainingSec: 0,
+          });
+        } else {
+          // Normal fixture: slot into shared InstancedMesh
+          if (normalDiffuserInstanced) {
+            tempPos.set(x, ceilingY - 0.06, z);
+            tempMatrix.compose(tempPos, tempQuat, tempScale);
+            normalDiffuserInstanced.setMatrixAt(normalDiffuserIdx, tempMatrix);
+            normalDiffuserIdx += 1;
+          }
+          fluorescentUnits.push({
+            isBlinker: false,
+            diffuserMaterial: sharedDiffuserMat,
+            baseEmissiveIntensity: BASE_EMISSIVE,
+            blinkCooldownSec: 0,
+            blinkRemainingSec: 0,
+          });
+        }
       }
+    }
+
+    housingInstanced.instanceMatrix.needsUpdate = true;
+    roomRoot.add(housingInstanced);
+    staticInstancedResources.push(housingInstanced);
+
+    if (normalDiffuserInstanced) {
+      normalDiffuserInstanced.instanceMatrix.needsUpdate = true;
+      roomRoot.add(normalDiffuserInstanced);
+      staticInstancedResources.push(normalDiffuserInstanced);
     }
   }
 
@@ -1443,6 +1588,7 @@ export function createRoomSystem({ scene, renderer }) {
     for (const cooler of coolers) createCooler(cooler);
     for (const freezer of freezers) createFreezer(freezer);
     placeWallPosters({
+      // cooler/freezer instances are flushed to InstancedMeshes after posters
       worldWidthMeters,
       worldHeightMeters,
       shelves,
@@ -1454,6 +1600,7 @@ export function createRoomSystem({ scene, renderer }) {
       ].join("||"),
     });
     buildStaticInstancedGeometry();
+    buildCoolerFreezerInstancedMeshes();
     buildProductInstancedMeshes();
     buildPosterInstancedMeshes();
     createFluorescentGrid(halfWorldWidth, halfWorldHeight);

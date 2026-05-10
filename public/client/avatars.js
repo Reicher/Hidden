@@ -18,15 +18,17 @@ const KNOCKDOWN_STAR_UPDATE_MS = 50;
 const EYE_DRAW_INTERVAL_NEAR_MS = 34;
 const EYE_DRAW_INTERVAL_FAR_MS = 90;
 const EYE_DRAW_FAR_DISTANCE_SQ = 100;
-const HEAD_TEX_SIZE = 256;
+const HEAD_TEX_SIZE = 128;
 const FACE_U = 0.25;
 const FACE_V = 0.5;
 const EYE_U_OFFSET = 0.058;
-const EYE_RADIUS_X_PX = 13;
-const EYE_RADIUS_Y_PX = 16;
-const PUPIL_RADIUS_PX = 5.2;
-const PUPIL_RANGE_X_PX = 8.9;
-const PUPIL_RANGE_Y_PX = 6.9;
+// All pixel constants are expressed as fractions of 256 so they scale
+// correctly regardless of HEAD_TEX_SIZE.
+const EYE_RADIUS_X_PX = HEAD_TEX_SIZE * (13 / 256); // ~6.5 at 128
+const EYE_RADIUS_Y_PX = HEAD_TEX_SIZE * (16 / 256); // ~8   at 128
+const PUPIL_RADIUS_PX = HEAD_TEX_SIZE * (5.2 / 256); // ~2.6 at 128
+const PUPIL_RANGE_X_PX = HEAD_TEX_SIZE * (8.9 / 256); // ~4.5 at 128
+const PUPIL_RANGE_Y_PX = HEAD_TEX_SIZE * (6.9 / 256); // ~3.5 at 128
 const AVATAR_YAW_OFFSET = Math.PI;
 const MAX_LOOK_PITCH_RAD = 1.2;
 const INSPECT_EYE_DOWN_LOOK = 0.78;
@@ -39,13 +41,42 @@ const SKIN_TONE_HEX = [
   0xfad7c4, 0xf1c7a5, 0xe6b88a, 0xd8a676, 0xbf8a5d, 0xa9744d, 0x8c603f,
   0x714c34, 0x573a2a, 0x3f2b1f,
 ];
-const HAT_TYPES = ["CylinderHatt", "Trollkarlshatt", "Sombrero"];
+const SHIRT_COLOR_HEX = [
+  0x2f80ed, 0x24a148, 0xd64550, 0xf2a900, 0x8a5cf6, 0x00a6a6, 0xe05a9d,
+  0x6f9e2f, 0x2c7be5, 0xe16f3d, 0x3b7f4f, 0xb84a62,
+];
+const PANTS_COLOR_HEX = [
+  0x1f3a5f, 0x253858, 0x2f3e46, 0x4a5568, 0x5c4033, 0x6b4f8a, 0x2e6f73,
+  0x8c5a2b, 0x503047, 0x3a5a40,
+];
+const SHOE_COLOR_HEX = [
+  0x171717, 0xf4f1de, 0xc1121f, 0x1d4ed8, 0xf59e0b, 0x0f766e, 0x7c2d12,
+  0x6d28d9, 0x2d3748,
+];
+const HAT_TYPES = ["Trollkarlshatt", "Sombrero", "Mössa"];
+const HAT_STYLE_SLOTS = [...HAT_TYPES, "none"];
 const HAT_COLOR_HEX_BY_TYPE = {
-  CylinderHatt: [0x111111, 0x232323, 0x3a3a3a, 0x3f2f24],
-  Trollkarlshatt: [0x1f2b44, 0x2d3561, 0x4a2f44, 0x2c2f36],
-  Sombrero: [0xd9c39a, 0xc5a77f, 0xb89365, 0x9f7b54],
+  Trollkarlshatt: [0x1f2b44, 0x2d3561, 0x4a2f44, 0x3f2f5f, 0x164e63],
+  Sombrero: [0xd9c39a, 0xc5a77f, 0xe0b354, 0xad7f3a, 0x8f6f47],
+  Mössa: [
+    0xc0392b, 0x2471a3, 0x1e8449, 0x6c3483, 0xca6f1e, 0xe84393, 0x0f766e,
+    0xf59e0b,
+  ],
 };
+const SKIRT_CHANCE = 0.33;
+const BACKPACK_CHANCE = 0.2;
+const BACKPACK_COLOR_HEX = [0x4f2f24, 0x263f5f, 0x2f4c35, 0x4a3c28, 0x3d314f];
 const MOUTH_TYPES = ["happy", "neutral", "surprised", "sad"];
+const NOSE_TYPES = ["round", "cone"];
+
+function chooseHatType(characterId, rng) {
+  const randomIndex = Math.floor(rng() * HAT_STYLE_SLOTS.length);
+  const numericId = Number(characterId);
+  if (!Number.isFinite(numericId)) return HAT_STYLE_SLOTS[randomIndex];
+  return HAT_STYLE_SLOTS[
+    Math.abs(Math.trunc(numericId)) % HAT_STYLE_SLOTS.length
+  ];
+}
 
 function noHatBodyHeight({ heightScale, legScale, torsoScale, headScale }) {
   const shoeHeight = 0.11 * heightScale;
@@ -73,31 +104,38 @@ function previewStyleForCharacter(characterId) {
   rng();
   rng();
   const skinHex = SKIN_TONE_HEX[Math.floor(rng() * SKIN_TONE_HEX.length)];
-  const shirtHue = Math.round(rng() * 360);
-  const shirtSat = Math.round((0.4 + rng() * 0.3) * 100);
-  const shirtLight = Math.round((0.36 + rng() * 0.24) * 100);
+  const shirtHex = SHIRT_COLOR_HEX[Math.floor(rng() * SHIRT_COLOR_HEX.length)];
   rng();
   rng();
-  rng();
-  rng();
-  rng();
-  rng();
-  const hatRoll = rng();
-  let hatType = "none";
+  const hatType = chooseHatType(characterId, rng);
   let hatHex = null;
-  if (hatRoll >= 0.28) {
-    hatType = HAT_TYPES[Math.floor(rng() * HAT_TYPES.length)];
+  if (hatType !== "none") {
     const palette =
-      HAT_COLOR_HEX_BY_TYPE[hatType] || HAT_COLOR_HEX_BY_TYPE.CylinderHatt;
+      HAT_COLOR_HEX_BY_TYPE[hatType] || HAT_COLOR_HEX_BY_TYPE.Trollkarlshatt;
     hatHex = palette[Math.floor(rng() * palette.length)];
   }
   const mouthType = MOUTH_TYPES[Math.floor(rng() * MOUTH_TYPES.length)];
+  const hasSkirt = rng() < SKIRT_CHANCE;
+  const hasBackpack = rng() < BACKPACK_CHANCE;
+  const backpackHex =
+    BACKPACK_COLOR_HEX[Math.floor(rng() * BACKPACK_COLOR_HEX.length)];
+  const noseType = NOSE_TYPES[Math.floor(rng() * NOSE_TYPES.length)];
+  const noseSizeScale =
+    noseType === "round" ? 0.85 + rng() * 0.95 : 0.72 + rng() * 0.62;
+  const noseDepthScale =
+    noseType === "round" ? noseSizeScale : 0.9 + rng() * 1.25;
   return {
     skin: hexToCss(skinHex),
-    shirt: `hsl(${shirtHue} ${shirtSat}% ${shirtLight}%)`,
+    shirt: hexToCss(shirtHex),
     hatType,
     hat: hatHex == null ? null : hexToCss(hatHex),
     mouthType,
+    hasSkirt,
+    hasBackpack,
+    backpack: hexToCss(backpackHex),
+    noseType,
+    noseSizeScale,
+    noseDepthScale,
   };
 }
 
@@ -172,6 +210,25 @@ function strokeSimpleMouth(ctx, cx, mouthY, size, mouthType) {
   ctx.stroke();
 }
 
+function drawSimpleNose(ctx, cx, cy, size, noseType) {
+  ctx.fillStyle = "rgba(92, 55, 38, 0.46)";
+  ctx.strokeStyle = "rgba(50, 31, 24, 0.42)";
+  ctx.lineWidth = Math.max(1, size * 0.12);
+  if (noseType === "round") {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, size * 0.42, size * 0.34, 0, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - size * 0.46);
+  ctx.lineTo(cx - size * 0.34, cy + size * 0.32);
+  ctx.lineTo(cx + size * 0.34, cy + size * 0.32);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
 export function drawCountdownCharacterPreview(canvas, characterId) {
   if (!canvas || characterId == null) return false;
   const ctx = canvas.getContext("2d");
@@ -194,6 +251,26 @@ export function drawCountdownCharacterPreview(canvas, characterId) {
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, width, height);
 
+  if (style.hasBackpack) {
+    ctx.fillStyle = style.backpack;
+    fillRoundedRect(
+      ctx,
+      width * 0.17,
+      height * 0.58,
+      width * 0.18,
+      height * 0.26,
+      10,
+    );
+    fillRoundedRect(
+      ctx,
+      width * 0.65,
+      height * 0.58,
+      width * 0.18,
+      height * 0.26,
+      10,
+    );
+  }
+
   ctx.fillStyle = style.shirt;
   fillRoundedRect(
     ctx,
@@ -203,6 +280,18 @@ export function drawCountdownCharacterPreview(canvas, characterId) {
     height * 0.34,
     16,
   );
+
+  if (style.hasBackpack) {
+    ctx.strokeStyle = "rgba(10, 12, 18, 0.46)";
+    ctx.lineWidth = Math.max(4, width * 0.035);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(width * 0.34, height * 0.59);
+    ctx.quadraticCurveTo(width * 0.4, height * 0.72, width * 0.42, height * 0.86);
+    ctx.moveTo(width * 0.66, height * 0.59);
+    ctx.quadraticCurveTo(width * 0.6, height * 0.72, width * 0.58, height * 0.86);
+    ctx.stroke();
+  }
 
   ctx.fillStyle = style.skin;
   fillRoundedRect(
@@ -255,6 +344,13 @@ export function drawCountdownCharacterPreview(canvas, characterId) {
     Math.PI * 2,
   );
   ctx.fill();
+  drawSimpleNose(
+    ctx,
+    cx,
+    headCy + headR * 0.22,
+    headR * 0.28 * style.noseSizeScale,
+    style.noseType,
+  );
   strokeSimpleMouth(
     ctx,
     cx,
@@ -265,24 +361,7 @@ export function drawCountdownCharacterPreview(canvas, characterId) {
 
   if (style.hat) {
     ctx.fillStyle = style.hat;
-    if (style.hatType === "CylinderHatt") {
-      fillRoundedRect(
-        ctx,
-        cx - headR * 0.58,
-        headCy - headR * 1.25,
-        headR * 1.16,
-        headR * 0.6,
-        8,
-      );
-      fillRoundedRect(
-        ctx,
-        cx - headR * 0.88,
-        headCy - headR * 0.76,
-        headR * 1.76,
-        headR * 0.16,
-        6,
-      );
-    } else if (style.hatType === "Trollkarlshatt") {
+    if (style.hatType === "Trollkarlshatt") {
       const brimRy = headR * 0.15;
       const brimCy = Math.min(headCy - headR * 0.88, minHatTopY + brimRy);
       ctx.beginPath();
@@ -294,7 +373,7 @@ export function drawCountdownCharacterPreview(canvas, characterId) {
       ctx.beginPath();
       ctx.ellipse(cx, brimCy, headR * 0.88, brimRy, 0, 0, Math.PI * 2);
       ctx.fill();
-    } else {
+    } else if (style.hatType === "Sombrero") {
       const crownRy = headR * 0.24;
       const crownCy = Math.min(headCy - headR * 0.82, minHatTopY + crownRy);
       const brimCy = crownCy + headR * 0.1;
@@ -303,6 +382,26 @@ export function drawCountdownCharacterPreview(canvas, characterId) {
       ctx.fill();
       ctx.beginPath();
       ctx.ellipse(cx, brimCy, headR * 1.08, headR * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (style.hatType === "Mössa") {
+      // Cuff band hugging the top of the head
+      const cuffTop = headCy - headR * 0.72;
+      fillRoundedRect(
+        ctx,
+        cx - headR * 0.82,
+        cuffTop,
+        headR * 1.64,
+        headR * 0.22,
+        6,
+      );
+      // Rounded dome above the cuff
+      ctx.beginPath();
+      ctx.ellipse(cx, cuffTop, headR * 0.82, headR * 0.65, 0, Math.PI, 0);
+      ctx.fill();
+      // Pom-pom on top
+      const pomR = headR * 0.14;
+      ctx.beginPath();
+      ctx.arc(cx, cuffTop - headR * 0.62, pomR, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -388,22 +487,33 @@ export function createAvatarSystem({ scene, camera }) {
     const skin = new THREE.Color(
       SKIN_TONE_HEX[Math.floor(rng() * SKIN_TONE_HEX.length)],
     );
-    const shirt = new THREE.Color();
-    shirt.setHSL(rng(), 0.4 + rng() * 0.3, 0.36 + rng() * 0.24);
-    const pants = new THREE.Color();
-    pants.setHSL(rng(), 0.18 + rng() * 0.24, 0.25 + rng() * 0.22);
-    const shoe = new THREE.Color();
-    shoe.setHSL(rng(), 0.08 + rng() * 0.12, 0.08 + rng() * 0.18);
-    const hatRoll = rng();
-    let hatType = "none";
+    const shirt = new THREE.Color(
+      SHIRT_COLOR_HEX[Math.floor(rng() * SHIRT_COLOR_HEX.length)],
+    );
+    const pants = new THREE.Color(
+      PANTS_COLOR_HEX[Math.floor(rng() * PANTS_COLOR_HEX.length)],
+    );
+    const shoe = new THREE.Color(
+      SHOE_COLOR_HEX[Math.floor(rng() * SHOE_COLOR_HEX.length)],
+    );
+    const hatType = chooseHatType(id, rng);
     let hat = null;
-    if (hatRoll >= 0.28) {
-      hatType = HAT_TYPES[Math.floor(rng() * HAT_TYPES.length)];
+    if (hatType !== "none") {
       const palette =
-        HAT_COLOR_HEX_BY_TYPE[hatType] || HAT_COLOR_HEX_BY_TYPE.CylinderHatt;
+        HAT_COLOR_HEX_BY_TYPE[hatType] || HAT_COLOR_HEX_BY_TYPE.Trollkarlshatt;
       hat = new THREE.Color(palette[Math.floor(rng() * palette.length)]);
     }
     const mouthType = MOUTH_TYPES[Math.floor(rng() * MOUTH_TYPES.length)];
+    const hasSkirt = rng() < SKIRT_CHANCE;
+    const hasBackpack = rng() < BACKPACK_CHANCE;
+    const backpack = new THREE.Color(
+      BACKPACK_COLOR_HEX[Math.floor(rng() * BACKPACK_COLOR_HEX.length)],
+    );
+    const noseType = NOSE_TYPES[Math.floor(rng() * NOSE_TYPES.length)];
+    const noseSizeScale =
+      noseType === "round" ? 0.85 + rng() * 0.95 : 0.72 + rng() * 0.62;
+    const noseDepthScale =
+      noseType === "round" ? noseSizeScale : 0.9 + rng() * 1.25;
 
     const baseHeightNoHat = noHatBodyHeight({
       heightScale,
@@ -432,6 +542,12 @@ export function createAvatarSystem({ scene, camera }) {
       hat: hat || new THREE.Color(0x2a2a2a),
       hatType,
       mouthType,
+      hasSkirt,
+      hasBackpack,
+      backpack,
+      noseType,
+      noseSizeScale,
+      noseDepthScale,
       visualScale,
     };
   }
@@ -445,77 +561,101 @@ export function createAvatarSystem({ scene, camera }) {
     });
     const hatGroup = new THREE.Group();
 
-    if (profile.hatType === "CylinderHatt") {
-      const brim = new THREE.Mesh(
-        new THREE.CylinderGeometry(
-          headRadius * 0.95,
-          headRadius * 0.95,
-          headRadius * 0.1,
-          20,
-        ),
-        hatMaterial,
-      );
-      brim.position.y = headRadius * 0.02;
-      hatGroup.add(brim);
-      const crown = new THREE.Mesh(
-        new THREE.CylinderGeometry(
-          headRadius * 0.58,
-          headRadius * 0.64,
-          headRadius * 1.05,
-          20,
-        ),
-        hatMaterial,
-      );
-      crown.position.y = headRadius * 0.54;
-      hatGroup.add(crown);
-      return hatGroup;
-    }
+    // anchorOffset: how far above headY the hat group origin is placed.
+    // y=0 inside the group = bottom of the hat's inner band/brim.
+    // The hat is "pulled down" so the band wraps the upper skull.
 
     if (profile.hatType === "Trollkarlshatt") {
+      // Wide brim rests on the very top of the skull (anchorOffset ≈ head top).
+      const brimHeight = headRadius * 0.08;
       const brim = new THREE.Mesh(
         new THREE.CylinderGeometry(
           headRadius * 1.02,
           headRadius * 1.02,
-          headRadius * 0.08,
-          20,
-        ),
-        hatMaterial,
-      );
-      brim.position.y = headRadius * 0.02;
-      hatGroup.add(brim);
-      const cone = new THREE.Mesh(
-        new THREE.ConeGeometry(headRadius * 0.76, headRadius * 1.5, 20),
-        hatMaterial,
-      );
-      cone.position.y = headRadius * 0.78;
-      hatGroup.add(cone);
-      return hatGroup;
-    }
-
-    if (profile.hatType === "Sombrero") {
-      const brim = new THREE.Mesh(
-        new THREE.CylinderGeometry(
-          headRadius * 1.34,
-          headRadius * 1.44,
-          headRadius * 0.1,
-          28,
-        ),
-        hatMaterial,
-      );
-      brim.position.y = headRadius * 0.08;
-      hatGroup.add(brim);
-      const crown = new THREE.Mesh(
-        new THREE.CylinderGeometry(
-          headRadius * 0.46,
-          headRadius * 0.64,
-          headRadius * 0.72,
+          brimHeight,
           22,
         ),
         hatMaterial,
       );
-      crown.position.y = headRadius * 0.44;
+      brim.position.y = brimHeight * 0.5;
+      hatGroup.add(brim);
+      const coneHeight = headRadius * 1.5;
+      const cone = new THREE.Mesh(
+        new THREE.ConeGeometry(headRadius * 0.72, coneHeight, 22),
+        hatMaterial,
+      );
+      cone.position.y = brimHeight + coneHeight * 0.5;
+      hatGroup.add(cone);
+      return { group: hatGroup, anchorOffset: 0.76 };
+    }
+
+    if (profile.hatType === "Sombrero") {
+      // Wide brim, rests near head top.
+      const brimHeight = headRadius * 0.1;
+      const brim = new THREE.Mesh(
+        new THREE.CylinderGeometry(
+          headRadius * 1.36,
+          headRadius * 1.46,
+          brimHeight,
+          28,
+        ),
+        hatMaterial,
+      );
+      brim.position.y = brimHeight * 0.5;
+      hatGroup.add(brim);
+      const crownHeight = headRadius * 0.72;
+      const crown = new THREE.Mesh(
+        new THREE.CylinderGeometry(
+          headRadius * 0.46,
+          headRadius * 0.62,
+          crownHeight,
+          22,
+        ),
+        hatMaterial,
+      );
+      crown.position.y = brimHeight + crownHeight * 0.5;
       hatGroup.add(crown);
-      return hatGroup;
+      return { group: hatGroup, anchorOffset: 0.8 };
+    }
+
+    if (profile.hatType === "Mössa") {
+      // Cuff wraps around the upper skull. Low anchor so cuff covers
+      // roughly the top third of the head.
+      const cuffHeight = headRadius * 0.22;
+      const cuff = new THREE.Mesh(
+        new THREE.CylinderGeometry(
+          headRadius * 0.84,
+          headRadius * 0.84,
+          cuffHeight,
+          22,
+        ),
+        hatMaterial,
+      );
+      cuff.position.y = cuffHeight * 0.5;
+      hatGroup.add(cuff);
+      const domeRadius = headRadius * 0.82;
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(
+          domeRadius,
+          22,
+          12,
+          0,
+          Math.PI * 2,
+          0,
+          Math.PI * 0.62,
+        ),
+        hatMaterial,
+      );
+      dome.position.y = cuffHeight;
+      hatGroup.add(dome);
+      const pomR = headRadius * 0.16;
+      const pom = new THREE.Mesh(
+        new THREE.SphereGeometry(pomR, 10, 8),
+        hatMaterial,
+      );
+      pom.position.y = cuffHeight + domeRadius * 0.92;
+      hatGroup.add(pom);
+      return { group: hatGroup, anchorOffset: 0.52 };
     }
 
     return null;
@@ -681,9 +821,22 @@ export function createAvatarSystem({ scene, camera }) {
       color: profile.skin,
       roughness: 0.8,
     });
+    const legMaterial = profile.hasSkirt ? skinMaterialPlain : pantsMaterial;
     const shoeMaterial = new THREE.MeshStandardMaterial({
       color: profile.shoe,
       roughness: 0.92,
+    });
+    const backpackMaterial = new THREE.MeshStandardMaterial({
+      color: profile.backpack,
+      roughness: 0.86,
+    });
+    const backpackStrapMaterial = new THREE.MeshStandardMaterial({
+      color: 0x151820,
+      roughness: 0.88,
+    });
+    const noseMaterial = new THREE.MeshStandardMaterial({
+      color: profile.skin,
+      roughness: 0.82,
     });
     const headFace = createHeadFaceTexture(profile.skin, profile.mouthType);
     const skinMaterial = headFace
@@ -718,8 +871,8 @@ export function createAvatarSystem({ scene, camera }) {
     const armTotal = 0.64 * profile.heightScale * profile.armScale;
     const armCore = Math.max(0.05, armTotal - armRadius * 2);
     const shoulderX = torsoRadius * profile.torsoWidthScale + armRadius * 0.58;
-    const handRadius = armRadius * 0.9;
-    const handCore = handRadius * 0.9;
+    const handRadius = armRadius * 1.18;
+    const handCore = handRadius * 0.95;
     const shoeOutset = shoeWidth * 0.14;
 
     const headRadius = 0.24 * profile.heightScale * profile.headScale;
@@ -734,6 +887,38 @@ export function createAvatarSystem({ scene, camera }) {
     torso.position.set(0, hipY + torsoTotal * 0.48, 0);
     poseRoot.add(torso);
 
+    if (profile.hasBackpack) {
+      const backpackHeight = torsoTotal * 0.62;
+      const backpackWidth = torsoRadius * profile.torsoWidthScale * 1.8;
+      const backpackDepth = torsoRadius * 0.62;
+      const backpack = new THREE.Mesh(
+        new THREE.BoxGeometry(backpackWidth, backpackHeight, backpackDepth),
+        backpackMaterial,
+      );
+      backpack.position.set(
+        0,
+        hipY + torsoTotal * 0.48,
+        -torsoRadius * profile.torsoDepthScale - backpackDepth * 0.42,
+      );
+      poseRoot.add(backpack);
+
+      const strapGeometry = new THREE.BoxGeometry(
+        Math.max(armRadius * 0.32, 0.018),
+        torsoTotal * 0.58,
+        0.018,
+      );
+      const strapY = hipY + torsoTotal * 0.48;
+      const strapZ = torsoRadius * profile.torsoDepthScale + 0.018;
+      const leftStrap = new THREE.Mesh(strapGeometry, backpackStrapMaterial);
+      leftStrap.position.set(-torsoHalfWidth * 0.44, strapY, strapZ);
+      leftStrap.rotation.z = -0.14;
+      poseRoot.add(leftStrap);
+      const rightStrap = new THREE.Mesh(strapGeometry, backpackStrapMaterial);
+      rightStrap.position.set(torsoHalfWidth * 0.44, strapY, strapZ);
+      rightStrap.rotation.z = 0.14;
+      poseRoot.add(rightStrap);
+    }
+
     const pelvis = new THREE.Mesh(
       new THREE.SphereGeometry(
         Math.max(legRadius * 1.35, torsoRadius * 0.36),
@@ -746,14 +931,57 @@ export function createAvatarSystem({ scene, camera }) {
     pelvis.position.set(0, hipY - legRadius * 0.1, 0);
     poseRoot.add(pelvis);
 
+    if (profile.hasSkirt) {
+      const skirtHeight = 0.34 * profile.heightScale;
+      const skirt = new THREE.Mesh(
+        new THREE.CylinderGeometry(
+          torsoRadius * 1.0,
+          torsoRadius * 1.72,
+          skirtHeight,
+          18,
+        ),
+        pantsMaterial,
+      );
+      skirt.scale.set(profile.torsoWidthScale, 1, profile.torsoDepthScale * 0.92);
+      skirt.position.set(0, hipY - skirtHeight * 0.12, 0);
+      poseRoot.add(skirt);
+    }
+
     const head = new THREE.Mesh(sharedUnitHeadGeometry, skinMaterial);
     head.scale.set(0.98 * headRadius, 1.02 * headRadius, 0.98 * headRadius);
     head.position.set(0, headY, 0);
     poseRoot.add(head);
-    const hat = createHatMesh(profile, headRadius);
-    if (hat) {
-      hat.position.set(0, headY + headRadius * 0.84, 0);
-      poseRoot.add(hat);
+
+    const noseSize = headRadius * 0.28 * profile.noseSizeScale;
+    const noseDepth = headRadius * 0.34 * profile.noseDepthScale;
+    const noseSurfaceZ = headRadius * 0.94;
+    const noseY = headY - headRadius * 0.25;
+    let nose;
+    if (profile.noseType === "round") {
+      nose = new THREE.Mesh(
+        new THREE.SphereGeometry(noseSize * 0.55, 14, 10),
+        noseMaterial,
+      );
+      nose.scale.set(0.9, 0.75, 1.25);
+      nose.position.set(0, noseY, noseSurfaceZ + noseSize * 0.42);
+    } else {
+      nose = new THREE.Mesh(
+        new THREE.ConeGeometry(noseSize * 0.5, noseDepth, 14),
+        noseMaterial,
+      );
+      nose.rotation.x = Math.PI * 0.5;
+      nose.position.set(0, noseY, noseSurfaceZ + noseDepth * 0.5);
+    }
+    poseRoot.add(nose);
+
+    const hatResult = createHatMesh(profile, headRadius);
+    if (hatResult) {
+      hatResult.group.position.set(
+        0,
+        headY + headRadius * hatResult.anchorOffset,
+        0,
+      );
+      poseRoot.add(hatResult.group);
     }
     const knockdownStarOrbit = new THREE.Group();
     knockdownStarOrbit.visible = false;
@@ -771,7 +999,7 @@ export function createAvatarSystem({ scene, camera }) {
     // (same dimensions, just positioned differently), so they share one geometry.
     const armGeometry = new THREE.CapsuleGeometry(armRadius, armCore, 5, 12);
     const handGeometry = new THREE.CapsuleGeometry(
-      handRadius * 0.72,
+      handRadius * 0.9,
       handCore,
       4,
       8,
@@ -789,7 +1017,7 @@ export function createAvatarSystem({ scene, camera }) {
     leftArm.position.set(0, -armTotal * 0.5, 0);
     leftArmPivot.add(leftArm);
     const leftHand = new THREE.Mesh(handGeometry, skinMaterialPlain);
-    leftHand.position.set(0, -armTotal + handRadius * 0.7, 0);
+    leftHand.position.set(0, -armTotal - handRadius * 1.05, 0);
     leftArmPivot.add(leftHand);
     poseRoot.add(leftArmPivot);
 
@@ -799,13 +1027,13 @@ export function createAvatarSystem({ scene, camera }) {
     rightArm.position.set(0, -armTotal * 0.5, 0);
     rightArmPivot.add(rightArm);
     const rightHand = new THREE.Mesh(handGeometry, skinMaterialPlain);
-    rightHand.position.set(0, -armTotal + handRadius * 0.7, 0);
+    rightHand.position.set(0, -armTotal - handRadius * 1.05, 0);
     rightArmPivot.add(rightHand);
     poseRoot.add(rightArmPivot);
 
     const leftLegPivot = new THREE.Group();
     leftLegPivot.position.set(-legGap, hipY, 0);
-    const leftLeg = new THREE.Mesh(legGeometry, pantsMaterial);
+    const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
     leftLeg.position.set(0, -legTotal * 0.5, 0);
     leftLegPivot.add(leftLeg);
     const leftShoe = new THREE.Mesh(shoeGeometry, shoeMaterial);
@@ -819,7 +1047,7 @@ export function createAvatarSystem({ scene, camera }) {
 
     const rightLegPivot = new THREE.Group();
     rightLegPivot.position.set(legGap, hipY, 0);
-    const rightLeg = new THREE.Mesh(legGeometry, pantsMaterial);
+    const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
     rightLeg.position.set(0, -legTotal * 0.5, 0);
     rightLegPivot.add(rightLeg);
     const rightShoe = new THREE.Mesh(shoeGeometry, shoeMaterial);
