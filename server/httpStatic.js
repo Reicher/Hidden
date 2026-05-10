@@ -12,7 +12,7 @@ const CONTENT_TYPES = new Map([
   [".webp", "image/webp"],
   [".svg", "image/svg+xml; charset=utf-8"],
   [".json", "application/json; charset=utf-8"],
-  [".ico", "image/x-icon"]
+  [".ico", "image/x-icon"],
 ]);
 
 function normalizeToRelativePath(pathname) {
@@ -32,7 +32,12 @@ function decodePathname(pathname) {
   }
 }
 
-export function createStaticHttpServer({ host, port, rootDir, onBeforeStaticRequest = null }) {
+export function createStaticHttpServer({
+  host,
+  port,
+  rootDir,
+  onBeforeStaticRequest = null,
+}) {
   const publicDir = path.resolve(path.join(rootDir, "public"));
 
   return http.createServer(async (req, res) => {
@@ -60,7 +65,8 @@ export function createStaticHttpServer({ host, port, rootDir, onBeforeStaticRequ
         const contentType = CONTENT_TYPES.get(ext);
         if (contentType) res.setHeader("Content-Type", contentType);
         const normalizedRequestPath = (primaryPath || "").replace(/\\/g, "/");
-        const isSoundAsset = normalizedRequestPath.startsWith("/assets/sounds/");
+        const isSoundAsset =
+          normalizedRequestPath.startsWith("/assets/sounds/");
         if (ext === ".html" || isSoundAsset) {
           res.setHeader("Cache-Control", "no-cache");
         } else {
@@ -73,7 +79,10 @@ export function createStaticHttpServer({ host, port, rootDir, onBeforeStaticRequ
       const relativePath = normalizeToRelativePath(primaryPath);
       const fullPath = path.resolve(path.join(publicDir, relativePath));
 
-      if (!fullPath.startsWith(publicDir + path.sep) && fullPath !== publicDir) {
+      if (
+        !fullPath.startsWith(publicDir + path.sep) &&
+        fullPath !== publicDir
+      ) {
         res.writeHead(403);
         res.end("Forbidden");
         return;
@@ -84,7 +93,9 @@ export function createStaticHttpServer({ host, port, rootDir, onBeforeStaticRequ
         return;
       } catch (error) {
         const code = error && typeof error === "object" ? error.code : null;
-        const canFallbackToSpa = (code === "ENOENT" || code === "ENOTDIR" || code === "EISDIR") && !hasFileExtension(pathname);
+        const canFallbackToSpa =
+          (code === "ENOENT" || code === "ENOTDIR" || code === "EISDIR") &&
+          !hasFileExtension(pathname);
         if (!canFallbackToSpa) throw error;
 
         const indexPath = path.resolve(path.join(publicDir, "index.html"));
@@ -93,14 +104,21 @@ export function createStaticHttpServer({ host, port, rootDir, onBeforeStaticRequ
       }
     } catch (error) {
       const code = error && typeof error === "object" ? error.code : null;
+      // Suppress expected errors from client disconnects mid-request.
+      if (code === "ECONNRESET" || code === "EPIPE" || code === "ECONNABORTED")
+        return;
       if (code === "ENOENT" || code === "ENOTDIR" || code === "EISDIR") {
-        res.writeHead(404);
-        res.end("Not found");
+        if (!res.headersSent) {
+          res.writeHead(404);
+          res.end("Not found");
+        }
         return;
       }
       console.error(`[http-static] ${error?.message || error}`);
-      res.writeHead(500);
-      res.end("Internal server error");
+      if (!res.headersSent) {
+        res.writeHead(500);
+        res.end("Internal server error");
+      }
     }
   });
 }

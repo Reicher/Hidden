@@ -626,6 +626,11 @@ export function createRoomRuntime({
       ? sessions.get(attackerSessionId)
       : null;
 
+    // Count alive players now, before any elimination this tick.
+    // If only 2 remain (attacker + this victim), this is the winning hit and
+    // we must NOT send knockdown_confirm – the winner overlay replaces it.
+    const aliveBeforeAttack = activePlayerCount();
+
     for (const victimId of victims) {
       const victimOwner = characters[victimId].ownerSessionId;
       const victimSession = victimOwner ? sessions.get(victimOwner) : null;
@@ -634,9 +639,13 @@ export function createRoomRuntime({
           attackerSession.stats.knockdowns += 1;
           attackerSession.stats.streak += 1;
           if (victimSession?.authenticated && victimSession.name) {
-            sendToSession(attackerSessionId, "knockdown_confirm", {
-              victimName: victimSession.name,
-            });
+            // Only show “Du slog ned…” when this is NOT the kill that ends the match.
+            const isWinningHit = aliveBeforeAttack <= 2;
+            if (!isWinningHit) {
+              sendToSession(attackerSessionId, "knockdown_confirm", {
+                victimName: victimSession.name,
+              });
+            }
             appendSystemChat([
               { type: "player", name: attackerSession.name },
               { type: "text", text: " slog ner " },

@@ -158,6 +158,9 @@ export function handleSocketMessage(msg, ctx) {
       : [];
     if (state.sessionState === "won" && previousSessionState !== "won") {
       state.winMessageHideAtMs = getNowMs() + constants.WIN_MESSAGE_VISIBLE_MS;
+      // Clear any knockdown toast that may have arrived just before this tick.
+      state.knockdownToastMsRemaining = 0;
+      actions.updateKnockdownToast?.();
     }
     if (state.downedByName && !previousDownedByName) {
       state.downedMessageSuppressed = false;
@@ -224,10 +227,19 @@ export function handleSocketMessage(msg, ctx) {
       state.sessionState === "won" ||
       state.sessionState === "spectating")
   ) {
-    if (document.pointerLockElement) document.exitPointerLock?.();
     actions.resetInputState();
     actions.setGameMenuOpen(false);
     actions.setGameChatOpen(false);
+    if (document.pointerLockElement) {
+      if (state.sessionState === "won") {
+        // For the win transition: defer pointer-lock exit by one frame so the
+        // winner overlay can be painted before the OS cursor animation kicks in,
+        // avoiding a visible jank on the transition.
+        requestAnimationFrame(() => document.exitPointerLock?.());
+      } else {
+        document.exitPointerLock?.();
+      }
+    }
   }
 
   if (!state.authenticated) {

@@ -89,14 +89,15 @@ export function createMatchFlow({
   function toCountdownState(session, endsAt) {
     if (!session?.authenticated || !session.ready) return;
     if (session.state === "alive") return;
-    if (!assignCharacterForCountdown(session, Date.now())) return;
+    const now = Date.now();
+    if (!assignCharacterForCountdown(session, now)) return;
     session.state = "countdown";
     session.readyAt = endsAt;
     session.input.attackRequested = false;
     if (session.name)
       countdownReadyNames.add(String(session.name).toLowerCase());
     sendToSession(session.id, "countdown", {
-      seconds: Math.max(1, Math.ceil((endsAt - Date.now()) / 1000)),
+      seconds: Math.max(1, Math.ceil((endsAt - now) / 1000)),
     });
   }
 

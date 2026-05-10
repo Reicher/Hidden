@@ -226,7 +226,15 @@ export function createRoomTickLoop({
       }
     }
 
-    if (sockets.size === 0) return;
+    if (sockets.size === 0) {
+      if (typeof onTick === "function") {
+        onTick({
+          at: now,
+          durationMs: Math.max(0, Date.now() - tickStartedAt),
+        });
+      }
+      return;
+    }
 
     let alivePlayers = activePlayerCount();
     let activeMatchStartedAt = getActiveMatchStartedAt();
@@ -254,7 +262,11 @@ export function createRoomTickLoop({
 
     // Throttle broadcasts to 4 Hz when no match or countdown is active.
     // During gameplay the full 20 Hz is preserved.
-    const needsFullRate = alivePlayers > 0 || getLobbyCountdown() != null;
+    // The winner can move during the post-match lap (state "won"), so we also
+    // keep full rate while any authenticated session is in "won" state.
+    const hasWinners = authenticatedSessions().some((s) => s.state === "won");
+    const needsFullRate =
+      alivePlayers > 0 || getLobbyCountdown() != null || hasWinners;
     if (!needsFullRate && now - lastBroadcastAt < LOBBY_BROADCAST_INTERVAL_MS) {
       if (typeof onTick === "function") {
         onTick({
