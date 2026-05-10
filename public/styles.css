@@ -438,6 +438,15 @@ button:disabled {
   color: var(--muted);
 }
 
+#countdownTagline {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: clamp(11px, 1.6vw, 13px);
+  font-weight: 500;
+  color: var(--muted-soft);
+  letter-spacing: 0.03em;
+}
+
 #countdownTopRow {
   display: flex;
   align-items: center;
@@ -534,12 +543,30 @@ button:disabled {
 }
 
 #countdownControlsTitle {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.ctrl-tagline {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-soft);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.ctrl-mobile-hint {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-soft);
+  text-align: center;
+  line-height: 1.4;
 }
 
 /* ── Kontroller-grid ── */

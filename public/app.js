@@ -265,6 +265,7 @@ const {
   getMobileControlsPreference,
   persistMobileControlsPreference,
   updateMobileControlsVisibility,
+  mobileControlsEnabledByPreference,
 } = mobileControls;
 
 const chatUi = createChatUi({
@@ -765,7 +766,7 @@ function setCountdownTextFromSession(state) {
     authenticated: state?.authenticated ?? clientState.authenticated,
     characterId: state?.characterId ?? clientState.myCharacterId,
     lastCountdownPreviewCharacterId,
-    isTouchDevice: IS_TOUCH_DEVICE,
+    isTouchDevice: mobileControlsEnabledByPreference(),
     drawCharacterPreview: drawCountdownCharacterPreview,
   }));
   updateLobbyMatchStatus();

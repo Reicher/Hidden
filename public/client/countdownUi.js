@@ -49,24 +49,7 @@ function buildDesktopControlsHtml() {
 
 function buildMobileControlsHtml() {
   return `
-    <div class="ctrl-grid ctrl-grid-mobile">
-      <div class="ctrl-item">
-        <span class="ctrl-badge">◉</span>
-        <span class="ctrl-label">Joystick<br>Rörelse</span>
-      </div>
-      <div class="ctrl-item">
-        <span class="ctrl-badge">⚡</span>
-        <span class="ctrl-label">Sprint</span>
-      </div>
-      <div class="ctrl-item">
-        <span class="ctrl-badge">⚔</span>
-        <span class="ctrl-label">Attack</span>
-      </div>
-      <div class="ctrl-item">
-        <span class="ctrl-badge">👆</span>
-        <span class="ctrl-label">Dra<br>Titta runt</span>
-      </div>
-    </div>
+    <p class="ctrl-mobile-hint">Använd kontrollerna på skärmen för att röra dig, titta runt och attackera.</p>
   `;
 }
 
