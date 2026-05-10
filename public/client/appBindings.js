@@ -102,6 +102,8 @@ export function bindAppEventHandlers({
 
   let debugLongPressTimer = null;
   let suppressNextGameMenuClick = false;
+  let lastTouchBlipButton = null;
+  let lastTouchBlipAt = 0;
 
   function clearDebugLongPressTimer() {
     if (debugLongPressTimer == null) return;
@@ -119,6 +121,14 @@ export function bindAppEventHandlers({
   function handleResize() {
     resize();
     updateMobileControlsVisibility();
+  }
+
+  function buttonFromEventTarget(target) {
+    if (!(target instanceof Element)) return null;
+    const button = target.closest("button");
+    if (!(button instanceof HTMLButtonElement)) return null;
+    if (button.disabled) return null;
+    return button;
   }
 
   connectBtnEl?.addEventListener("click", connectAndLogin);
@@ -328,11 +338,30 @@ export function bindAppEventHandlers({
   });
   window.addEventListener("resize", handleResize);
   window.addEventListener("orientationchange", handleResize);
+  document.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (!IS_TOUCH_DEVICE) return;
+      if (event.pointerType && event.pointerType !== "touch") return;
+      const button = buttonFromEventTarget(event.target);
+      if (!button) return;
+      lastTouchBlipButton = button;
+      lastTouchBlipAt = performance.now();
+      playUiBlipSfx?.();
+    },
+    { capture: true },
+  );
   document.addEventListener("click", (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    const button = target.closest("button");
+    const button = buttonFromEventTarget(event.target);
     if (!button) return;
+    if (
+      IS_TOUCH_DEVICE &&
+      button === lastTouchBlipButton &&
+      performance.now() - lastTouchBlipAt < 900
+    ) {
+      lastTouchBlipButton = null;
+      return;
+    }
     playUiBlipSfx?.();
   });
 
