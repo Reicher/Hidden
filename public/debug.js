@@ -9,6 +9,7 @@ const chartEl = document.getElementById("chart");
 const roomsEl = document.getElementById("rooms");
 const playersEl = document.getElementById("players");
 const eventsEl = document.getElementById("events");
+const chatEl = document.getElementById("chat");
 const metaEl = document.getElementById("meta");
 
 const tabStatsBtnEl = document.getElementById("tabStatsBtn");
@@ -356,7 +357,7 @@ function drawChart(samples) {
 
 function roomLabel(room) {
   if (!room) return "-";
-  return room.isPrivate ? `privat:${room.roomCode || room.roomId}` : "publik";
+  return room.isPrivate ? (room.roomCode || room.roomId) : "publik";
 }
 
 function buildRoomRows(data) {
@@ -409,43 +410,97 @@ function renderText(data) {
   const roomLabelById = new Map(roomRows.map((room) => [room.roomId, roomLabel(room)]));
 
   if (roomsEl) {
-    if (roomRows.length === 0) {
-      roomsEl.textContent = "Inga rum.";
+    roomsEl.textContent = "";
+    const visible = roomRows.slice(0, LIST_LIMIT);
+    if (visible.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "Inga rum ännu.";
+      roomsEl.appendChild(empty);
     } else {
-      const visible = roomRows.slice(0, LIST_LIMIT);
-      const activeRows = visible.filter((room) => room.hasLive);
-      const historicalRows = visible.filter((room) => !room.hasLive);
-      const lines = [];
-
-      if (activeRows.length > 0) {
-        lines.push(`Aktiva (${activeRows.length}):`);
-        for (const room of activeRows) {
-          const names = room.names.length > 0 ? room.names.join(", ") : "-";
-          lines.push(`${roomLabel(room)} | namn: ${names}`);
-        }
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      for (const [label, width] of [["Status", "72px"], ["Rum", "90px"], ["Spelare", ""]]) {
+        const th = document.createElement("th");
+        th.textContent = label;
+        if (width) th.style.width = width;
+        headerRow.appendChild(th);
       }
-      if (historicalRows.length > 0) {
-        if (lines.length > 0) lines.push("");
-        lines.push(`Tidigare (${historicalRows.length}):`);
-        for (const room of historicalRows) {
-          const names = room.uniqueNames.length > 0 ? room.uniqueNames.join(", ") : "-";
-          lines.push(`${roomLabel(room)} | senast: ${fmtAt(room.lastEventAt)} | namn: ${names}`);
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+      const tbody = document.createElement("tbody");
+      for (const room of visible) {
+        const tr = document.createElement("tr");
+        const tdStatus = document.createElement("td");
+        const badge = document.createElement("span");
+        badge.className = room.hasLive ? "badge" : "badge old";
+        badge.textContent = room.hasLive ? "● Aktiv" : "Tidigare";
+        tdStatus.appendChild(badge);
+        const tdRoom = document.createElement("td");
+        tdRoom.textContent = roomLabel(room);
+        const tdNames = document.createElement("td");
+        const nameList = room.hasLive
+          ? (room.names.length > 0 ? room.names : [])
+          : [...room.uniqueNames];
+        if (nameList.length === 0) {
+          tdNames.style.color = "var(--muted)";
+          tdNames.textContent = room.hasLive ? "(ingen inne)" : "-";
+        } else {
+          tdNames.textContent = nameList.join(", ");
         }
+        if (!room.hasLive && room.lastEventAt) {
+          tdNames.title = `Senast aktiv: ${fmtAt(room.lastEventAt)}`;
+        }
+        tr.appendChild(tdStatus);
+        tr.appendChild(tdRoom);
+        tr.appendChild(tdNames);
+        tbody.appendChild(tr);
       }
-      roomsEl.textContent = lines.join("\n");
+      table.appendChild(tbody);
+      roomsEl.appendChild(table);
     }
   }
   if (playersEl) {
+    playersEl.textContent = "";
     const players = Array.isArray(data?.players) ? data.players.slice(0, LIST_LIMIT) : [];
-    playersEl.textContent =
-      players.length > 0
-        ? players
-            .map((p) => {
-              const rooms = (p.rooms || []).map((roomId) => roomLabelById.get(roomId) || roomId).join(", ") || "-";
-              return `${p.name} | senast: ${fmtAt(p.lastSeenAt)} | rum: ${rooms}`;
-            })
-            .join("\n")
-        : "Inga namn loggade ännu.";
+    if (players.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "Inga namn loggade ännu.";
+      playersEl.appendChild(empty);
+    } else {
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      for (const [label, width] of [["Namn", "130px"], ["Senast sedd", "148px"], ["Rum", ""]]) {
+        const th = document.createElement("th");
+        th.textContent = label;
+        if (width) th.style.width = width;
+        headerRow.appendChild(th);
+      }
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+      const tbody = document.createElement("tbody");
+      for (const p of players) {
+        const tr = document.createElement("tr");
+        const tdName = document.createElement("td");
+        tdName.textContent = p.name;
+        tdName.style.fontWeight = "500";
+        const tdSeen = document.createElement("td");
+        tdSeen.textContent = fmtAt(p.lastSeenAt);
+        tdSeen.style.color = "var(--muted)";
+        const tdRooms = document.createElement("td");
+        const roomNames = (p.rooms || []).map((roomId) => roomLabelById.get(roomId) || roomId);
+        tdRooms.textContent = roomNames.join(", ") || "-";
+        tr.appendChild(tdName);
+        tr.appendChild(tdSeen);
+        tr.appendChild(tdRooms);
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      playersEl.appendChild(table);
+    }
   }
   if (eventsEl) {
     const events = Array.isArray(data?.recentEvents) ? data.recentEvents.slice(-LIST_LIMIT).reverse() : [];
@@ -454,10 +509,90 @@ function renderText(data) {
         ? events
             .map((event) => {
               const label = roomLabel(event);
-              return `${fmtAt(event.at)} | ${event.type} | ${label} | ${event.name || "-"}`;
+              const name = event.name || "Okänd";
+              let sentence;
+              switch (event.type) {
+                case "session_connected":
+                  sentence = `Ny anslutning till ${label} rum.`;
+                  break;
+                case "session_disconnected":
+                  sentence = `${name} kopplades bort från ${label} rum.`;
+                  break;
+                case "session_login":
+                  sentence = `${name} loggade in i ${label} rum.`;
+                  break;
+                case "countdown_start":
+                  sentence = `Nedräkning startad i ${label} rum.`;
+                  break;
+                case "session_possess":
+                  sentence = `${name} tog kontroll över en karaktär (${label}).`;
+                  break;
+                case "attack":
+                  sentence = `En attack genomfördes i ${label} rum.`;
+                  break;
+                case "player_eliminated":
+                  sentence = `${name} slogs ut i ${label} rum.`;
+                  break;
+                case "character_respawn":
+                  sentence = `En karaktär återuppstod i ${label} rum.`;
+                  break;
+                case "chat":
+                  sentence = `${name} skickade ett meddelande i ${label} rum.`;
+                  break;
+                case "heartbeat_timeout":
+                  sentence = `${name} tappade uppkopplingen (${label} rum).`;
+                  break;
+                case "message_drop":
+                  sentence = `Meddelande ignorerat pga. hög frekvens (${label} rum).`;
+                  break;
+                default:
+                  sentence = `${event.type} i ${label} rum${event.name ? ` (${event.name})` : ""}.`;
+              }
+              return `${fmtAt(event.at)}  ${sentence}`;
             })
             .join("\n")
-        : "Inga events ännu.";
+        : "Inga händelser ännu.";
+  }
+  if (chatEl) {
+    chatEl.textContent = "";
+    const chats = Array.isArray(data?.recentChat) ? data.recentChat.slice(-LIST_LIMIT).reverse() : [];
+    if (chats.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "Ingen chat ännu.";
+      chatEl.appendChild(empty);
+    } else {
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      for (const [label, width] of [["Tid", "148px"], ["Namn", "120px"], ["Meddelande", ""]]) {
+        const th = document.createElement("th");
+        th.textContent = label;
+        if (width) th.style.width = width;
+        headerRow.appendChild(th);
+      }
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+      const tbody = document.createElement("tbody");
+      for (const msg of chats) {
+        const tr = document.createElement("tr");
+        const tdTime = document.createElement("td");
+        tdTime.textContent = fmtAt(msg.at);
+        tdTime.style.color = "var(--muted)";
+        const tdName = document.createElement("td");
+        tdName.textContent = msg.name;
+        tdName.style.fontWeight = "500";
+        const tdText = document.createElement("td");
+        tdText.textContent = msg.text;
+        tdText.style.whiteSpace = "pre-wrap";
+        tr.appendChild(tdTime);
+        tr.appendChild(tdName);
+        tr.appendChild(tdText);
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      chatEl.appendChild(table);
+    }
   }
   if (metaEl) {
     const host = data?.systemMetrics?.host || {};

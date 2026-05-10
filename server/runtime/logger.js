@@ -7,92 +7,84 @@
  */
 export function createRoomLogger(roomTag, getStateSummary) {
   function nowTime() {
-    return new Date().toISOString().slice(11, 19);
+    return new Date().toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+
+  function prefix(warn = false) {
+    return `${warn ? "⚠ " : ""}${nowTime()}  [${roomTag}]`;
   }
 
   function logInfo(topic, message) {
-    console.log(`[${nowTime()}] [${topic}] [${roomTag}] ${message}`);
+    console.log(`${prefix()}  ${message}`);
   }
 
   function logWarn(topic, message) {
-    console.warn(`[${nowTime()}] [${topic}] [${roomTag}] ${message}`);
+    console.warn(`${prefix(true)}  ${message}`);
   }
 
   function logEvent(event, details = {}) {
-    const sid = details.sessionId || "-";
     if (event === "runtime_started") {
-      const width = details.worldWidthMeters ?? details.worldSizeMeters ?? "-";
-      const height = details.worldHeightMeters ?? details.worldSizeMeters ?? "-";
+      const width = details.worldWidthMeters ?? details.worldSizeMeters ?? "?";
+      const height = details.worldHeightMeters ?? details.worldSizeMeters ?? "?";
       logInfo(
         "runtime",
-        `start world=${width}x${height}m maxPlayers=${details.maxPlayers} chars=${details.totalCharacters}`
+        `Rum startat – karta ${width}×${height} m, max ${details.maxPlayers} spelare, ${details.totalCharacters} karaktärer.`
       );
       return;
     }
     if (event === "session_connected") {
-      const ua = details.userAgent ? String(details.userAgent).slice(0, 68) : "-";
-      logInfo("anslutning", `ny session sid=${sid} ip=${details.ip || "-"} origin=${details.origin || "-"} ua="${ua}" ${getStateSummary()}`);
+      const ip = details.ip || "okänd IP";
+      logInfo("anslutning", `Ny anslutning från ${ip}.`);
       return;
     }
     if (event === "session_disconnected") {
-      const code = details.code == null ? "-" : String(details.code);
-      const name = details.name || "-";
-      logInfo(
-        "anslutning",
-        `frankoppling sid=${sid} namn=${name} reason=${details.reason || "-"} code=${code} ${getStateSummary()}`
-      );
+      const name = details.name || "Okänd";
+      const reason = details.reason ? ` (${details.reason})` : "";
+      logInfo("anslutning", `${name} kopplades bort${reason}.`);
       return;
     }
     if (event === "session_login") {
-      logInfo("spelare", `${details.name} loggade in sid=${sid} ${getStateSummary()}`);
+      logInfo("spelare", `${details.name} loggade in.`);
       return;
     }
     if (event === "countdown_start") {
-      logInfo("spel", `nedrakning start sid=${sid} sek=${details.seconds ?? "-"}`);
+      logInfo("spel", `Nedräkning startad – ${details.seconds ?? "?"} sekunder kvar.`);
       return;
     }
     if (event === "session_possess") {
-      logInfo(
-        "spel",
-        `${details.name || "-"} tog karaktar ${details.characterId} sid=${sid} pos=(${details.x},${details.z}) yaw=${details.yaw}`
-      );
+      logInfo("spel", `${details.name || "Okänd"} tog kontroll över karaktär #${details.characterId}.`);
       return;
     }
     if (event === "attack") {
-      const victimList =
-        Array.isArray(details.victimCharacterIds) && details.victimCharacterIds.length > 0
-          ? details.victimCharacterIds.join(",")
-          : "-";
-      logInfo(
-        "strid",
-        `attack sid=${sid} char=${details.attackerCharacterId} traffar=${details.victims ?? 0} victimIds=${victimList}`
-      );
+      const hits = details.victims ?? 0;
+      if (hits === 0) {
+        logInfo("strid", `Karaktär #${details.attackerCharacterId} slog – missade.`);
+      } else {
+        logInfo("strid", `Karaktär #${details.attackerCharacterId} slog och träffade ${hits} karaktär${hits !== 1 ? "er" : ""}.`);
+      }
       return;
     }
     if (event === "player_eliminated") {
-      logInfo("strid", `${details.name || "-"} dog (char=${details.characterId}, sid=${sid})`);
+      logInfo("strid", `${details.name || "Okänd"} är utslagen.`);
       return;
     }
     if (event === "character_respawn") {
-      logInfo("world", `respawn char=${details.characterId} pos=(${details.x},${details.z}) yaw=${details.yaw}`);
+      logInfo("world", `Karaktär #${details.characterId} återuppstod.`);
       return;
     }
     if (event === "chat") {
-      logInfo("chat", `${details.name || "-"}: ${details.text || ""}`);
+      logInfo("chat", `${details.name || "Okänd"}: "${details.text || ""}"`);
       return;
     }
     if (event === "heartbeat_timeout") {
-      logWarn("anslutning", `heartbeat timeout sid=${sid}`);
+      logWarn("anslutning", `Spelare tappade uppkopplingen (heartbeat timeout).`);
       return;
     }
     if (event === "message_drop") {
-      logWarn(
-        "ratelimit",
-        `drop sid=${sid} reason=${details.reason || "-"} total=${details.droppedTotal ?? 0} window=${details.droppedInWindow ?? 0}`
-      );
+      logWarn("ratelimit", `Meddelande ignorerat – för hög sändningsfrekvens (${details.droppedTotal ?? 0} totalt).`);
       return;
     }
-    logInfo("game", `${event} ${getStateSummary()}`);
+    logInfo("game", `${event}.`);
   }
 
   return { logInfo, logWarn, logEvent };
@@ -135,7 +127,7 @@ export function createInvariantChecker({
       warnInvariant(
         "character_count",
         now,
-        `Expected ${totalCharacters} characters, got ${characters.length}.`
+        `Fel antal karaktärer – förväntade ${totalCharacters}, hittade ${characters.length}.`
       );
     }
 
@@ -144,7 +136,7 @@ export function createInvariantChecker({
       warnInvariant(
         "max_players",
         now,
-        `Expected at most ${maxPlayers} alive players, got ${alivePlayers}.`
+        `För många aktiva spelare – max är ${maxPlayers}, men ${alivePlayers} är aktiva.`
       );
     }
 
@@ -158,7 +150,7 @@ export function createInvariantChecker({
         warnInvariant(
           "owner_controller_mismatch",
           now,
-          `Character ${c.id} has owner ${c.ownerSessionId} but controllerType=${c.controllerType}.`
+          `Karaktär #${c.id} har en ägare men är inte spelarstyrd (typ: ${c.controllerType}).`
         );
       }
     }
@@ -168,7 +160,7 @@ export function createInvariantChecker({
         warnInvariant(
           "multi_char_owner",
           now,
-          `Session ${sessionId} owns multiple characters: ${ownedCharIds.join(", ")}.`
+          `En spelare äger flera karaktärer samtidigt: #${ownedCharIds.join(", #")}.`
         );
       }
 
@@ -181,7 +173,7 @@ export function createInvariantChecker({
         warnInvariant(
           "owner_without_alive_session",
           now,
-          `Character owner ${sessionId} missing valid active session.`
+          `Karaktär har en ägare men ingen aktiv spelsession kopplad.`
         );
         continue;
       }
@@ -190,7 +182,7 @@ export function createInvariantChecker({
         warnInvariant(
           "session_character_mismatch",
           now,
-          `Session ${sessionId} points to character ${session.characterId} but owns [${ownedCharIds.join(", ")}].`
+          `En spelsession pekar på karaktär #${session.characterId} men äger [#${ownedCharIds.join(", #")}].`
         );
       }
     }

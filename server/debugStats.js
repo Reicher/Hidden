@@ -4,6 +4,7 @@ import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises
 const DEFAULT_SAMPLE_INTERVAL_MS = 15_000;
 const SAMPLE_RETENTION = 24 * 60 * 6; // 24h with 15-second sampling.
 const RECENT_EVENT_LIMIT = 240;
+const RECENT_CHAT_LIMIT = 120;
 const PERSISTED_STATE_VERSION = 1;
 
 function safeInt(value, fallback = 0) {
@@ -18,7 +19,7 @@ function isoAt(at) {
 
 function roomLabel(room) {
   if (!room) return "-";
-  return room.isPrivate ? `privat:${room.roomCode || room.roomId}` : "publik";
+  return room.isPrivate ? (room.roomCode || room.roomId) : "publik";
 }
 
 function parseJsonLine(raw) {
@@ -60,6 +61,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     rooms: new Map(),
     names: new Map(),
     recentEvents: [],
+    recentChat: [],
     samples: []
   };
 
@@ -420,6 +422,16 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
     persistSoon();
   }
 
+  function recordChatMessage({ name, text, at = Date.now() }) {
+    if (closed) return;
+    if (!name || !text) return;
+    const entry = { at: safeInt(at, Date.now()), name: String(name), text: String(text) };
+    state.recentChat.push(entry);
+    if (state.recentChat.length > RECENT_CHAT_LIMIT) {
+      state.recentChat.splice(0, state.recentChat.length - RECENT_CHAT_LIMIT);
+    }
+  }
+
   function getSnapshot() {
     recomputeCurrentTotals();
     const rooms = [...state.rooms.values()]
@@ -461,6 +473,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
       rooms,
       players,
       recentEvents: [...state.recentEvents],
+      recentChat: [...state.recentChat],
       samples: [...state.samples]
     };
   }
@@ -476,6 +489,7 @@ export function createDebugStatsStore({ rootDir, sampleIntervalMs = DEFAULT_SAMP
 
   return {
     recordRoomEvent,
+    recordChatMessage,
     getSnapshot,
     close,
     logs: {

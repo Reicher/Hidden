@@ -177,6 +177,7 @@ export function createClientMessageProcessor({
         name: session.name,
         text,
       });
+      if (!isPrivate) emitStatsEvent("chat", { name: session.name, text });
       constants.broadcastChatToNonActivePlayers(entry);
       return "ok";
     }
@@ -187,6 +188,7 @@ export function createClientMessageProcessor({
       name: session.name,
       text,
     });
+    if (!isPrivate) emitStatsEvent("chat", { name: session.name, text });
     constants.broadcast("chat", { entry });
     return "ok";
   }

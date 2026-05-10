@@ -126,7 +126,11 @@ export function attachGameRuntime({ server, rootDir }) {
       roomCode,
       isPrivate,
       onStatsEvent: (event) => {
-        debugStats.recordRoomEvent(event);
+        if (event.type === "chat") {
+          debugStats.recordChatMessage({ name: event.name, text: event.text, at: event.at });
+        } else {
+          debugStats.recordRoomEvent(event);
+        }
       },
       onRoomEmpty: ({ roomId: emptyRoomId }) => {
         const toRemove = rooms.get(emptyRoomId);

@@ -744,9 +744,12 @@ export function createRoomRuntime({
           ? IDLE_SESSION_TIMEOUT_MS
           : LOBBY_IDLE_TIMEOUT_MS;
       if (idleForMs < timeoutMs) continue;
+      const idleSec = Math.round(idleForMs / 1000);
+      const stateName = session.state === "lobby" ? "lobbyn" : "spelet";
+      const playerLabel = session.name ? `${session.name}` : "Okänd spelare";
       logWarn(
         "anslutning",
-        `idle-timeout sid=${shortSessionId(sessionId)} state=${session.state} idleMs=${idleForMs}`,
+        `${playerLabel} kopplades bort automatiskt efter ${idleSec}s inaktivitet i ${stateName}.`,
       );
       closeWsSafe(ws, 1001, "idle timeout");
     }
@@ -866,7 +869,7 @@ export function createRoomRuntime({
     if (!isOriginAllowed(origin)) {
       socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
       socket.destroy();
-      logWarn("ws-origin", `blocked origin=${origin || "<missing>"}`);
+      logWarn("säkerhet", `Anslutning blockerad – otillåtet origin: ${origin || "(saknas)"}.`);
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {

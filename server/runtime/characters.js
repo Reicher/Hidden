@@ -67,7 +67,7 @@ export function createCharacterSystem({
     // Last-resort fallback – may land inside an obstacle if the room is
     // completely packed.  Log so this situation is visible in the server log.
     console.warn(
-      "[characters] randomSpawn: no free position found – falling back to origin (0,0)",
+      "⚠ Ingen ledig spawnposition hittades – karaktär placeras i origo (0,0). Rummet kan vara för fullt.",
     );
     return { x: 0, z: 0, yaw: rand(-Math.PI, Math.PI) };
   }

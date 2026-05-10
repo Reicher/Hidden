@@ -158,7 +158,7 @@ export function createRoomWsLifecycle({
         const dropped = activeSession?.net.droppedMessages ?? 0;
         logWarn(
           "ratelimit",
-          `abuse-kick sid=${shortSessionId(sessionId)} origin=${req?.headers?.origin || "-"} reason=${reason} dropped=${dropped}`,
+          `Spelare kickad pga. spammning – ${dropped} ignorerade meddelanden (anledning: ${reason}).`,
         );
         cleanupSession("abuse_kick", {
           dropReason: reason,
