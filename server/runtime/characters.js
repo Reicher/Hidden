@@ -30,7 +30,7 @@ export function createCharacterSystem({
   permanentDownedUntil,
   maxLookPitchRad,
   getActiveMatchStartedAt,
-  rand
+  rand,
 }) {
   // ─── Spawn ────────────────────────────────────────────────────────────────
 
@@ -64,6 +64,11 @@ export function createCharacterSystem({
         return { x, z, yaw: rand(-Math.PI, Math.PI) };
       }
     }
+    // Last-resort fallback – may land inside an obstacle if the room is
+    // completely packed.  Log so this situation is visible in the server log.
+    console.warn(
+      "[characters] randomSpawn: no free position found – falling back to origin (0,0)",
+    );
     return { x: 0, z: 0, yaw: rand(-Math.PI, Math.PI) };
   }
 
@@ -103,13 +108,14 @@ export function createCharacterSystem({
         inspectDownedTargetId: -1,
         inspectDownedUntil: 0,
         inspectDownedAngle: 0,
-        inspectDownedRadius: 1.05
-      }
+        inspectDownedRadius: 1.05,
+      },
     };
   }
 
   const characters = [];
-  for (let i = 0; i < totalCharacters; i += 1) characters.push(createCharacter(i));
+  for (let i = 0; i < totalCharacters; i += 1)
+    characters.push(createCharacter(i));
 
   // ─── State helpers ────────────────────────────────────────────────────────
 
@@ -137,15 +143,23 @@ export function createCharacterSystem({
         victim.x - attacker.x,
         victim.z - attacker.z,
         Math.sin(victim.yaw),
-        Math.cos(victim.yaw)
+        Math.cos(victim.yaw),
       );
     }
-    return normalizeHorizontalVector(Math.sin(victim?.yaw || 0), Math.cos(victim?.yaw || 0), 0, 1);
+    return normalizeHorizontalVector(
+      Math.sin(victim?.yaw || 0),
+      Math.cos(victim?.yaw || 0),
+      0,
+      1,
+    );
   }
 
   function downCharacter(victim, now, fallAwayX, fallAwayZ) {
-    const stayDownPermanently = getActiveMatchStartedAt() > 0 && victim.everPlayerControlled;
-    victim.downedUntil = stayDownPermanently ? permanentDownedUntil : now + npcDownedRespawnMs;
+    const stayDownPermanently =
+      getActiveMatchStartedAt() > 0 && victim.everPlayerControlled;
+    victim.downedUntil = stayDownPermanently
+      ? permanentDownedUntil
+      : now + npcDownedRespawnMs;
     victim.fallAwayX = fallAwayX;
     victim.fallAwayZ = fallAwayZ;
     victim.downedRecoveryUntil = 0;
@@ -204,6 +218,6 @@ export function createCharacterSystem({
     computeFallAwayVector,
     downCharacter,
     releaseOwnedCharacter,
-    resetArenaForNextRound
+    resetArenaForNextRound,
   };
 }

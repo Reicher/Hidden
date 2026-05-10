@@ -285,14 +285,9 @@ export function createRoomTickLoop({
 
     // Serialize the shared world data once; only the per-client session differs.
     // This avoids re-serializing the full characters array for every connected client.
+    // Static world data (shelves, room size, …) is sent once via world_static on connect.
     const sharedJson = JSON.stringify({
       type: "world",
-      worldSizeMeters: constants.WORLD_SIZE_METERS,
-      worldWidthMeters: constants.WORLD_WIDTH_METERS,
-      worldHeightMeters: constants.WORLD_HEIGHT_METERS,
-      shelves: constants.SHELVES,
-      coolers: constants.COOLERS,
-      freezers: constants.FREEZERS,
       scoreboard,
       characters: characters.map((c) => serializeCharacter(c, now)),
       match,

@@ -820,6 +820,15 @@ export function createRoomRuntime({
     },
   });
 
+  const WORLD_STATIC_PAYLOAD = Object.freeze({
+    worldSizeMeters: WORLD_SIZE_METERS,
+    worldWidthMeters: WORLD_WIDTH_METERS,
+    worldHeightMeters: WORLD_HEIGHT_METERS,
+    shelves: SHELVES,
+    coolers: COOLERS,
+    freezers: FREEZERS,
+  });
+
   const { wss, heartbeatInterval } = createRoomWsLifecycle({
     roomMeta: {
       roomId,
@@ -831,6 +840,7 @@ export function createRoomRuntime({
       MIN_PLAYERS_TO_START,
       MAX_PLAYERS,
     },
+    worldStaticPayload: WORLD_STATIC_PAYLOAD,
     sessions,
     sockets,
     processClientMessage,

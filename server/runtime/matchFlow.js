@@ -318,6 +318,8 @@ export function createMatchFlow({
         }
       }
       if (session.state === "countdown") {
+        releaseOwnedCharacter(session.id);
+        session.characterId = null;
         session.state = "lobby";
         session.readyAt = 0;
       }

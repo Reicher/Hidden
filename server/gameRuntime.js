@@ -15,7 +15,7 @@ import {
   mergeGameplaySettingsPatch,
   setAiBehaviorSettings,
   setActiveLayout,
-  setGameplaySettings
+  setGameplaySettings,
 } from "./config.js";
 
 const PUBLIC_ROOM_ID = "public";
@@ -34,7 +34,12 @@ function parseRoomFromRequestUrl(rawUrl) {
     .filter(Boolean);
 
   if (segments.length === 0) {
-    return { ok: true, roomId: PUBLIC_ROOM_ID, roomCode: null, isPrivate: false };
+    return {
+      ok: true,
+      roomId: PUBLIC_ROOM_ID,
+      roomCode: null,
+      isPrivate: false,
+    };
   }
 
   if (segments.length !== 1) return { ok: false, reason: "invalid_path" };
@@ -67,14 +72,18 @@ export function attachGameRuntime({ server, rootDir }) {
     return Object.freeze({
       layoutId: getActiveLayoutInfo().id,
       gameplaySettings: getGameplaySettings(),
-      aiBehaviorSettings: getAiBehaviorSettings()
+      aiBehaviorSettings: getAiBehaviorSettings(),
     });
   }
 
   function writePersistedServerSettings() {
     const payload = persistedSettingsPayload();
     fs.mkdirSync(settingsDir, { recursive: true });
-    fs.writeFileSync(settingsTmpPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+    fs.writeFileSync(
+      settingsTmpPath,
+      `${JSON.stringify(payload, null, 2)}\n`,
+      "utf8",
+    );
     fs.renameSync(settingsTmpPath, settingsPath);
   }
 
@@ -85,13 +94,16 @@ export function attachGameRuntime({ server, rootDir }) {
     try {
       parsed = JSON.parse(raw);
     } catch (error) {
-      throw new Error(`[server-settings] Ogiltig JSON i ${settingsPath}: ${error?.message || error}`);
+      throw new Error(
+        `[server-settings] Ogiltig JSON i ${settingsPath}: ${error?.message || error}`,
+      );
     }
     if (!parsed || typeof parsed !== "object") {
       throw new Error(`[server-settings] Ogiltigt innehåll i ${settingsPath}.`);
     }
 
-    const hasLayout = typeof parsed.layoutId === "string" && parsed.layoutId.trim() !== "";
+    const hasLayout =
+      typeof parsed.layoutId === "string" && parsed.layoutId.trim() !== "";
     if (hasLayout) setActiveLayout(parsed.layoutId);
 
     const gameplay = parsed.gameplaySettings;
@@ -128,7 +140,7 @@ export function attachGameRuntime({ server, rootDir }) {
         if (!toRemove) return;
         toRemove.close();
         rooms.delete(emptyRoomId);
-      }
+      },
     });
     rooms.set(roomId, runtime);
     return runtime;
@@ -157,7 +169,10 @@ export function attachGameRuntime({ server, rootDir }) {
   function isDebugAuthorized(req, requestUrl, res) {
     const configuredToken = String(DEBUG_VIEW_TOKEN || "").trim();
     if (!configuredToken) {
-      writeJson(res, 503, { error: "debug_token_not_configured", authRequired: true });
+      writeJson(res, 503, {
+        error: "debug_token_not_configured",
+        authRequired: true,
+      });
       return false;
     }
     if (getProvidedToken(req, requestUrl) !== configuredToken) {
@@ -179,7 +194,7 @@ export function attachGameRuntime({ server, rootDir }) {
       const gameplay = getGameplaySettings();
       writeJson(res, 200, {
         maxPlayers: gameplay.maxPlayers,
-        totalCharacters: gameplay.totalCharacters
+        totalCharacters: gameplay.totalCharacters,
       });
       return true;
     }
@@ -193,10 +208,13 @@ export function attachGameRuntime({ server, rootDir }) {
 
       const payload = debugStats.getSnapshot();
       payload.systemMetrics = await systemMetrics.collect();
-      payload.liveRooms = [...rooms.values()].map((room) => room.getDebugSnapshot()).sort((a, b) => {
-        if (b.current.connected !== a.current.connected) return b.current.connected - a.current.connected;
-        return String(a.roomId).localeCompare(String(b.roomId), "sv");
-      });
+      payload.liveRooms = [...rooms.values()]
+        .map((room) => room.getDebugSnapshot())
+        .sort((a, b) => {
+          if (b.current.connected !== a.current.connected)
+            return b.current.connected - a.current.connected;
+          return String(a.roomId).localeCompare(String(b.roomId), "sv");
+        });
       payload.authRequired = true;
       payload.logFiles = debugStats.logs;
       payload.layout = getActiveLayoutInfo();
@@ -214,7 +232,7 @@ export function attachGameRuntime({ server, rootDir }) {
           layout: getActiveLayoutInfo(),
           availableLayouts: getAvailableLayouts(),
           gameplaySettings: getGameplaySettings(),
-          aiBehaviorSettings: getAiBehaviorSettings()
+          aiBehaviorSettings: getAiBehaviorSettings(),
         });
         return true;
       }
@@ -229,7 +247,11 @@ export function attachGameRuntime({ server, rootDir }) {
         const chunkText = typeof chunk === "string" ? chunk : chunk.toString();
         bodyBytes += Buffer.byteLength(chunkText, "utf8");
         if (bodyBytes > MAX_DEBUG_SETTINGS_BODY_BYTES) {
-          writeJson(res, 413, { error: "payload_too_large", maxBytes: MAX_DEBUG_SETTINGS_BODY_BYTES });
+          writeJson(res, 413, {
+            error: "payload_too_large",
+            maxBytes: MAX_DEBUG_SETTINGS_BODY_BYTES,
+          });
+          req.destroy();
           return true;
         }
         bodyText += chunkText;
@@ -244,8 +266,12 @@ export function attachGameRuntime({ server, rootDir }) {
       }
 
       const requestedLayoutIdRaw = parsedBody?.layoutId;
-      const hasLayoutPatch = typeof requestedLayoutIdRaw === "string" && requestedLayoutIdRaw.trim() !== "";
-      const requestedLayoutId = hasLayoutPatch ? String(requestedLayoutIdRaw).trim().toLowerCase() : null;
+      const hasLayoutPatch =
+        typeof requestedLayoutIdRaw === "string" &&
+        requestedLayoutIdRaw.trim() !== "";
+      const requestedLayoutId = hasLayoutPatch
+        ? String(requestedLayoutIdRaw).trim().toLowerCase()
+        : null;
       const hasGameplayPatch = hasGameplaySettingsPatch(parsedBody);
       const hasAiBehaviorPatch = hasAiBehaviorSettingsPatch(parsedBody);
       if (!hasLayoutPatch && !hasGameplayPatch && !hasAiBehaviorPatch) {
@@ -262,10 +288,14 @@ export function attachGameRuntime({ server, rootDir }) {
           changed = setActiveLayout(requestedLayoutId) || changed;
         }
         if (hasGameplayPatch) {
-          changed = setGameplaySettings(mergeGameplaySettingsPatch(parsedBody)) || changed;
+          changed =
+            setGameplaySettings(mergeGameplaySettingsPatch(parsedBody)) ||
+            changed;
         }
         if (hasAiBehaviorPatch) {
-          changed = setAiBehaviorSettings(mergeAiBehaviorSettingsPatch(parsedBody)) || changed;
+          changed =
+            setAiBehaviorSettings(mergeAiBehaviorSettingsPatch(parsedBody)) ||
+            changed;
         }
         if (changed) {
           try {
@@ -280,14 +310,17 @@ export function attachGameRuntime({ server, rootDir }) {
             }
             writeJson(res, 500, {
               error: "persist_failed",
-              message: persistError?.message || String(persistError)
+              message: persistError?.message || String(persistError),
             });
             return true;
           }
           restartRoomsForSettingsChange();
         }
       } catch (error) {
-        writeJson(res, 400, { error: "invalid_settings", message: error?.message || String(error) });
+        writeJson(res, 400, {
+          error: "invalid_settings",
+          message: error?.message || String(error),
+        });
         return true;
       }
 
@@ -297,7 +330,7 @@ export function attachGameRuntime({ server, rootDir }) {
         layout: getActiveLayoutInfo(),
         availableLayouts: getAvailableLayouts(),
         gameplaySettings: getGameplaySettings(),
-        aiBehaviorSettings: getAiBehaviorSettings()
+        aiBehaviorSettings: getAiBehaviorSettings(),
       });
       return true;
     }
@@ -323,6 +356,6 @@ export function attachGameRuntime({ server, rootDir }) {
   });
 
   return {
-    handleHttpRequest
+    handleHttpRequest,
   };
 }

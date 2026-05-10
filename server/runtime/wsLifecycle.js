@@ -14,6 +14,7 @@ function closeWsSafe(ws, code, reason) {
 export function createRoomWsLifecycle({
   roomMeta,
   constants,
+  worldStaticPayload = null,
   sessions,
   sockets,
   processClientMessage,
@@ -134,6 +135,9 @@ export function createRoomWsLifecycle({
       roomCode: roomMeta.roomCode || null,
       isPrivate: roomMeta.isPrivate,
     });
+    if (worldStaticPayload) {
+      send(ws, "world_static", worldStaticPayload);
+    }
 
     ws.on("pong", () => {
       ws.isAlive = true;

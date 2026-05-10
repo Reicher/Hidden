@@ -1,3 +1,7 @@
+// Cached static world data received once via the world_static message.
+// Falls back to undefined so syncFromWorld uses its own defaults when not yet received.
+let _cachedWorldStatic = null;
+
 export function handleSocketMessage(msg, ctx) {
   const {
     state,
@@ -70,6 +74,25 @@ export function handleSocketMessage(msg, ctx) {
 
   if (msg.type === "pong") {
     actions.handleDebugPong?.(msg);
+    return;
+  }
+
+  // Static world data (room dimensions, shelves, coolers, freezers).
+  // Sent once per connection; cached here and used in subsequent world ticks.
+  if (msg.type === "world_static") {
+    _cachedWorldStatic = msg;
+    try {
+      roomSystem.syncFromWorld({
+        worldSizeMeters: msg.worldSizeMeters,
+        worldWidthMeters: msg.worldWidthMeters,
+        worldHeightMeters: msg.worldHeightMeters,
+        shelves: msg.shelves,
+        coolers: msg.coolers,
+        freezers: msg.freezers,
+      });
+    } catch (err) {
+      console.error("[client:world_static]", err);
+    }
     return;
   }
 
@@ -225,13 +248,16 @@ export function handleSocketMessage(msg, ctx) {
   actions.updateLobbyMatchStatus();
 
   try {
+    // Use the data from the world message if present (legacy / reconnect),
+    // otherwise fall back to the cached world_static received at connect time.
+    const staticSrc = _cachedWorldStatic || {};
     roomSystem.syncFromWorld({
-      worldSizeMeters: msg.worldSizeMeters,
-      worldWidthMeters: msg.worldWidthMeters,
-      worldHeightMeters: msg.worldHeightMeters,
-      shelves: msg.shelves,
-      coolers: msg.coolers,
-      freezers: msg.freezers,
+      worldSizeMeters: msg.worldSizeMeters ?? staticSrc.worldSizeMeters,
+      worldWidthMeters: msg.worldWidthMeters ?? staticSrc.worldWidthMeters,
+      worldHeightMeters: msg.worldHeightMeters ?? staticSrc.worldHeightMeters,
+      shelves: msg.shelves ?? staticSrc.shelves,
+      coolers: msg.coolers ?? staticSrc.coolers,
+      freezers: msg.freezers ?? staticSrc.freezers,
     });
 
     actions.renderScoreboard(msg.scoreboard || []);

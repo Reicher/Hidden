@@ -353,7 +353,9 @@ export function createClientMessageProcessor({
         at - session.net.lastAttackRequestAt <
         constants.ATTACK_MESSAGE_MIN_MS
       ) {
-        return dropMessage(session, "rate_attack") ? "abuse" : "dropped";
+        // Frequent attack messages are normal player behaviour (button-mashing).
+        // Silently ignore extras instead of counting them as drops/abuse.
+        return "ok";
       }
       session.net.lastAttackRequestAt = at;
       session.input.attackRequested =
