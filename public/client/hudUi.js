@@ -36,8 +36,9 @@ export function updateDownedOverlay({
   const downed =
     appMode === "playing" &&
     (sessionState === "downed" ||
-      (sessionState === "spectating" && Boolean(downedByName))) &&
-    !(returnToLobbyMsRemaining > 0);
+      (sessionState === "spectating" &&
+        Boolean(downedByName) &&
+        !(returnToLobbyMsRemaining > 0)));
   downedOverlayEl.classList.toggle("hidden", !downed);
   gameMenuBtnEl?.classList.toggle("hidden", downed);
   if (!downed) return;
@@ -68,7 +69,7 @@ export function updateWinOverlay({
   const won = appMode === "playing" && sessionState === "won";
   const matchEnd =
     appMode === "playing" &&
-    (sessionState === "spectating" || sessionState === "downed") &&
+    sessionState === "spectating" &&
     winReturnToLobbyMsRemaining > 0;
   const visible = won || matchEnd;
   winOverlayEl.classList.toggle("hidden", !visible);
