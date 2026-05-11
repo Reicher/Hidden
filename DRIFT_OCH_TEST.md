@@ -139,3 +139,25 @@ Om browser-test saknar Chromium:
 ```bash
 npx playwright install chromium
 ```
+
+## Spelflöde och UI
+
+### Spectatorläge
+
+När en spelare besegras (karaktären faller ned) övergår sessionen automatiskt till `state = "spectating"`. Spelaren följer en slumpmässigt vald levande spelare och kan bläddra med piltangenterna (eller swipe-kontroller på mobil). HUD:en visar vem man följer och hur många åskådare det finns i rummet. Spectatorläget aktiveras enbart under en pågående match – inte i lobby.
+
+### Chattregler
+
+- Meddelanden normaliseras och trunkeras till **220 tecken** på servern.
+- Upprepade identiska meddelanden i snabb följd blockeras (deduplicering).
+- Chatthistorik per rum är begränsad till de senaste meddelandena (`CHAT_HISTORY_LIMIT`).
+- Under aktiv match visas in-game-chatten som ett kompakt overlay med max **5 rader** (`GAME_CHAT_MAX_LINES`). Panelen kan öppnas för att se hela historiken.
+- Hastighetsbegränsning via `MESSAGE_WINDOW_MS` / `MAX_MESSAGES_PER_WINDOW` och spam-skydd via `SPAM_DROP_WINDOW_MS` / `SPAM_MAX_DROPS_PER_WINDOW` (se miljövariabler ovan).
+
+### Fullscreen
+
+Connectskärmen har en **"Starta i helskärm"-kryssruta** som triggar `requestFullscreen()` vid matchstart. Inställningspanelen (kugghjulet) erbjuder även en **"Helskärmsläge"-toggle** under spelgång. Stödet detekteras automatiskt; på webbläsare utan fullscreen-API döljs kontrollerna.
+
+### Nyhetsruta
+
+På connectskärmen hämtas `/news.json` och visas i ett kort (version, datum, fritext). För produktion: uppdatera `public/news.json` med önskad text – fälten är `version`, `title`, `publishedAt` (ISO-datum eller fri sträng) och `notes`. Kortet döljs tyst om filen saknas eller returnerar fel.

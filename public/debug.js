@@ -537,6 +537,7 @@ function renderText(data) {
         const tdRoom = document.createElement("td");
         tdRoom.textContent = roomLabel(room);
         const tdNames = document.createElement("td");
+        tdNames.className = "wrapCell";
         const nameList = room.hasLive
           ? room.names.length > 0
             ? room.names
@@ -547,6 +548,7 @@ function renderText(data) {
           tdNames.textContent = room.hasLive ? "(ingen inne)" : "-";
         } else {
           tdNames.textContent = nameList.join(", ");
+          tdNames.title = nameList.join(", ");
         }
         if (!room.hasLive && room.lastEventAt) {
           tdNames.title = `Senast aktiv: ${fmtAt(room.lastEventAt)}`;
@@ -596,6 +598,7 @@ function renderText(data) {
         tdSeen.textContent = fmtAt(p.lastSeenAt);
         tdSeen.style.color = "var(--muted)";
         const tdRooms = document.createElement("td");
+        tdRooms.className = "wrapCell";
         const roomNames = (p.rooms || []).map(
           (roomId) => roomLabelById.get(roomId) || roomId,
         );
