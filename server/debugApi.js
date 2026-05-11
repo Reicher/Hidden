@@ -35,17 +35,9 @@ export function createDebugApiHandler({
   debugStats,
   systemMetrics,
   getRooms,
-  getActiveLayoutInfo,
-  getAvailableLayouts,
-  getGameplaySettings,
-  getAiBehaviorSettings,
-  setActiveLayout,
-  setGameplaySettings,
-  setAiBehaviorSettings,
-  hasGameplaySettingsPatch,
-  hasAiBehaviorSettingsPatch,
-  mergeGameplaySettingsPatch,
-  mergeAiBehaviorSettingsPatch,
+  layout,
+  gameplay,
+  aiSettings,
   writePersistedSettings,
   restartRoomsForSettingsChange,
 }) {
@@ -101,10 +93,10 @@ export function createDebugApiHandler({
         writeJson(res, 405, { error: "method_not_allowed" });
         return true;
       }
-      const gameplay = getGameplaySettings();
+      const gameplaySnapshot = gameplay.get();
       writeJson(res, 200, {
-        maxPlayers: gameplay.maxPlayers,
-        totalCharacters: gameplay.totalCharacters,
+        maxPlayers: gameplaySnapshot.maxPlayers,
+        totalCharacters: gameplaySnapshot.totalCharacters,
       });
       return true;
     }
@@ -127,9 +119,9 @@ export function createDebugApiHandler({
         });
       payload.authRequired = true;
       payload.logFiles = debugStats.logs;
-      payload.layout = getActiveLayoutInfo();
-      payload.gameplaySettings = getGameplaySettings();
-      payload.aiBehaviorSettings = getAiBehaviorSettings();
+      payload.layout = layout.getActive();
+      payload.gameplaySettings = gameplay.get();
+      payload.aiBehaviorSettings = aiSettings.get();
       writeJson(res, 200, payload);
       return true;
     }
@@ -140,10 +132,10 @@ export function createDebugApiHandler({
       if (req.method === "GET") {
         writeJson(res, 200, {
           authRequired: true,
-          layout: getActiveLayoutInfo(),
-          availableLayouts: getAvailableLayouts(),
-          gameplaySettings: getGameplaySettings(),
-          aiBehaviorSettings: getAiBehaviorSettings(),
+          layout: layout.getActive(),
+          availableLayouts: layout.getAll(),
+          gameplaySettings: gameplay.get(),
+          aiBehaviorSettings: aiSettings.get(),
         });
         return true;
       }
@@ -193,39 +185,35 @@ export function createDebugApiHandler({
       const requestedLayoutId = hasLayoutPatch
         ? String(requestedLayoutIdRaw).trim().toLowerCase()
         : null;
-      const hasGameplayPatch = hasGameplaySettingsPatch(parsedBody);
-      const hasAiBehaviorPatch = hasAiBehaviorSettingsPatch(parsedBody);
+      const hasGameplayPatch = gameplay.hasOverride(parsedBody);
+      const hasAiBehaviorPatch = aiSettings.hasOverride(parsedBody);
       if (!hasLayoutPatch && !hasGameplayPatch && !hasAiBehaviorPatch) {
         writeJson(res, 400, { error: "no_settings_provided" });
         return true;
       }
 
       let changed = false;
-      const previousLayoutId = getActiveLayoutInfo().id;
-      const previousGameplay = getGameplaySettings();
-      const previousAiBehavior = getAiBehaviorSettings();
+      const previousLayoutId = layout.getActive().id;
+      const previousGameplay = gameplay.get();
+      const previousAiBehavior = aiSettings.get();
       try {
         if (hasLayoutPatch && requestedLayoutId) {
-          changed = setActiveLayout(requestedLayoutId) || changed;
+          changed = layout.setActive(requestedLayoutId) || changed;
         }
         if (hasGameplayPatch) {
-          changed =
-            setGameplaySettings(mergeGameplaySettingsPatch(parsedBody)) ||
-            changed;
+          changed = gameplay.set(gameplay.merge(parsedBody)) || changed;
         }
         if (hasAiBehaviorPatch) {
-          changed =
-            setAiBehaviorSettings(mergeAiBehaviorSettingsPatch(parsedBody)) ||
-            changed;
+          changed = aiSettings.set(aiSettings.merge(parsedBody)) || changed;
         }
         if (changed) {
           try {
             writePersistedSettings();
           } catch (persistError) {
             try {
-              setActiveLayout(previousLayoutId);
-              setGameplaySettings(previousGameplay);
-              setAiBehaviorSettings(previousAiBehavior);
+              layout.setActive(previousLayoutId);
+              gameplay.set(previousGameplay);
+              aiSettings.set(previousAiBehavior);
             } catch {
               // If rollback also fails, surface the original persistence error.
             }
@@ -248,10 +236,10 @@ export function createDebugApiHandler({
       writeJson(res, 200, {
         ok: true,
         authRequired: true,
-        layout: getActiveLayoutInfo(),
-        availableLayouts: getAvailableLayouts(),
-        gameplaySettings: getGameplaySettings(),
-        aiBehaviorSettings: getAiBehaviorSettings(),
+        layout: layout.getActive(),
+        availableLayouts: layout.getAll(),
+        gameplaySettings: gameplay.get(),
+        aiBehaviorSettings: aiSettings.get(),
       });
       return true;
     }

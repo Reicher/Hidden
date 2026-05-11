@@ -21,9 +21,7 @@ import {
 } from "./client/lobbyUi.js";
 import { GAME_CREDITS_TEXT } from "./client/about.js";
 import { createInputController } from "./client/inputControls.js";
-import { handleSocketMessage } from "./client/socketMessages.js";
-import { createSocketConnectionController } from "./client/socketConnection.js";
-import { createSocketMessageContext } from "./client/socketContext.js";
+import { createConnectionManager } from "./client/connectionManager.js";
 import { createConnectScreen } from "./client/connectScreen.js";
 import { createSettingsController } from "./client/settingsController.js";
 import { createDebugOverlay } from "./client/debugOverlay.js";
@@ -48,8 +46,6 @@ import {
   normalizeMobileControlsPreference,
   mobileControlsLabel,
 } from "./client/appHelpers.js";
-import { clampVolume, persistAudioSettings } from "./client/audioSettings.js";
-import { persistLookSettings } from "./client/lookSettings.js";
 import { createMobileControls } from "./client/mobileControls.js";
 import {
   PLAYER_NAME_KEY,
@@ -282,8 +278,11 @@ const settingsController = createSettingsController({
 });
 const {
   bindFullscreenListeners,
+  clampVolume,
   getAudioSettings,
   getLookSettings,
+  persistAudioSettings,
+  persistLookSettings,
   playHitHurtAtPosition,
   playHitMissSfx,
   playUiBlipSfx,
@@ -295,30 +294,36 @@ const {
 
 const inputController = createInputController({
   canvas,
-  mobileJoystickBaseEl,
-  mobileJoystickKnobEl,
-  mobileLookPadEl,
-  mobileSprintBtnEl,
-  mobileAttackBtnEl,
-  isTouchDevice: IS_TOUCH_DEVICE,
-  inputSendIntervalMs: INPUT_SEND_INTERVAL_MS,
-  inputHeartbeatMs: INPUT_HEARTBEAT_MS,
-  lookTouchSensitivityX: LOOK_TOUCH_SENSITIVITY_X,
-  lookTouchSensitivityY: LOOK_TOUCH_SENSITIVITY_Y,
-  getLookSensitivityMultiplier: () => {
-    const liveValue = Number(lookSensitivityInputEl?.value);
-    if (Number.isFinite(liveValue)) return Math.max(0.1, liveValue / 100);
-    return settingsController.getLookSensitivityMultiplier();
+  mobile: {
+    joystickBaseEl: mobileJoystickBaseEl,
+    joystickKnobEl: mobileJoystickKnobEl,
+    lookPadEl: mobileLookPadEl,
+    sprintBtnEl: mobileSprintBtnEl,
+    attackBtnEl: mobileAttackBtnEl,
   },
-  joystickDeadzone: JOYSTICK_DEADZONE,
-  clampPitch,
-  getSocket: () => socketConnection?.getSocket() || null,
-  getAppMode: () => clientState.appMode,
-  getSessionState: () => clientState.sessionState,
-  getGameMenuOpen: () => clientState.gameMenuOpen,
-  getGameChatOpen: () => clientState.gameChatOpen,
-  isGameChatFocused: () => isGameChatFocused(),
-  requestPointerLock: requestPointerLockSafe,
+  config: {
+    isTouchDevice: IS_TOUCH_DEVICE,
+    inputSendIntervalMs: INPUT_SEND_INTERVAL_MS,
+    inputHeartbeatMs: INPUT_HEARTBEAT_MS,
+    lookTouchSensitivityX: LOOK_TOUCH_SENSITIVITY_X,
+    lookTouchSensitivityY: LOOK_TOUCH_SENSITIVITY_Y,
+    getLookSensitivityMultiplier: () => {
+      const liveValue = Number(lookSensitivityInputEl?.value);
+      if (Number.isFinite(liveValue)) return Math.max(0.1, liveValue / 100);
+      return settingsController.getLookSensitivityMultiplier();
+    },
+    joystickDeadzone: JOYSTICK_DEADZONE,
+    clampPitch,
+  },
+  app: {
+    getSocket: () => socketConnection?.getSocket() || null,
+    getAppMode: () => clientState.appMode,
+    getSessionState: () => clientState.sessionState,
+    getGameMenuOpen: () => clientState.gameMenuOpen,
+    getGameChatOpen: () => clientState.gameChatOpen,
+    isGameChatFocused: () => isGameChatFocused(),
+    requestPointerLock: requestPointerLockSafe,
+  },
 });
 
 const connectScreen = createConnectScreen({
@@ -818,7 +823,8 @@ function resetInputState() {
   inputController.resetInputState();
 }
 
-const socketMessageContext = createSocketMessageContext({
+socketConnection = createConnectionManager({
+  createGameSocket,
   state: clientState,
   constants: {
     DEFAULT_MATCH_STATE,
@@ -833,6 +839,9 @@ const socketMessageContext = createSocketMessageContext({
   inputController,
   getNowMs: () => performance.now(),
   actions: {
+    setPendingLoginName: (name) => {
+      clientState.pendingLoginName = name;
+    },
     resetSessionRuntimeState,
     replaceChat,
     appendChat,
@@ -859,27 +868,10 @@ const socketMessageContext = createSocketMessageContext({
     renderScoreboard,
     playHitHurtAtPosition,
     playHitMissSfx,
-    cancelAutoReconnect: () =>
-      socketConnection?.cancelAutoReconnectOnLoginError?.(),
     setViewYaw: (value) => {
       clientState.viewYaw = value;
     },
   },
-});
-
-socketConnection = createSocketConnectionController({
-  createGameSocket,
-  handleSocketMessage,
-  getSocketMessageContext: () => socketMessageContext,
-  setPendingLoginName: (name) => {
-    clientState.pendingLoginName = name;
-  },
-  setConnectError,
-  setPrivateRoomButtonVisible,
-  setAppMode,
-  resetSessionRuntimeState,
-  updateDocumentTitle,
-  resetInputState,
   onConnectingChanged: () => {
     updateConnectButton();
   },

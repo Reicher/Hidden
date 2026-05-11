@@ -1,9 +1,98 @@
-import { loadAudioSettings } from "./audioSettings.js";
-import {
-  loadLookSettings,
-  lookSensitivityMultiplier,
-  lookSmoothingRate,
-} from "./lookSettings.js";
+// ── Audio settings ────────────────────────────────────────────────────────
+const AUDIO_SETTINGS_KEY = "hidden_audio_settings";
+
+function clampVolume(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 100;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function normalizeAudioSettings(value) {
+  const src = value && typeof value === "object" ? value : {};
+  return {
+    musicVolume: clampVolume(src.musicVolume ?? 80),
+    musicMuted: Boolean(src.musicMuted),
+    sfxVolume: clampVolume(src.sfxVolume ?? 90),
+    sfxMuted: Boolean(src.sfxMuted),
+  };
+}
+
+function loadAudioSettings() {
+  try {
+    const raw = localStorage.getItem(AUDIO_SETTINGS_KEY);
+    if (!raw) return normalizeAudioSettings(null);
+    return normalizeAudioSettings(JSON.parse(raw));
+  } catch {
+    return normalizeAudioSettings(null);
+  }
+}
+
+function persistAudioSettings(settings) {
+  localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+// ── Look settings ─────────────────────────────────────────────────────────
+const LOOK_SETTINGS_KEY = "hidden_look_settings";
+
+const DEFAULT_LOOK_SETTINGS = Object.freeze({
+  sensitivity: 100,
+  smoothingEnabled: true,
+});
+
+function clampSensitivity(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(50, Math.min(220, Math.round(n)));
+}
+
+function normalizeLookSettings(value) {
+  const src = value && typeof value === "object" ? value : {};
+  let smoothingEnabled = DEFAULT_LOOK_SETTINGS.smoothingEnabled;
+  if (typeof src.smoothingEnabled === "boolean") {
+    smoothingEnabled = src.smoothingEnabled;
+  } else if (Number.isFinite(Number(src.smoothing))) {
+    smoothingEnabled = Number(src.smoothing) > 0;
+  }
+  return {
+    sensitivity: clampSensitivity(
+      src.sensitivity,
+      DEFAULT_LOOK_SETTINGS.sensitivity,
+    ),
+    smoothingEnabled,
+  };
+}
+
+function loadLookSettings() {
+  try {
+    const raw = localStorage.getItem(LOOK_SETTINGS_KEY);
+    if (!raw) return normalizeLookSettings(null);
+    return normalizeLookSettings(JSON.parse(raw));
+  } catch {
+    return normalizeLookSettings(null);
+  }
+}
+
+function persistLookSettings(settings) {
+  try {
+    localStorage.setItem(
+      LOOK_SETTINGS_KEY,
+      JSON.stringify(normalizeLookSettings(settings)),
+    );
+  } catch {
+    // ignore storage write errors; settings still apply in memory
+  }
+}
+
+function lookSensitivityMultiplier(settings) {
+  return Math.max(
+    0.1,
+    (Number(settings?.sensitivity) || DEFAULT_LOOK_SETTINGS.sensitivity) / 100,
+  );
+}
+
+function lookSmoothingRate(settings) {
+  return settings?.smoothingEnabled ? 30 : 0;
+}
 
 const HIT_SFX_MIN_DISTANCE = 0.8;
 const HIT_SFX_MAX_DISTANCE = 13;
@@ -249,10 +338,13 @@ export function createSettingsController({
 
   return {
     bindFullscreenListeners,
+    clampVolume,
     getAudioSettings: () => audioSettings,
     getLookSensitivityMultiplier: () => lookSensitivityMultiplier(lookSettings),
     getLookSmoothingRate: () => lookSmoothingRate(lookSettings),
     getLookSettings: () => lookSettings,
+    persistAudioSettings,
+    persistLookSettings,
     playHitHurtAtPosition,
     playHitMissSfx,
     playUiBlipSfx,

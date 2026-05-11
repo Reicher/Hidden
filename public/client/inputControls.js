@@ -1,25 +1,31 @@
 export function createInputController({
   canvas,
-  mobileJoystickBaseEl,
-  mobileJoystickKnobEl,
-  mobileLookPadEl,
-  mobileSprintBtnEl,
-  mobileAttackBtnEl,
-  isTouchDevice,
-  inputSendIntervalMs,
-  inputHeartbeatMs,
-  lookTouchSensitivityX,
-  lookTouchSensitivityY,
-  getLookSensitivityMultiplier,
-  joystickDeadzone,
-  clampPitch,
-  getSocket,
-  getAppMode,
-  getSessionState,
-  getGameMenuOpen,
-  getGameChatOpen,
-  isGameChatFocused,
-  requestPointerLock
+  mobile: {
+    joystickBaseEl: mobileJoystickBaseEl,
+    joystickKnobEl: mobileJoystickKnobEl,
+    lookPadEl: mobileLookPadEl,
+    sprintBtnEl: mobileSprintBtnEl,
+    attackBtnEl: mobileAttackBtnEl,
+  },
+  config: {
+    isTouchDevice,
+    inputSendIntervalMs,
+    inputHeartbeatMs,
+    lookTouchSensitivityX,
+    lookTouchSensitivityY,
+    getLookSensitivityMultiplier,
+    joystickDeadzone,
+    clampPitch,
+  },
+  app: {
+    getSocket,
+    getAppMode,
+    getSessionState,
+    getGameMenuOpen,
+    getGameChatOpen,
+    isGameChatFocused,
+    requestPointerLock,
+  },
 }) {
   const input = {
     forward: false,
@@ -28,7 +34,7 @@ export function createInputController({
     right: false,
     sprint: false,
     yaw: 0,
-    pitch: 0
+    pitch: 0,
   };
 
   let yaw = 0;
@@ -84,7 +90,10 @@ export function createInputController({
   function updateJoystickVisual() {
     if (!mobileJoystickKnobEl || !mobileJoystickBaseEl) return;
     const radius = mobileJoystickBaseEl.clientWidth * 0.5;
-    const travel = Math.max(0, radius - mobileJoystickKnobEl.clientWidth * 0.5 - 4);
+    const travel = Math.max(
+      0,
+      radius - mobileJoystickKnobEl.clientWidth * 0.5 - 4,
+    );
     mobileJoystickKnobEl.style.transform = `translate(calc(-50% + ${joystickCurrentX * travel}px), calc(-50% + ${joystickCurrentY * travel}px))`;
   }
 
@@ -132,7 +141,11 @@ export function createInputController({
     if (!el) return;
 
     const stop = (event) => {
-      if (event && event.pointerId != null && el.hasPointerCapture?.(event.pointerId)) {
+      if (
+        event &&
+        event.pointerId != null &&
+        el.hasPointerCapture?.(event.pointerId)
+      ) {
         el.releasePointerCapture(event.pointerId);
       }
       onStop();
@@ -156,7 +169,7 @@ export function createInputController({
     bindHoldButton(
       mobileSprintBtnEl,
       () => setMoveInputState("sprint", true),
-      () => setMoveInputState("sprint", false)
+      () => setMoveInputState("sprint", false),
     );
 
     if (mobileAttackBtnEl) {
@@ -244,7 +257,10 @@ export function createInputController({
       mobileLookLastX = event.clientX;
       mobileLookLastY = event.clientY;
 
-      const sensitivity = Math.max(0.1, Number(getLookSensitivityMultiplier?.() ?? 1));
+      const sensitivity = Math.max(
+        0.1,
+        Number(getLookSensitivityMultiplier?.() ?? 1),
+      );
       yaw -= dx * lookTouchSensitivityX * sensitivity;
       pitch = clampPitch(pitch - dy * lookTouchSensitivityY * sensitivity);
       input.yaw = yaw;
@@ -288,7 +304,10 @@ export function createInputController({
       input.right = true;
       changed = true;
     }
-    if ((event.code === "ShiftLeft" || event.code === "ShiftRight") && !input.sprint) {
+    if (
+      (event.code === "ShiftLeft" || event.code === "ShiftRight") &&
+      !input.sprint
+    ) {
       input.sprint = true;
       changed = true;
     }
@@ -314,7 +333,10 @@ export function createInputController({
       input.right = false;
       changed = true;
     }
-    if ((event.code === "ShiftLeft" || event.code === "ShiftRight") && input.sprint) {
+    if (
+      (event.code === "ShiftLeft" || event.code === "ShiftRight") &&
+      input.sprint
+    ) {
       input.sprint = false;
       changed = true;
     }
@@ -333,7 +355,10 @@ export function createInputController({
   function handleMouseMove(event) {
     if (!canUseMovementInput()) return;
     if (document.pointerLockElement !== canvas) return;
-    const sensitivity = Math.max(0.1, Number(getLookSensitivityMultiplier?.() ?? 1));
+    const sensitivity = Math.max(
+      0.1,
+      Number(getLookSensitivityMultiplier?.() ?? 1),
+    );
     yaw -= event.movementX * 0.0022 * sensitivity;
     pitch = clampPitch(pitch - event.movementY * 0.002 * sensitivity);
     input.yaw = yaw;
@@ -377,6 +402,6 @@ export function createInputController({
     sendInput,
     setYaw,
     getYaw,
-    getPitch
+    getPitch,
   };
 }

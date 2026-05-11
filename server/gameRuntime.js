@@ -4,20 +4,7 @@ import { createRoomRuntime } from "./roomRuntime.js";
 import { createDebugStatsStore } from "./debugStats.js";
 import { createSystemMetricsCollector } from "./systemMetrics.js";
 import { createDebugApiHandler } from "./debugApi.js";
-import {
-  DEBUG_VIEW_TOKEN,
-  getActiveLayoutInfo,
-  getAvailableLayouts,
-  getAiBehaviorSettings,
-  getGameplaySettings,
-  hasAiBehaviorSettingsPatch,
-  hasGameplaySettingsPatch,
-  mergeAiBehaviorSettingsPatch,
-  mergeGameplaySettingsPatch,
-  setAiBehaviorSettings,
-  setActiveLayout,
-  setGameplaySettings,
-} from "./config.js";
+import { DEBUG_VIEW_TOKEN, layout, gameplay, aiSettings } from "./config.js";
 
 const PUBLIC_ROOM_ID = "public";
 const PRIVATE_CODE_RE = /^[a-z0-9][a-z0-9-]{2,23}$/i;
@@ -70,9 +57,9 @@ export function attachGameRuntime({ server, rootDir }) {
 
   function persistedSettingsPayload() {
     return Object.freeze({
-      layoutId: getActiveLayoutInfo().id,
-      gameplaySettings: getGameplaySettings(),
-      aiBehaviorSettings: getAiBehaviorSettings(),
+      layoutId: layout.getActive().id,
+      gameplaySettings: gameplay.get(),
+      aiBehaviorSettings: aiSettings.get(),
     });
   }
 
@@ -116,16 +103,16 @@ export function attachGameRuntime({ server, rootDir }) {
 
     const hasLayout =
       typeof parsed.layoutId === "string" && parsed.layoutId.trim() !== "";
-    if (hasLayout) setActiveLayout(parsed.layoutId);
+    if (hasLayout) layout.setActive(parsed.layoutId);
 
-    const gameplay = parsed.gameplaySettings;
-    if (gameplay && typeof gameplay === "object") {
-      setGameplaySettings(mergeGameplaySettingsPatch(gameplay));
+    const gameplayPatch = parsed.gameplaySettings;
+    if (gameplayPatch && typeof gameplayPatch === "object") {
+      gameplay.set(gameplay.merge(gameplayPatch));
     }
 
-    const aiBehavior = parsed.aiBehaviorSettings;
-    if (aiBehavior && typeof aiBehavior === "object") {
-      setAiBehaviorSettings(mergeAiBehaviorSettingsPatch(aiBehavior));
+    const aiBehaviorPatch = parsed.aiBehaviorSettings;
+    if (aiBehaviorPatch && typeof aiBehaviorPatch === "object") {
+      aiSettings.set(aiSettings.merge(aiBehaviorPatch));
     }
   }
 
@@ -177,17 +164,9 @@ export function attachGameRuntime({ server, rootDir }) {
     debugStats,
     systemMetrics,
     getRooms: () => rooms.values(),
-    getActiveLayoutInfo,
-    getAvailableLayouts,
-    getGameplaySettings,
-    getAiBehaviorSettings,
-    setActiveLayout,
-    setGameplaySettings,
-    setAiBehaviorSettings,
-    hasGameplaySettingsPatch,
-    hasAiBehaviorSettingsPatch,
-    mergeGameplaySettingsPatch,
-    mergeAiBehaviorSettingsPatch,
+    layout,
+    gameplay,
+    aiSettings,
     writePersistedSettings: writePersistedServerSettings,
     restartRoomsForSettingsChange,
   });

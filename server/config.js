@@ -794,3 +794,32 @@ export const INVARIANT_LOG_COOLDOWN_MS = envPositiveInt(
   "INVARIANT_LOG_COOLDOWN_MS",
   5000,
 );
+
+// ── Namespace exports (deep-module API) ────────────────────────────────────
+// These group the functional API into three cohesive namespaces so callers
+// only need to import one name per concern instead of 4–5 individual exports.
+
+/** Layout: read/set the active world layout and enumerate available ones. */
+export const layout = Object.freeze({
+  getActive: getActiveLayoutInfo,
+  getAll: getAvailableLayouts,
+  setActive: setActiveLayout,
+});
+
+/** Gameplay settings: player/NPC tuning values that can be patched at runtime. */
+export const gameplay = Object.freeze({
+  schema: GAMEPLAY_SETTINGS_SCHEMA,
+  get: getGameplaySettings,
+  set: setGameplaySettings,
+  merge: mergeGameplaySettingsPatch,
+  hasOverride: hasGameplaySettingsPatch,
+});
+
+/** AI behaviour settings: NPC decision-making tuning values. */
+export const aiSettings = Object.freeze({
+  schema: AI_BEHAVIOR_SETTINGS_SCHEMA,
+  get: getAiBehaviorSettings,
+  set: setAiBehaviorSettings,
+  merge: mergeAiBehaviorSettingsPatch,
+  hasOverride: hasAiBehaviorSettingsPatch,
+});
