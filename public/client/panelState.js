@@ -37,8 +37,6 @@ export function createPanelState(
     getAppMode,
     // () => string
     getSessionState,
-    // () => number
-    getWinReturnToLobbyMsRemaining,
     // (value: boolean) => void
     setGameChatOpen: _setGameChatOpenState,
     // (value: boolean) => void
@@ -85,7 +83,6 @@ export function createPanelState(
 
   function canOpenInGameChat() {
     if (getAppMode() !== "playing") return false;
-    if (getWinReturnToLobbyMsRemaining() > 0) return false;
     const s = getSessionState();
     return s === "downed" || s === "spectating" || s === "won";
   }

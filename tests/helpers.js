@@ -110,6 +110,9 @@ export class TestClient {
       if (msg.type === "countdown") this.state = "countdown";
       if (msg.type === "possess") this.state = "alive";
       if (msg.type === "world" && msg.session) this.state = msg.session.state;
+      if (msg.type === "chat" && msg.entry) {
+        this.chatHistory.push(msg.entry);
+      }
       if (this.collectSystemChat && msg.type === "chat" && msg.entry?.system) {
         this.systemChat.push(String(msg.entry.text || ""));
       }

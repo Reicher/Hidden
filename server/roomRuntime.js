@@ -442,13 +442,6 @@ export function createRoomRuntime({
     for (const ws of sockets.values()) send(ws, type, payload);
   }
 
-  function broadcastChatToNonActivePlayers(entry) {
-    for (const [sessionId, ws] of sockets.entries()) {
-      const session = sessions.get(sessionId);
-      if (session?.state !== "alive") send(ws, "chat", { entry });
-    }
-  }
-
   function appendChat({ name, text, system = false, segments = null }) {
     const entry = {
       id: randomUUID(),
@@ -701,7 +694,6 @@ export function createRoomRuntime({
       chatHistory,
       appendChat,
       broadcast,
-      broadcastChatToNonActivePlayers,
     },
     normalizePlayerName,
     normalizeChatText,

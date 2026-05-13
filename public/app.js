@@ -245,10 +245,7 @@ const chatUi = createChatUi({
   lobbyMessagesEl: chatMessagesEl,
   gameMessagesEl: gameChatMessagesEl,
   colorForName,
-  shouldMirrorToGameChat: (entry) => {
-    if (clientState.sessionState === "alive") return Boolean(entry?.system);
-    return true;
-  },
+  shouldMirrorToGameChat: () => clientState.sessionState !== "alive",
   maxGameLines: GAME_CHAT_MAX_LINES,
 });
 
@@ -595,8 +592,6 @@ const {
   {
     getAppMode: () => clientState.appMode,
     getSessionState: () => clientState.sessionState,
-    getWinReturnToLobbyMsRemaining: () =>
-      clientState.winReturnToLobbyMsRemaining,
     setGameChatOpen: (v) => {
       clientState.gameChatOpen = v;
     },
