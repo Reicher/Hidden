@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 /**
  * Pure UI updaters for lobby overlays.
  * All functions are side-effect-free with respect to app state – they only
@@ -55,13 +57,18 @@ export function updateLobbyMatchStatus({
   const players = Array.isArray(lobbyScoreboard) ? lobbyScoreboard : [];
   const playerCount = players.length;
   const maxPlayers = Math.max(playerCount, Number(lobbyMaxPlayers || 0));
-  lobbyPlayersMetaEl.textContent = `${playerCount}/${maxPlayers} spelare`;
+  lobbyPlayersMetaEl.textContent = t("lobby.players", {
+    count: playerCount,
+    max: maxPlayers,
+  });
 
   if (currentMatch.inProgress) {
     const elapsedMinutes = Math.floor(
       Math.max(0, Number(currentMatch.elapsedMs || 0)) / 60000,
     );
-    lobbyStatusTextEl.textContent = `Match pågår (${elapsedMinutes} min)`;
+    lobbyStatusTextEl.textContent = t("lobby.status.inProgress", {
+      min: elapsedMinutes,
+    });
     return;
   }
 
@@ -76,27 +83,32 @@ export function updateLobbyMatchStatus({
       status === "i lobby" || status === "lobbyn" || status === "lobby";
     return acc + (canReady ? 1 : 0);
   }, 0);
-  const readyText = `Redo ${readyCount}/${readyEligibleCount}`;
+  const readyText = t("lobby.ready.label", {
+    count: readyCount,
+    total: readyEligibleCount,
+  });
   const countdownRunning =
     lobbyCountdownMsRemaining > 0 || sessionState === "countdown";
 
   if (countdownRunning) {
-    lobbyStatusTextEl.textContent = "Startar match";
+    lobbyStatusTextEl.textContent = t("lobby.status.starting");
     return;
   }
   if (playerCount < minPlayers) {
-    lobbyStatusTextEl.textContent = "Väntar på spelare";
+    lobbyStatusTextEl.textContent = t("lobby.status.waiting");
     return;
   }
   if (readyEligibleCount === 0) {
-    lobbyStatusTextEl.textContent = "Väntar på spelare";
+    lobbyStatusTextEl.textContent = t("lobby.status.waiting");
     return;
   }
   if (readyCount < readyEligibleCount) {
-    lobbyStatusTextEl.textContent = `Väntar på redo (${readyText})`;
+    lobbyStatusTextEl.textContent = t("lobby.status.waitingReady", {
+      text: readyText,
+    });
     return;
   }
-  lobbyStatusTextEl.textContent = "Startar match";
+  lobbyStatusTextEl.textContent = t("lobby.status.starting");
 }
 
 /**
@@ -121,35 +133,33 @@ export function updateReadyButton({
   let buttonReadyState = "inactive";
   if (!authenticated) {
     playBtnEl.disabled = true;
-    playBtnEl.textContent = "Redo";
+    playBtnEl.textContent = t("ready.ready");
   } else if (sessionState === "alive") {
     playBtnEl.disabled = true;
-    playBtnEl.textContent = "Du spelar";
+    playBtnEl.textContent = t("ready.playing");
   } else if (sessionState === "spectating") {
     playBtnEl.disabled = true;
-    playBtnEl.textContent = "Åskådar";
+    playBtnEl.textContent = t("ready.spectating");
   } else if (currentMatch.pendingReset) {
     playBtnEl.disabled = true;
-    playBtnEl.textContent = "Avslutar match...";
+    playBtnEl.textContent = t("ready.ending");
   } else if (currentMatch.inProgress) {
     playBtnEl.disabled = false;
-    playBtnEl.textContent = "Åskåda";
+    playBtnEl.textContent = t("ready.spectate");
   } else if (sessionState === "countdown" && sessionReady) {
     playBtnEl.disabled = true;
-    playBtnEl.textContent = "Match startar...";
+    playBtnEl.textContent = t("ready.starting");
   } else if (sessionReady) {
     playBtnEl.disabled = false;
-    playBtnEl.textContent = "Inte redo";
+    playBtnEl.textContent = t("ready.notReady");
     buttonReadyState = "ready";
   } else if (lobbyCountdownMsRemaining > 0) {
-    // Player is in lobby watching an active countdown – join button is shown in overlay,
-    // but keep lobby button usable as backup (labelled clearly).
     playBtnEl.disabled = false;
-    playBtnEl.textContent = "Gå med";
+    playBtnEl.textContent = t("ready.join");
     buttonReadyState = "not-ready";
   } else {
     playBtnEl.disabled = false;
-    playBtnEl.textContent = "Redo";
+    playBtnEl.textContent = t("ready.ready");
     buttonReadyState = "not-ready";
   }
   playBtnEl.dataset.readyState = buttonReadyState;

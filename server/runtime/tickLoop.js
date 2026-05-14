@@ -155,7 +155,9 @@ export function createRoomTickLoop({
       matchEndedByTimeout = true;
     }
     if (matchEndedByTimeout) {
-      appendSystemChat([{ type: "text", text: "Spelet avslutat" }]);
+      appendSystemChat([
+        { type: "text", text: "Spelet avslutat", key: "chat.sys.matchEnded" },
+      ]);
     }
     if (getPendingRoundReset()) {
       const hasEndMatchParticipants =

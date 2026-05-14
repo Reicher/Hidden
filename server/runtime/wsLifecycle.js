@@ -83,7 +83,7 @@ export function createRoomWsLifecycle({
       if (closingSession?.authenticated && closingSession.name) {
         appendSystemChat([
           { type: "player", name: closingSession.name },
-          { type: "text", text: " lämnade spelet" },
+          { type: "text", text: " lämnade spelet", key: "chat.sys.left" },
         ]);
       }
 

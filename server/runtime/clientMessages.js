@@ -120,7 +120,11 @@ export function createClientMessageProcessor({
           session.input.attackRequested = false;
           appendSystemChat([
             { type: "player", name: normalizedName },
-            { type: "text", text: " återanslöt till pågående runda" },
+            {
+              type: "text",
+              text: " återanslöt till pågående runda",
+              key: "chat.sys.reconnected",
+            },
           ]);
         }
       }
@@ -159,7 +163,7 @@ export function createClientMessageProcessor({
 
     appendSystemChat([
       { type: "player", name: normalizedName },
-      { type: "text", text: " joinade spelet" },
+      { type: "text", text: " joinade spelet", key: "chat.sys.joined" },
     ]);
     return "ok";
   }
@@ -311,7 +315,7 @@ export function createClientMessageProcessor({
         returnToLobby(session, "left_match");
         appendSystemChat([
           { type: "player", name: session.name },
-          { type: "text", text: " lämnade matchen" },
+          { type: "text", text: " lämnade matchen", key: "chat.sys.leftMatch" },
         ]);
       }
       return "ok";

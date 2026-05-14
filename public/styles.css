@@ -194,6 +194,59 @@ h1, h2, h3 {
   border-radius: var(--r-lg);
 }
 
+.login-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.login-card-header h1 {
+  margin: 0 0 6px;
+}
+
+/* ── Language flag buttons ─────────────────────────────────────────────── */
+
+.lang-flags {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.lang-flag-btn {
+  background: none;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 2px 4px;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.15s, border-color 0.15s;
+  user-select: none;
+}
+
+.lang-flag-btn:hover {
+  opacity: 0.8;
+}
+
+.lang-flag-btn.active {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.settingsLanguageRow .lang-flags {
+  grid-column: 3;
+  justify-self: end;
+  margin-left: 0;
+}
+
+.settingsLanguageRow .lang-flag-btn {
+  font-size: 18px;
+  padding: 1px 3px;
+}
+
 .connect-tagline {
   margin: -2px 0 6px;
   color: rgba(216, 226, 244, 0.92);

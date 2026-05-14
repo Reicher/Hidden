@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 // ── Audio settings ────────────────────────────────────────────────────────
 const AUDIO_SETTINGS_KEY = "hidden_audio_settings";
 
@@ -171,13 +173,13 @@ export function createSettingsController({
     if (!settingsFullscreenHelpEl) return;
     if (isFullscreenSupported()) {
       settingsFullscreenHelpEl.textContent = isFullscreenActive()
-        ? "Helskärm är aktivt. Avmarkera rutan för att lämna."
-        : "";
+        ? t("settings.fullscreenHelp.active")
+        : t("settings.fullscreenHelp.inactive");
       return;
     }
     settingsFullscreenHelpEl.textContent = isTouchDevice
-      ? "Helskärm stöds inte här (vanligt på iPhone/iPad Safari)."
-      : "Helskärm stöds inte i den här webbläsaren.";
+      ? t("settings.fullscreenHelp.unsupportedTouch")
+      : t("settings.fullscreenHelp.unsupported");
   }
 
   function syncMusicLoop() {
@@ -228,17 +230,21 @@ export function createSettingsController({
     }
     if (lookSmoothingToggleBtnEl) {
       lookSmoothingToggleBtnEl.textContent = lookSettings.smoothingEnabled
-        ? "På"
-        : "Av";
+        ? t("settings.on")
+        : t("settings.off");
     }
     if (musicVolumeInputEl)
       musicVolumeInputEl.value = String(audioSettings.musicVolume);
     if (sfxVolumeInputEl)
       sfxVolumeInputEl.value = String(audioSettings.sfxVolume);
     if (musicMuteBtnEl)
-      musicMuteBtnEl.textContent = audioSettings.musicMuted ? "Avmuta" : "Muta";
+      musicMuteBtnEl.textContent = audioSettings.musicMuted
+        ? t("settings.unmute")
+        : t("settings.mute");
     if (sfxMuteBtnEl)
-      sfxMuteBtnEl.textContent = audioSettings.sfxMuted ? "Avmuta" : "Muta";
+      sfxMuteBtnEl.textContent = audioSettings.sfxMuted
+        ? t("settings.unmute")
+        : t("settings.mute");
     syncMusicLoop();
   }
 
@@ -334,6 +340,7 @@ export function createSettingsController({
   function bindFullscreenListeners() {
     document.addEventListener("fullscreenchange", refreshSettingsUi);
     document.addEventListener("webkitfullscreenchange", refreshSettingsUi);
+    document.addEventListener("languagechange", refreshSettingsUi);
   }
 
   return {

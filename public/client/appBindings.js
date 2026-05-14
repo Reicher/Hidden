@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 function isTextInputTarget(target) {
   if (!target) return false;
   if (target instanceof HTMLInputElement) return true;
@@ -55,7 +57,6 @@ export function bindAppEventHandlers({
   } = elements;
 
   const {
-    GAME_CREDITS_TEXT,
     MOBILE_CONTROLS_PREFS,
     GAME_CHAT_OPEN_SHORTCUT,
     DEBUG_OVERLAY_TOGGLE_SHORTCUT,
@@ -171,11 +172,11 @@ export function bindAppEventHandlers({
   });
   lobbyMenuSettingsBtnEl?.addEventListener("click", () => {
     setLobbyMenuOpen(false);
-    openLobbyDialog("Inställningar", "", { showSettings: true });
+    openLobbyDialog(t("menu.settings"), "", { showSettings: true });
   });
   lobbyMenuCreditsBtnEl?.addEventListener("click", () => {
     setLobbyMenuOpen(false);
-    openLobbyDialog("Om spelet", GAME_CREDITS_TEXT);
+    openLobbyDialog(t("menu.about"), t("about.credits"));
   });
   lobbyMenuCloseBtnEl?.addEventListener("click", () => {
     setLobbyMenuOpen(false);
@@ -239,11 +240,11 @@ export function bindAppEventHandlers({
   });
   gameMenuSettingsBtnEl?.addEventListener("click", () => {
     setGameMenuOpen(false);
-    openLobbyDialog("Inställningar", "", { showSettings: true });
+    openLobbyDialog(t("menu.settings"), "", { showSettings: true });
   });
   gameMenuCreditsBtnEl?.addEventListener("click", () => {
     setGameMenuOpen(false);
-    openLobbyDialog("Om spelet", GAME_CREDITS_TEXT);
+    openLobbyDialog(t("menu.about"), t("about.credits"));
   });
   gameMenuLobbyBtnEl?.addEventListener("click", requestReturnToLobby);
   downedLobbyBtnEl?.addEventListener("click", requestReturnToLobby);

@@ -470,7 +470,10 @@ export function createRoomRuntime({
       }
       const text = sanitizeSystemTextSegment(seg?.text || "");
       if (!text) continue;
-      normalized.push({ type: "text", text });
+      const out = { type: "text", text };
+      if (seg.key) out.key = seg.key;
+      if (seg.vars) out.vars = seg.vars;
+      normalized.push(out);
       plainText += text;
     }
     if (normalized.length === 0 || !plainText) return null;
@@ -618,7 +621,7 @@ export function createRoomRuntime({
             }
             appendSystemChat([
               { type: "player", name: attackerSession.name },
-              { type: "text", text: " slog ner " },
+              { type: "text", text: " slog ner ", key: "chat.sys.knockedDown" },
               { type: "player", name: victimSession.name },
             ]);
           }

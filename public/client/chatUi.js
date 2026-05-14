@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 function appendChatLine(container, entry, colorForName) {
   if (!container) return;
   if (!entry || typeof entry.text !== "string") return;
@@ -17,7 +19,9 @@ function appendChatLine(container, entry, colorForName) {
           continue;
         }
         const textSpan = document.createElement("span");
-        textSpan.textContent = seg?.text || "";
+        textSpan.textContent = seg?.key
+          ? t(seg.key, seg.vars)
+          : seg?.text || "";
         line.appendChild(textSpan);
       }
     } else {
@@ -47,7 +51,7 @@ export function createChatUi({
   gameMessagesEl,
   colorForName,
   shouldMirrorToGameChat,
-  maxGameLines = 5
+  maxGameLines = 5,
 }) {
   let gameLineLimit = Math.max(1, Number(maxGameLines || 5));
   const historyEntries = [];
@@ -101,7 +105,9 @@ export function createChatUi({
       return;
     }
     const normalized = Number(limit);
-    gameLineLimit = Number.isFinite(normalized) ? Math.max(1, Math.floor(normalized)) : 1;
+    gameLineLimit = Number.isFinite(normalized)
+      ? Math.max(1, Math.floor(normalized))
+      : 1;
     renderGameChatFromHistory();
   }
 
@@ -109,6 +115,6 @@ export function createChatUi({
     appendChat,
     replaceChat,
     refreshGameChat,
-    setGameLineLimit
+    setGameLineLimit,
   };
 }

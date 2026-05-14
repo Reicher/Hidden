@@ -117,7 +117,13 @@ export function createMatchFlow({
     state.setLobbyCountdown(null);
     countdownReadyNames.clear();
     countdownReconnectGraceByName.clear();
-    appendSystemChat([{ type: "text", text: "Nedräkning avbruten" }]);
+    appendSystemChat([
+      {
+        type: "text",
+        text: "Nedräkning avbruten",
+        key: "chat.sys.countdownCancelled",
+      },
+    ]);
   }
 
   function cancelSupermajorityReadyTimeout() {
@@ -135,6 +141,8 @@ export function createMatchFlow({
       {
         type: "text",
         text: `2/3 spelare redo. Matchstart om ${constants.SUPERMAJORITY_READY_TIMEOUT_SECONDS} sekunder om inte alla blir redo tidigare.`,
+        key: "chat.sys.supermajority",
+        vars: { sec: constants.SUPERMAJORITY_READY_TIMEOUT_SECONDS },
       },
     ]);
   }
@@ -153,6 +161,8 @@ export function createMatchFlow({
         {
           type: "text",
           text: `2/3 spelare redo. Matchstart om ${seconds} sekunder om inte alla blir redo tidigare.`,
+          key: "chat.sys.supermajority",
+          vars: { sec: seconds },
         },
       ]);
       supermajorityReadyTimeout.nextAnnounceSecond -=
@@ -185,7 +195,13 @@ export function createMatchFlow({
       seconds,
       players: countdownPlayerCount(),
     });
-    appendSystemChat([{ type: "text", text: "Nedräkning startad" }]);
+    appendSystemChat([
+      {
+        type: "text",
+        text: "Nedräkning startad",
+        key: "chat.sys.countdownStarted",
+      },
+    ]);
   }
 
   function maybeStartLobbyCountdown(now) {
@@ -234,7 +250,9 @@ export function createMatchFlow({
     pruneCountdownReconnectGrace(now);
     for (const session of participants)
       markCountdownReconnectGrace(session.name, now);
-    appendSystemChat([{ type: "text", text: "Spel startat" }]);
+    appendSystemChat([
+      { type: "text", text: "Spel startat", key: "chat.sys.matchStarted" },
+    ]);
     for (const session of participants) {
       if (
         session.characterId == null &&
@@ -279,12 +297,16 @@ export function createMatchFlow({
       winnerSession.stats.wins += 1;
       appendSystemChat([
         { type: "player", name: normalizePlayerName(winnerSession.name) },
-        { type: "text", text: " vann matchen!" },
+        { type: "text", text: " vann matchen!", key: "chat.sys.won" },
       ]);
       appendSystemChat([
         {
           type: "text",
           text: `Spelet avslutas om ${Math.ceil(constants.MATCH_END_RETURN_TO_LOBBY_MS / 1000)} sekunder`,
+          key: "chat.sys.matchEnding",
+          vars: {
+            sec: Math.ceil(constants.MATCH_END_RETURN_TO_LOBBY_MS / 1000),
+          },
         },
       ]);
     }

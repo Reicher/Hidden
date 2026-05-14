@@ -1,3 +1,5 @@
+import { t, getCurrentLanguage } from "./i18n.js";
+
 /**
  * Pure UI updater for the countdown overlay.
  *
@@ -29,19 +31,19 @@ function buildDesktopControlsHtml() {
           <div class="ctrl-key-row"><kbd class="key">W</kbd></div>
           <div class="ctrl-key-row"><kbd class="key">A</kbd><kbd class="key">S</kbd><kbd class="key">D</kbd></div>
         </div>
-        <span class="ctrl-label">Rörelse</span>
+        <span class="ctrl-label">${t("countdown.ctrl.movement")}</span>
       </div>
       <div class="ctrl-item">
         <kbd class="key key-wide">⇧ Shift</kbd>
-        <span class="ctrl-label">Sprint</span>
+        <span class="ctrl-label">${t("countdown.ctrl.sprint")}</span>
       </div>
       <div class="ctrl-item">
         <span class="ctrl-mouse"><svg viewBox="0 0 20 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1" y="1" width="18" height="26" rx="9" stroke="currentColor" stroke-width="1.6"/><line x1="10" y1="1" x2="10" y2="14" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="19" r="1.5" fill="currentColor"/><rect x="1" y="1" width="8.2" height="13" rx="4" fill="currentColor" fill-opacity="0.25"/></svg></span>
-        <span class="ctrl-label">Vänsterklick<br>Attackera</span>
+        <span class="ctrl-label">${t("countdown.ctrl.attack")}</span>
       </div>
       <div class="ctrl-item">
         <span class="ctrl-mouse ctrl-mouse-drag"><svg viewBox="0 0 20 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1" y="1" width="18" height="26" rx="9" stroke="currentColor" stroke-width="1.6"/><line x1="10" y1="1" x2="10" y2="14" stroke="currentColor" stroke-width="1.6"/><path d="M10 22 L7 25 M10 22 L13 25 M10 22 L10 26" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span>
-        <span class="ctrl-label">Dra<br>Titta runt</span>
+        <span class="ctrl-label">${t("countdown.ctrl.look")}</span>
       </div>
     </div>
   `;
@@ -49,7 +51,7 @@ function buildDesktopControlsHtml() {
 
 function buildMobileControlsHtml() {
   return `
-    <p class="ctrl-mobile-hint">Använd kontrollerna på skärmen för att röra dig, titta runt och attackera.</p>
+    <p class="ctrl-mobile-hint">${t("countdown.ctrl.mobileHint")}</p>
   `;
 }
 
@@ -73,7 +75,7 @@ export function updateCountdownOverlay({
 
   if (countdownControlsTextEl) {
     const rendered = countdownControlsTextEl.dataset.renderedFor;
-    const mode = isTouchDevice ? "mobile" : "desktop";
+    const mode = `${isTouchDevice ? "mobile" : "desktop"}-${getCurrentLanguage()}`;
     if (rendered !== mode) {
       countdownControlsTextEl.innerHTML = isTouchDevice
         ? buildMobileControlsHtml()

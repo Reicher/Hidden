@@ -14,11 +14,36 @@
       <section id="connectView" class="view">
         <div id="connectLayout" class="connect-layout">
           <div class="card login-card">
-            <h1>Hidden</h1>
-            <p class="connect-tagline">Smält in. Hitta spelarna. Slå först.</p>
+            <div class="login-card-header">
+              <h1>Hidden</h1>
+              <div class="lang-flags">
+                <button
+                  class="lang-flag-btn active"
+                  data-lang="sv"
+                  type="button"
+                  title="Svenska"
+                  aria-label="Svenska"
+                >
+                  🇸🇪
+                </button>
+                <button
+                  class="lang-flag-btn"
+                  data-lang="en"
+                  type="button"
+                  title="English"
+                  aria-label="English"
+                >
+                  🇬🇧
+                </button>
+              </div>
+            </div>
+            <p class="connect-tagline" data-i18n="connect.tagline">
+              Smält in. Hitta spelarna. Slå först.
+            </p>
             <input
               id="nameInput"
               type="text"
+              data-i18n-placeholder="connect.namePlaceholder"
               placeholder="Ditt namn"
               maxlength="20"
               autocomplete="off"
@@ -28,19 +53,38 @@
               for="startFullscreenCheckbox"
             >
               <input id="startFullscreenCheckbox" type="checkbox" />
-              <span>Starta i fullskärm</span>
+              <span data-i18n="connect.startFullscreen"
+                >Starta i fullskärm</span
+              >
             </label>
-            <button id="connectBtn" type="button">Anslut</button>
+            <button
+              id="connectBtn"
+              type="button"
+              data-i18n="connect.connectBtn"
+            >
+              Anslut
+            </button>
             <div id="connectError" class="error" aria-live="polite"></div>
-            <button id="createPrivateRoomBtn" class="hidden" type="button">
+            <button
+              id="createPrivateRoomBtn"
+              class="hidden"
+              type="button"
+              data-i18n="connect.createPrivateRoom"
+            >
               Skapa privat rum
             </button>
             <p id="roomInfo" class="room-info"></p>
           </div>
           <aside id="newsCard" class="news-card" aria-live="polite">
-            <p id="newsVersion" class="news-meta">Nyheter version -</p>
+            <p
+              id="newsVersion"
+              class="news-meta"
+              data-i18n="news.versionDefault"
+            >
+              Nyheter version -
+            </p>
             <p id="newsPublishedAt" class="news-meta hidden"></p>
-            <p id="newsNotes" class="news-notes">
+            <p id="newsNotes" class="news-notes" data-i18n="news.loading">
               Hämtar senaste versionsnyheter.
             </p>
           </aside>
@@ -49,18 +93,22 @@
 
       <section id="lobbyView" class="view hidden">
         <div id="lobbyMatchStatus" aria-live="polite">
-          <span id="lobbyMatchStatusTitle">Offentligt rum</span>
+          <span id="lobbyMatchStatusTitle" data-i18n="room.public"
+            >Offentligt rum</span
+          >
           <button
             id="playBtn"
             type="button"
             data-ready-state="not-ready"
             aria-pressed="false"
+            data-i18n="ready.ready"
           >
             Redo
           </button>
           <button
             id="lobbySettingsBtn"
             type="button"
+            data-i18n-aria-label="menu.settings"
             aria-label="Inställningar"
           >
             ⚙
@@ -73,32 +121,47 @@
               <thead>
                 <tr>
                   <th>
-                    <span class="th-full">Namn</span
+                    <span class="th-full" data-i18n="score.name">Namn</span
                     ><span class="th-short"></span>
                   </th>
                   <th>
-                    <span class="th-full">Vinster</span
-                    ><span class="th-short">V</span>
+                    <span class="th-full" data-i18n="score.wins">Vinster</span
+                    ><span class="th-short" data-i18n="score.wins.short"
+                      >V</span
+                    >
                   </th>
                   <th>
-                    <span class="th-full">Nedslagningar</span
-                    ><span class="th-short">K</span>
+                    <span class="th-full" data-i18n="score.knockdowns"
+                      >Nedslagningar</span
+                    ><span class="th-short" data-i18n="score.knockdowns.short"
+                      >K</span
+                    >
                   </th>
                   <th>
-                    <span class="th-full">Streak</span
-                    ><span class="th-short">S</span>
+                    <span class="th-full" data-i18n="score.streak">Streak</span
+                    ><span class="th-short" data-i18n="score.streak.short"
+                      >S</span
+                    >
                   </th>
                   <th>
-                    <span class="th-full">Nedslagen</span
-                    ><span class="th-short">D</span>
+                    <span class="th-full" data-i18n="score.downed"
+                      >Nedslagen</span
+                    ><span class="th-short" data-i18n="score.downed.short"
+                      >D</span
+                    >
                   </th>
                   <th>
-                    <span class="th-full">Oskyldiga</span
-                    ><span class="th-short">O</span>
+                    <span class="th-full" data-i18n="score.innocents"
+                      >Oskyldiga</span
+                    ><span class="th-short" data-i18n="score.innocents.short"
+                      >O</span
+                    >
                   </th>
                   <th>
-                    <span class="th-full">Status</span
-                    ><span class="th-short">St</span>
+                    <span class="th-full" data-i18n="score.status">Status</span
+                    ><span class="th-short" data-i18n="score.status.short"
+                      >St</span
+                    >
                   </th>
                 </tr>
               </thead>
@@ -106,7 +169,9 @@
             </table>
           </div>
           <div id="lobbyStatusRow" aria-live="polite">
-            <span id="lobbyStatusText">Väntar på spelare</span>
+            <span id="lobbyStatusText" data-i18n="lobby.status.waiting"
+              >Väntar på spelare</span
+            >
             <span id="lobbyPlayersMeta">0/0 spelare</span>
           </div>
           <div id="chatPanel">
@@ -115,11 +180,14 @@
               <input
                 id="chatInput"
                 type="text"
+                data-i18n-placeholder="chat.placeholder"
                 placeholder="Skriv i chatten..."
                 maxlength="220"
                 autocomplete="off"
               />
-              <button id="chatSendBtn" type="button">Skicka</button>
+              <button id="chatSendBtn" type="button" data-i18n="chat.sendBtn">
+                Skicka
+              </button>
             </div>
           </div>
         </div>
@@ -130,12 +198,24 @@
             aria-modal="true"
             aria-labelledby="lobbyMenuTitle"
           >
-            <h2 id="lobbyMenuTitle">Meny</h2>
-            <button id="lobbyMenuSettingsBtn" type="button">
+            <h2 id="lobbyMenuTitle" data-i18n="menu.title">Meny</h2>
+            <button
+              id="lobbyMenuSettingsBtn"
+              type="button"
+              data-i18n="menu.settings"
+            >
               Inställningar
             </button>
-            <button id="lobbyMenuCreditsBtn" type="button">Om spelet</button>
-            <button id="lobbyMenuCloseBtn" type="button">Stäng</button>
+            <button
+              id="lobbyMenuCreditsBtn"
+              type="button"
+              data-i18n="menu.about"
+            >
+              Om spelet
+            </button>
+            <button id="lobbyMenuCloseBtn" type="button" data-i18n="menu.close">
+              Stäng
+            </button>
           </div>
         </div>
       </section>
@@ -149,13 +229,35 @@
           <h2 id="lobbyDialogTitle"></h2>
           <p id="lobbyDialogText"></p>
           <div id="settingsPanel" class="hidden">
+            <div class="settingsOptionRow settingsLanguageRow">
+              <span data-i18n="settings.language">Språk</span>
+              <div class="lang-flags">
+                <button
+                  class="lang-flag-btn active"
+                  data-lang="sv"
+                  type="button"
+                  title="Svenska"
+                  aria-label="Svenska"
+                >
+                  🇸🇪
+                </button>
+                <button
+                  class="lang-flag-btn"
+                  data-lang="en"
+                  type="button"
+                  title="English"
+                  aria-label="English"
+                >
+                  🇬🇧
+                </button>
+              </div>
+            </div>
             <div class="settingsOptionRow settingsMobileControlsRow">
-              <span>Mobilkontroller</span>
+              <span data-i18n="settings.mobileControls">Mobilkontroller</span>
               <button id="mobileControlsModeBtn" type="button">Auto</button>
             </div>
             <div class="settingsOptionRow settingsFullscreenRow">
-              <span>Helskärm</span>
-              <span class="settingsInlineHint">kan saknas</span>
+              <span data-i18n="settings.fullscreen">Helskärm</span>
               <input
                 id="fullscreenModeCheckbox"
                 type="checkbox"
@@ -165,12 +267,12 @@
             <p id="settingsFullscreenHelp">
               Helskärm stöds inte i den här webbläsaren.
             </p>
-            <p id="settingsTrackpadHelp">
+            <p id="settingsTrackpadHelp" data-i18n="settings.trackpadHelp">
               Styrplatta: prova högre känslighet (160-220%) och stäng av
               utjämning.
             </p>
             <div class="settingsAudioRow">
-              <span>Tittkänslighet</span>
+              <span data-i18n="settings.sensitivity">Tittkänslighet</span>
               <input
                 id="lookSensitivityInput"
                 type="range"
@@ -184,11 +286,11 @@
               >
             </div>
             <div class="settingsOptionRow settingsLookSmoothingRow">
-              <span>Siktesutjämning</span>
+              <span data-i18n="settings.lookSmoothing">Siktesutjämning</span>
               <button id="lookSmoothingToggleBtn" type="button">På</button>
             </div>
             <div class="settingsAudioRow">
-              <span>Musikvolym</span>
+              <span data-i18n="settings.musicVolume">Musikvolym</span>
               <input
                 id="musicVolumeInput"
                 type="range"
@@ -200,7 +302,7 @@
               <button id="musicMuteBtn" type="button">Tysta</button>
             </div>
             <div class="settingsAudioRow">
-              <span>Ljudvolym</span>
+              <span data-i18n="settings.sfxVolume">Ljudvolym</span>
               <input
                 id="sfxVolumeInput"
                 type="range"
@@ -211,17 +313,23 @@
               />
               <button id="sfxMuteBtn" type="button">Tysta</button>
             </div>
-            <p id="settingsAudioHelp">Inställningarna sparas lokalt</p>
+            <p id="settingsAudioHelp" data-i18n="settings.audioSaved">
+              Inställningarna sparas lokalt
+            </p>
           </div>
-          <button id="lobbyDialogCloseBtn" type="button">Stäng</button>
+          <button id="lobbyDialogCloseBtn" type="button" data-i18n="menu.close">
+            Stäng
+          </button>
         </div>
       </div>
     </div>
     <div id="gameStartFade" aria-hidden="true"></div>
     <div id="countdownOverlay" class="hidden" aria-live="polite">
       <div id="countdownContent">
-        <p id="countdownHeading">Matchen börjar om</p>
-        <p id="countdownTagline">
+        <p id="countdownHeading" data-i18n="countdown.heading">
+          Matchen börjar om
+        </p>
+        <p id="countdownTagline" data-i18n="countdown.tagline">
           Slå ner motståndarna – sista spelaren vinner.
         </p>
         <div id="countdownTopRow">
@@ -231,16 +339,28 @@
               id="countdownCharacterCanvas"
               width="200"
               height="200"
+              data-i18n-aria-label="countdown.characterCanvasLabel"
               aria-label="Karaktärspreview"
             ></canvas>
-            <span id="countdownCharacterLabel">Din karaktär</span>
+            <span
+              id="countdownCharacterLabel"
+              data-i18n="countdown.characterLabel"
+              >Din karaktär</span
+            >
           </div>
         </div>
-        <button id="countdownJoinBtn" type="button" class="hidden">
+        <button
+          id="countdownJoinBtn"
+          type="button"
+          class="hidden"
+          data-i18n="countdown.joinBtn"
+        >
           Gå med i matchen
         </button>
         <div id="countdownControlsCard">
-          <h3 id="countdownControlsTitle">Kontroller</h3>
+          <h3 id="countdownControlsTitle" data-i18n="countdown.controlsTitle">
+            Kontroller
+          </h3>
           <div id="countdownControlsText"></div>
         </div>
       </div>
@@ -268,6 +388,7 @@
           <button
             id="spectatorPrevBtn"
             type="button"
+            data-i18n-aria-label="hud.spectatorPrev"
             aria-label="Föregående spelare"
           >
             ◀
@@ -275,13 +396,18 @@
           <button
             id="spectatorNextBtn"
             type="button"
+            data-i18n-aria-label="hud.spectatorNext"
             aria-label="Nästa spelare"
           >
             ▶
           </button>
         </div>
         <div id="spectatorActionRow">
-          <button id="spectatorLobbyBtn" type="button">
+          <button
+            id="spectatorLobbyBtn"
+            type="button"
+            data-i18n="menu.returnToLobby"
+          >
             Återgå till lobbyn
           </button>
         </div>
@@ -290,28 +416,48 @@
       <div id="winOverlay" class="hidden">
         <p id="winTitle">Du vann!</p>
         <p id="winCountdownText">Spelet avslutas om 10</p>
-        <button id="winLobbyBtn" type="button">Återgå till lobbyn</button>
+        <button id="winLobbyBtn" type="button" data-i18n="menu.returnToLobby">
+          Återgå till lobbyn
+        </button>
       </div>
       <div id="downedOverlay" class="hidden">
         <p id="downedByText">Du blev nedslagen av okänd spelare</p>
         <p id="downedCountdownText">Spelet avslutas om 10</p>
         <div id="downedActionRow">
-          <button id="downedLobbyBtn" type="button">Återgå till lobbyn</button>
+          <button
+            id="downedLobbyBtn"
+            type="button"
+            data-i18n="menu.returnToLobby"
+          >
+            Återgå till lobbyn
+          </button>
         </div>
       </div>
-      <div id="gameChatNotice">Systemhändelser</div>
-      <button id="gameMenuBtn" type="button" aria-label="Spelmeny">⚙</button>
+      <div id="gameChatNotice" data-i18n="chat.systemEvents">
+        Systemhändelser
+      </div>
+      <button
+        id="gameMenuBtn"
+        type="button"
+        data-i18n-aria-label="menu.gameMenuLabel"
+        aria-label="Spelmeny"
+      >
+        ⚙
+      </button>
       <div id="gameChatBox">
         <div id="gameChatMessages"></div>
         <div id="gameChatInputRow" class="hidden">
           <input
             id="gameChatInput"
             type="text"
+            data-i18n-placeholder="chat.gamePlaceholder"
             placeholder="Skriv meddelande..."
             maxlength="220"
             autocomplete="off"
           />
-          <button id="gameChatSendBtn" type="button">Chatta</button>
+          <button id="gameChatSendBtn" type="button" data-i18n="chat.gameBtn">
+            Chatta
+          </button>
         </div>
       </div>
       <div id="gameMenuBackdrop" class="hidden">
@@ -321,13 +467,27 @@
           aria-modal="true"
           aria-labelledby="gameMenuTitle"
         >
-          <h2 id="gameMenuTitle">Meny</h2>
-          <button id="gameMenuSettingsBtn" type="button">Inställningar</button>
-          <button id="gameMenuCreditsBtn" type="button">Om spelet</button>
-          <button id="gameMenuLobbyBtn" type="button">
+          <h2 id="gameMenuTitle" data-i18n="menu.title">Meny</h2>
+          <button
+            id="gameMenuSettingsBtn"
+            type="button"
+            data-i18n="menu.settings"
+          >
+            Inställningar
+          </button>
+          <button id="gameMenuCreditsBtn" type="button" data-i18n="menu.about">
+            Om spelet
+          </button>
+          <button
+            id="gameMenuLobbyBtn"
+            type="button"
+            data-i18n="menu.returnToLobby"
+          >
             Återgå till lobbyn
           </button>
-          <button id="gameMenuCloseBtn" type="button">Stäng</button>
+          <button id="gameMenuCloseBtn" type="button" data-i18n="menu.close">
+            Stäng
+          </button>
         </div>
       </div>
       <div id="mobileControls" class="hidden" aria-hidden="true">
@@ -337,15 +497,21 @@
           </div>
         </div>
         <div id="mobileCombatPad">
-          <button id="mobileSprintBtn" type="button">Spring</button>
-          <button id="mobileAttackBtn" type="button">Attack</button>
+          <button id="mobileSprintBtn" type="button" data-i18n="mobile.sprint">
+            Spring
+          </button>
+          <button id="mobileAttackBtn" type="button" data-i18n="mobile.attack">
+            Attack
+          </button>
         </div>
         <div id="mobileActionPad">
-          <div id="mobileLookPad">Dra här för att titta</div>
+          <div id="mobileLookPad" data-i18n="mobile.lookPad">
+            Dra här för att titta
+          </div>
         </div>
       </div>
       <div id="mobileLandscapePrompt" class="hidden" aria-hidden="true">
-        <div id="mobileLandscapePromptCard">
+        <div id="mobileLandscapePromptCard" data-i18n="mobile.landscape">
           Vrid telefonen till landskapsläge för att spela.
         </div>
       </div>

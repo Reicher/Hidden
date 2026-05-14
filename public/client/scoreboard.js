@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 /**
  * Produce a stable string signature for a player list so callers can
  * skip re-rendering when nothing has changed.
@@ -40,15 +42,16 @@ export function renderScoreboard(scoreBodyEl, players, colorForName) {
     const raw = String(value || "").trim();
     if (!raw) return "-";
     const lower = raw.toLowerCase();
-    if (lower.includes("lobby")) return "Lobbyn";
-    if (lower.includes("åsk") || lower.includes("spect")) return "Åsk";
+    if (lower.includes("lobby")) return t("score.statusLobby");
+    if (lower.includes("åsk") || lower.includes("spect"))
+      return t("score.statusSpectating");
     if (
       lower.includes("spel") ||
       lower.includes("alive") ||
       lower.includes("won") ||
       lower.includes("downed")
     )
-      return "Spel";
+      return t("score.statusPlaying");
     if (raw.length <= 8) return raw;
     return `${raw.slice(0, 7)}…`;
   };

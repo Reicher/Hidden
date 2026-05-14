@@ -56,12 +56,7 @@ export const MOBILE_RENDER_SCALE_STEP_UP = 0.04;
 export const MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS = 1500;
 
 // ── UI copy / controls texts ───────────────────────────────────────────────
-export const GAMEPLAY_SUMMARY_TEXT =
-  "Håll dig gömd, hitta spelare och slå ner dem.";
-export const DESKTOP_CONTROLS_TEXT =
-  "Desktop: WASD rörelse, Shift sprint, mus för att titta runt, vänsterklick attack.";
-export const MOBILE_CONTROLS_TEXT =
-  "Mobil: joystick nere till vänster för rörelse, Attack/Spring i mitten, dra i höger ruta för att titta.";
+// (strings are now managed through public/client/i18n.js and the lang/ files)
 
 // ── Device detection (evaluated once at module load) ──────────────────────
 export const FORCE_MOBILE_UI =

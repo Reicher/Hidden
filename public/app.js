@@ -19,7 +19,7 @@ import {
   updateLobbyMatchStatus as updateLobbyMatchStatusUi,
   updateReadyButton as updateReadyButtonUi,
 } from "./client/lobbyUi.js";
-import { GAME_CREDITS_TEXT } from "./client/about.js";
+import { initI18n, t } from "./client/i18n.js";
 import { createInputController } from "./client/inputControls.js";
 import { createConnectionManager } from "./client/connectionManager.js";
 import { createConnectScreen } from "./client/connectScreen.js";
@@ -82,9 +82,6 @@ import {
   MOBILE_RENDER_SCALE_STEP_DOWN,
   MOBILE_RENDER_SCALE_STEP_UP,
   MOBILE_RENDER_SCALE_ADJUST_COOLDOWN_MS,
-  GAMEPLAY_SUMMARY_TEXT,
-  DESKTOP_CONTROLS_TEXT,
-  MOBILE_CONTROLS_TEXT,
   IS_TOUCH_DEVICE,
 } from "./client/appConstants.js";
 import {
@@ -181,6 +178,9 @@ import {
   spectatorLobbyBtnEl,
 } from "./client/domRefs.js";
 
+// Initialise i18n before anything renders, so t() returns the correct language.
+initI18n();
+
 const sceneSystem = createSceneSystem(canvas);
 const {
   renderer,
@@ -223,9 +223,6 @@ const mobileControls = createMobileControls(
       localStorage.getItem(MOBILE_CONTROLS_PREF_KEY),
     ),
     normalizePreference: normalizeMobileControlsPreference,
-    gameplaySummaryText: GAMEPLAY_SUMMARY_TEXT,
-    desktopControlsText: DESKTOP_CONTROLS_TEXT,
-    mobileControlsText: MOBILE_CONTROLS_TEXT,
     getAppMode: () => clientState.appMode,
     getSessionState: () => clientState.sessionState,
     getGameChatOpen: () => clientState.gameChatOpen,
@@ -342,6 +339,12 @@ const {
   setRoomInfo,
 } = connectScreen;
 
+// Re-fetch news text with new language strings when user switches language.
+document.addEventListener("languagechange", () => {
+  setNewsCard();
+  setRoomInfo();
+});
+
 const debugOverlay = createDebugOverlay({
   elements: {
     debugOverlayEl,
@@ -369,7 +372,7 @@ const {
 
 function lobbyRoomNameFromPath() {
   const roomCode = activeRoomCodeFromPath();
-  if (!roomCode) return "Offentligt rum";
+  if (!roomCode) return t("room.public");
   return roomCode;
 }
 
@@ -975,7 +978,6 @@ bindAppEventHandlers({
     countdownJoinBtnEl,
   },
   constants: {
-    GAME_CREDITS_TEXT,
     MOBILE_CONTROLS_PREFS,
     GAME_CHAT_OPEN_SHORTCUT,
     DEBUG_OVERLAY_TOGGLE_SHORTCUT,

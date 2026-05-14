@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 /**
  * Mobile controls preference + visibility logic.
  *
@@ -37,9 +39,6 @@ export function createMobileControls(
     isTouchDevice,
     initialPreference,
     normalizePreference,
-    gameplaySummaryText,
-    desktopControlsText,
-    mobileControlsText,
     getAppMode,
     getSessionState,
     getGameChatOpen,
@@ -61,10 +60,10 @@ export function createMobileControls(
   }
 
   function controlsTextForCurrentMode() {
-    return `${gameplaySummaryText}\n${
+    return `${t("gameplay.summary")}\n${
       mobileControlsEnabledByPreference()
-        ? mobileControlsText
-        : desktopControlsText
+        ? t("gameplay.mobileControls")
+        : t("gameplay.desktopControls")
     }`;
   }
 

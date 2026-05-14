@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 const RESERVED_PATH_CODES = new Set(["debug"]);
 const PRIVATE_ROOM_CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 
@@ -33,7 +35,9 @@ export function randomPrivateRoomCode(randomValuesSource = crypto) {
   const bytes = new Uint8Array(8);
   randomValuesSource.getRandomValues(bytes);
   let out = "";
-  for (const value of bytes) out += PRIVATE_ROOM_CODE_ALPHABET[value % PRIVATE_ROOM_CODE_ALPHABET.length];
+  for (const value of bytes)
+    out +=
+      PRIVATE_ROOM_CODE_ALPHABET[value % PRIVATE_ROOM_CODE_ALPHABET.length];
   return out;
 }
 
@@ -43,7 +47,7 @@ export function normalizeMobileControlsPreference(value) {
 }
 
 export function mobileControlsLabel(pref) {
-  if (pref === "on") return "På";
-  if (pref === "off") return "AV";
-  return "Auto";
+  if (pref === "on") return t("settings.on");
+  if (pref === "off") return t("settings.off");
+  return t("settings.mobileControlsAuto");
 }
