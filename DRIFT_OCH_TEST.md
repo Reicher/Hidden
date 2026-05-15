@@ -37,7 +37,23 @@ tests/
   *.js                    # Node + WebSocket + Playwright tester
 ```
 
-Three.js hanteras lokalt: `node_modules/three/build/three.module.js` är källan och synkas till `public/vendor/three.module.js` via `npm run sync:three-local` (körs automatiskt vid `npm install`).
+Three.js hanteras lokalt: `node_modules/three/build/three.module.js` är källan och synkas till `public/vendor/three.js` via `npm run sync:three-local` (körs automatiskt vid `npm install`).
+
+## itch.io-driftsättning
+
+Spelet kan laddas upp på itch.io som ett statiskt HTML-spel. Klienten pekar mot Raspberry Pi-servern via `public/config.json`.
+
+Bygg zip:
+```bash
+npm run zip:itch
+```
+
+Skapar `hidden-itch.zip` med `serverHost: "hidden-game.duckdns.org"` inbakat i `config.json`. Ladda upp den på [robin-reicher.itch.io/hidden](https://robin-reicher.itch.io/hidden).
+
+Se till att servern startas med rätt `ALLOWED_ORIGINS` på Pi:n:
+```
+ALLOWED_ORIGINS=https://hidden-game.duckdns.org,https://robin-reicher.itch.io,https://html-classic.itch.zone
+```
 
 ## Gameplay-inställningar (default)
 

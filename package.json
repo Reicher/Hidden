@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "zip:itch": "printf '{\\n  \"serverHost\": \"hidden-game.duckdns.org\"\\n}' > public/config.json && cd public && zip -r ../hidden-itch.zip . --exclude '*.DS_Store' && cd .. && printf '{}' > public/config.json && echo 'hidden-itch.zip ready'",
     "sync:three-local": "node scripts/sync-three-local.js",
     "postinstall": "npm run sync:three-local",
     "generate:layout": "node scripts/generate-layout-png.js",
