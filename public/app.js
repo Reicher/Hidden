@@ -181,6 +181,15 @@ import {
 // Initialise i18n before anything renders, so t() returns the correct language.
 initI18n();
 
+// Load deploy config. config.json may contain a "serverHost" field to redirect
+// WebSocket and API calls to a remote server (e.g. when the client is hosted on
+// itch.io but the server runs on a Raspberry Pi). If the field is absent the
+// client connects to whatever host served the page — no change for Pi users.
+const _deployConfig = await fetch("./config.json")
+  .then((r) => r.json())
+  .catch(() => ({}));
+const _serverHost = _deployConfig?.serverHost || null;
+
 const sceneSystem = createSceneSystem(canvas);
 const {
   renderer,
@@ -331,8 +340,9 @@ const connectScreen = createConnectScreen({
     roomInfoEl,
   },
   activeRoomCodeFromPath,
-  // When _serverHost is set (itch.io deploy) API calls must go to the remote
-  // server since the page is not served from the same origin.
+  // When _serverHost is set, API calls must go to the remote server since the
+  // page is not served from the same origin (e.g. itch.io). On the Pi, this
+  // is null and the default fetchJson is used, hitting the same origin.
   fetchJson: _serverHost
     ? async (url) => {
         const absolute = `https://${_serverHost}${url.startsWith("/") ? url : "/" + url}`;
@@ -894,7 +904,9 @@ async function connectAndLogin() {
   if (!nameInputEl) return;
   const rawName = String(nameInputEl.value ?? "");
   const trimmedName = rawName.trim();
-  const wsUrl = `${wsScheme()}://${location.host}${activeRoomPath()}`;
+  const wsUrl = _serverHost
+    ? `wss://${_serverHost}${activeRoomPath()}`
+    : `${wsScheme()}://${location.host}${activeRoomPath()}`;
   if (trimmedName.length < 2) {
     setConnectError("Namn måste vara minst 2 tecken.");
     return;
