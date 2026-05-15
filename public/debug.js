@@ -481,11 +481,13 @@ function buildRoomRows(data) {
       uniqueNames: [],
       hasLive: false,
       names: [],
+      players: [],
     };
     existing.roomCode = room.roomCode || existing.roomCode;
     existing.isPrivate = Boolean(room.isPrivate);
     existing.hasLive = true;
     existing.names = Array.isArray(room.names) ? room.names : [];
+    existing.players = Array.isArray(room.players) ? room.players : [];
     byId.set(roomId, existing);
   }
 
@@ -546,6 +548,19 @@ function renderText(data) {
         if (nameList.length === 0) {
           tdNames.style.color = "var(--muted)";
           tdNames.textContent = room.hasLive ? "(ingen inne)" : "-";
+        } else if (room.hasLive && room.players.length > 0) {
+          for (const p of room.players) {
+            if (!p.name) continue;
+            const span = document.createElement("span");
+            span.style.marginRight = "8px";
+            span.style.whiteSpace = "nowrap";
+            const source = p.origin
+              ? p.origin.includes("itch.io") ? "🎮" : "🍓"
+              : "❓";
+            span.textContent = `${source} ${p.name}`;
+            span.title = p.origin || "(okänt origin)";
+            tdNames.appendChild(span);
+          }
         } else {
           tdNames.textContent = nameList.join(", ");
           tdNames.title = nameList.join(", ");

@@ -117,6 +117,7 @@ export function createRoomWsLifecycle({
     };
 
     const session = createSession(sessionId, now);
+    session.origin = req.headers.origin || null;
 
     sessions.set(sessionId, session);
     sockets.set(sessionId, ws);

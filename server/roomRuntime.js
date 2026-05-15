@@ -905,6 +905,12 @@ export function createRoomRuntime({
         .map((session) => session.name)
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b, "sv")),
+      players: authenticatedSessions()
+        .map((session) => ({
+          name: session.name,
+          origin: session.origin || null,
+        }))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name), "sv")),
     }),
   };
 }
