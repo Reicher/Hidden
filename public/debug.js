@@ -555,7 +555,7 @@ function renderText(data) {
             span.style.marginRight = "8px";
             span.style.whiteSpace = "nowrap";
             const source = p.origin
-              ? p.origin.includes("itch.io") ? "🎮" : "🍓"
+              ? p.origin.includes("itch.io") ? "🎮" : "🥧"
               : "❓";
             span.textContent = `${source} ${p.name}`;
             span.title = p.origin || "(okänt origin)";
