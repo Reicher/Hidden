@@ -55,6 +55,16 @@ Se till att servern startas med rätt `ALLOWED_ORIGINS` på Pi:n:
 ALLOWED_ORIGINS=https://hidden-game.duckdns.org,https://robin-reicher.itch.io,https://html-classic.itch.zone
 ```
 
+### Starta med pm2 (rekommenderat)
+
+Använd `ecosystem.config.cjs` — alla env-variabler utom hemligheter är definierade där.
+`DEBUG_VIEW_TOKEN` sätts i skalet vid start och ärvs av pm2-daemonen:
+
+```bash
+DEBUG_VIEW_TOKEN='ditt-token' pm2 start ecosystem.config.cjs
+pm2 save
+```
+
 ## Gameplay-inställningar (default)
 
 - `totalCharacters = 20`
