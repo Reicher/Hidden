@@ -54,6 +54,9 @@ export function createStaticHttpServer({
       const requestUrl = new URL(req.url || "/", `http://${host}:${port}`);
       applyCorsHeaders(req, res);
       if (req.method === "OPTIONS") {
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "x-debug-token, content-type, accept");
+        res.setHeader("Access-Control-Max-Age", "86400");
         res.writeHead(204);
         res.end();
         return;
