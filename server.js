@@ -1,5 +1,6 @@
 import { createStaticHttpServer } from "./server/httpStatic.js";
 import { attachGameRuntime } from "./server/gameRuntime.js";
+import { ALLOWED_ORIGINS } from "./server/config.js";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,6 +33,7 @@ const server = createStaticHttpServer({
   host: HOST,
   port: PORT,
   rootDir: HERE,
+  allowedOrigins: ALLOWED_ORIGINS,
   onBeforeStaticRequest: ({ req, res, requestUrl }) =>
     gameRuntimeApi?.handleHttpRequest?.({ req, res, requestUrl }) || false,
 });

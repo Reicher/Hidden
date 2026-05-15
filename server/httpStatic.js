@@ -36,13 +36,28 @@ export function createStaticHttpServer({
   host,
   port,
   rootDir,
+  allowedOrigins = new Set(),
   onBeforeStaticRequest = null,
 }) {
   const publicDir = path.resolve(path.join(rootDir, "public"));
 
+  function applyCorsHeaders(req, res) {
+    const origin = req.headers.origin;
+    if (origin && allowedOrigins.has(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+    }
+  }
+
   return http.createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url || "/", `http://${host}:${port}`);
+      applyCorsHeaders(req, res);
+      if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
       if (typeof onBeforeStaticRequest === "function") {
         const handled = await onBeforeStaticRequest({ req, res, requestUrl });
         if (handled) return;

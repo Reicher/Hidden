@@ -55,6 +55,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   `http://localhost:${DEFAULT_PORT}`,
   `https://127.0.0.1:${DEFAULT_PORT}`,
   `https://localhost:${DEFAULT_PORT}`,
+  "https://html-classic.itch.zone",
+  "https://robin-reicher.itch.io",
 ];
 
 export const GAMEPLAY_SETTINGS_SCHEMA = Object.freeze({
