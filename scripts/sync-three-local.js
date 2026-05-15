@@ -6,8 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const sourcePath = path.resolve(projectRoot, "node_modules/three/build/three.module.js");
-const targetPath = path.resolve(projectRoot, "public/vendor/three.module.js");
-const targetPathPlain = path.resolve(projectRoot, "public/vendor/three.js");
+const targetPath = path.resolve(projectRoot, "public/vendor/three.js");
 
 function patchShaderLogNullGuards(text) {
   // Some WebGL implementations may return null from *InfoLog APIs.
@@ -39,8 +38,7 @@ function main() {
   const source = fs.readFileSync(sourcePath, "utf8");
   const patched = patchShaderLogNullGuards(source);
   fs.writeFileSync(targetPath, patched, "utf8");
-  fs.writeFileSync(targetPathPlain, patched, "utf8");
-  console.log(`Synced ${targetPath} and ${targetPathPlain} from local source ${sourcePath}`);
+  console.log(`Synced ${targetPath} from local source ${sourcePath}`);
 }
 
 main();
