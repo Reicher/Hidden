@@ -140,10 +140,10 @@ export function createSettingsController({
   document.addEventListener("keydown", onFirstInteraction, true);
   document.addEventListener("touchstart", onFirstInteraction, true);
 
-  const musicLoopEl = new Audio("/assets/sounds/music.wav");
-  const uiBlipSfxTemplateEl = new Audio("/assets/sounds/blipSelect.wav");
-  const hitHurtSfxTemplateEl = new Audio("/assets/sounds/hitHurt.wav");
-  const hitMissSfxTemplateEl = new Audio("/assets/sounds/hitMiss.wav");
+  const musicLoopEl = new Audio("./assets/sounds/music.wav");
+  const uiBlipSfxTemplateEl = new Audio("./assets/sounds/blipSelect.wav");
+  const hitHurtSfxTemplateEl = new Audio("./assets/sounds/hitHurt.wav");
+  const hitMissSfxTemplateEl = new Audio("./assets/sounds/hitMiss.wav");
   uiBlipSfxTemplateEl.preload = "auto";
   hitHurtSfxTemplateEl.preload = "auto";
   hitMissSfxTemplateEl.preload = "auto";

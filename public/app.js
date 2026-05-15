@@ -331,6 +331,16 @@ const connectScreen = createConnectScreen({
     roomInfoEl,
   },
   activeRoomCodeFromPath,
+  // When _serverHost is set (itch.io deploy) API calls must go to the remote
+  // server since the page is not served from the same origin.
+  fetchJson: _serverHost
+    ? async (url) => {
+        const absolute = `https://${_serverHost}${url.startsWith("/") ? url : "/" + url}`;
+        const response = await fetch(absolute, { cache: "no-store" });
+        if (!response.ok) throw new Error(`http_${response.status}`);
+        return response.json();
+      }
+    : undefined,
 });
 const {
   setConnectError,

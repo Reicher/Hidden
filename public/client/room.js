@@ -23,7 +23,7 @@ const CEILING_TILE_METERS = 3;
 const PRODUCT_SPAWN_CHANCE = 0.8;
 const PRODUCT_WIDTH_METERS = 0.8;
 const PRODUCT_TILE_WIDTH = 32;
-const PRODUCT_ATLAS_URLS = ["/assets/products.png"];
+const PRODUCT_ATLAS_URLS = ["./assets/products.png"];
 const PRODUCT_YAW_JITTER_RAD = Math.PI / 9; // +/- 20 deg
 const PRODUCT_SIDE_JITTER_METERS = 0.2; // +/- 20 cm along shelf length
 const PRODUCT_DEPTH_JITTER_METERS = 0.1; // +/- 10 cm toward/away from shelf front
@@ -38,43 +38,43 @@ const WALL_RENDER_OUTSET_METERS = 0.04;
 
 const TEXTURE_SPECS = Object.freeze({
   floor: Object.freeze({
-    urls: ["/assets/floor.png"],
+    urls: ["./assets/floor.png"],
     baseWidth: 64,
     baseHeight: 64,
     fallbackColor: 0x4a505d,
   }),
   ceiling: Object.freeze({
-    urls: ["/assets/ceiling.png"],
+    urls: ["./assets/ceiling.png"],
     baseWidth: 96,
     baseHeight: 96,
     fallbackColor: 0x515661,
   }),
   wall: Object.freeze({
-    urls: ["/assets/wall.png"],
+    urls: ["./assets/wall.png"],
     baseWidth: 32,
     baseHeight: 160,
     fallbackColor: 0x6f7b8f,
   }),
   shelf: Object.freeze({
-    urls: ["/assets/shelf.png"],
+    urls: ["./assets/shelf.png"],
     baseWidth: 192,
     baseHeight: 64,
     fallbackColor: 0x9a856b,
   }),
   cooler: Object.freeze({
-    urls: ["/assets/cooler.png"],
+    urls: ["./assets/cooler.png"],
     baseWidth: 32,
     baseHeight: 64,
     fallbackColor: 0xf8fafc,
   }),
   freezer: Object.freeze({
-    urls: ["/assets/freezer.png"],
+    urls: ["./assets/freezer.png"],
     baseWidth: 32,
     baseHeight: 32,
     fallbackColor: 0xf7f9fc,
   }),
   poster: Object.freeze({
-    urls: ["/assets/posters.png"],
+    urls: ["./assets/posters.png"],
     baseWidth: 64,
     baseHeight: 64,
     fallbackColor: 0xc8b06f,
